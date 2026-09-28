@@ -16,7 +16,10 @@ import { AudioEngine } from './audio/engine.js';
 import { createIntro } from './sequences/intro.js';
 import { createFall } from './sequences/fall.js';
 import { createEnding, prepareEnding } from './sequences/ending.js';
+import { createResume } from './sequences/resume.js';
 import { createSettings } from './ui/settings.js';
+import { openDialog } from './ui/kit/index.js';
+import { createSaveSystem, readSnapshot, clearSaves, promotePending, dropPending, SAVE_KEY, PENDING_KEY } from './core/save.js';
 import { createReticle } from './ui/reticle.js';
 import { createDebugReport } from './ui/debugReport.js';
 import { loadCabin, PROBE_LAYER } from './props/cabin.js';
@@ -25,10 +28,14 @@ import { loadCave } from './props/cave.js';
 import { loadLounge } from './props/lounge.js';
 import { loadElevator } from './props/elevator.js';
 import { loadTowerKit } from './props/powertower.js';
+import { loadDeck } from './props/deck.js';
 import { preload } from './render/preload.js';
+import { createLoadingVeil } from './ui/loadingVeil.js';
 
 const params = new URLSearchParams(location.search);
 const DEV = params.has('dev');
+// Saved games (core/save.js). ?nosave (and ?spawn, which picks its own start) neither loads nor writes them.
+let savesOn = !params.has('nosave') && !params.has('spawn') && !params.has('at');
 
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false });
@@ -77,26 +84,57 @@ input.on('firstClick', () => {
   audio.unlock();   // the AudioContext must be made inside the click; the sound graph waits for begin()
 });
 
+// ---------- Saved game ----------
+// Which saved game to wake into, settled while the world loads. A pending snapshot (progress left unsaved when the
+// page closed, see the Loop's unload handlers) newer than the save is offered first; the dialog is up before the
+// first click, so it is answered before the game takes the mouse.
+const ago = (ms) => {
+  const m = Math.round((Date.now() - ms) / 60000);
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 60 * 24 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+};
+const resumeChoice = (async () => {
+  if (!savesOn) return null;
+  const saved = readSnapshot(SAVE_KEY), pending = readSnapshot(PENDING_KEY);
+  if (!pending) return saved;
+  if (saved && pending.time <= saved.time) { dropPending(); return saved; }
+  const keep = await openDialog({
+    title: 'You left without saving',
+    description: `Your last visit (${ago(pending.time)}) ended with progress that was never saved. Save that progress? `
+      + (saved ? 'Discard goes back to your last save.' : 'Discard starts the dream from the beginning.'),
+    dismissible: false,
+    actions: [
+      { label: 'Discard', variant: 'outline', value: false },
+      { label: 'Save', variant: 'default', value: true, autofocus: true },
+    ],
+  });
+  if (keep) { promotePending(pending); return pending; }
+  dropPending();
+  return saved;
+})();
+let restored = false;
+
 // ---------- Timers ----------
 const timers = [];
 const later = (delay, fn) => timers.push({ at: elapsed + delay, fn });
 let elapsed = 0;
 
 // ---------- Loading veil ----------
-// The black screen's progress: a hairline that fills from the middle (index.html), then the breathing light that
-// means "click to begin". Roughly by time: the models' download to 10 %, building the world to 55 %, the preload
-// (render/preload.js) the rest.
+// The black screen's progress (ui/loadingVeil.js): a track that fills at an even pace to its end, the stage and a
+// countdown, then the breathing light and "click to begin". Real progress: the models' download to 10 %, building
+// the world to 55 %, the preload (render/preload.js) the rest; the veil maps it onto time from the last load.
 const veil = document.getElementById('veil');
-const setProgress = (f) => veil.style.setProperty('--p', f.toFixed(3));
 const bootT = performance.now();
+const loader = createLoadingVeil(veil, bootT);
+const setProgress = (f) => loader.progress(f);
 
 // ---------- World ----------
 let loaded = 0;
-const counted = (p) => p.then((a) => { setProgress((++loaded / 6) * 0.1); return a; });
-const [cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset] = await Promise.all([loadCabin(), loadObservatory(), loadCave(), loadLounge(), loadElevator(), loadTowerKit()].map(counted));
+const counted = (p) => p.then((a) => { setProgress((++loaded / 7) * 0.1); return a; });
+const [cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset] = await Promise.all([loadCabin(), loadObservatory(), loadCave(), loadLounge(), loadElevator(), loadTowerKit(), loadDeck()].map(counted));
 const loadedT = performance.now();
+loader.glide(0.55);                             // the build blocks the page: the fill glides on meanwhile
 await new Promise((r) => setTimeout(r, 20));   // let the line show it before the (synchronous) build
-const ctx = buildWorld({ renderer, scene, camera, physics, interact, audio, input, fx, later, updaters: [], cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset });
+const ctx = buildWorld({ renderer, scene, camera, physics, interact, audio, input, fx, later, updaters: [], cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset });
 prepareEnding(ctx);   // the ending's clock and steam, hidden until then, so the preload warms them too
 setProgress(0.55);
 const player = new Player(camera, input, physics);
@@ -104,7 +142,59 @@ ctx.player = player;
 // The cabin's reflection probe sees the sky and every light (see PROBE_LAYER).
 sky.mesh.layers.enable(PROBE_LAYER);
 scene.traverse((o) => { if (o.isLight) o.layers.enable(PROBE_LAYER); });
-const settings = createSettings({ player, clock, fx, input, canvas: renderer.domElement, baseSpeed: clock.speed });
+const saves = createSaveSystem({
+  ctx, player, clock,
+  enabled: () => savesOn && !ended,
+  // Where the player may be saved: standing free on the ground (not in a sequence or a fall, on a ladder, riding an
+  // elevator, at the eyepiece or holding a handwheel). Otherwise a save keeps the last such pose. Seated in a deck
+  // chair counts: the feet already stand beside it (Player.sit), so a restore stands the player up there.
+  isSafe: () => started && !ended && !(sequence && !sequence.done) && (player.mode === 'walk' || player.mode === 'sit') && player.onGround && player.canMove
+    && !ctx.riding && player.cameraControlled && !player.lookHandler,
+});
+// Start over: no save, no pending snapshot, and no "Leave site?" on the way out.
+function restart() {
+  savesOn = false;
+  clearSaves();
+  removeEventListener('beforeunload', onBeforeUnload);
+  location.reload();
+}
+// Travel (the Escape panel's buttons): straight to a place, standing, facing somewhere worth facing.
+const PLACES = [['home', 'Home'], ['rocks', 'Rocks'], ['tower', 'Tower'], ['observatory', 'Observatory'], ['end', 'End']];
+function travel(key) {
+  if (!started || ended || (sequence && !sequence.done)) return;
+  if (fx.scope > 0.5) ctx.exitScope?.();
+  if (player.mode === 'sit') player.standUp();
+  player.zone = 'surface';
+  const face = (from, to) => Math.atan2(-(to.x - from.x), -(to.z - from.z));
+  if (key === 'home') {
+    const w = ctx.house.wake;
+    player.place(w.stand.x, w.stand.y, w.stand.z, w.standYaw);
+  } else if (key === 'observatory' && ctx.observatory) {
+    // Outside its door, facing it.
+    const R = ctx.observatory.root, p = R.localToWorld(new THREE.Vector3(0, 0, -9)), door = R.localToWorld(new THREE.Vector3(0, 0, -5));
+    const st = ctx.stacks.mountain;
+    player.place(p.x, (st.heightAt(p.x, p.z) ?? p.y) + 0.1, p.z, face(p, door));
+  } else if (ctx.stacks[key]) {
+    const st = ctx.stacks[key];
+    const x = st.cx + 6, z = st.cz + 6;
+    player.place(x, (st.heightAt(x, z) ?? st.top) + 0.1, z, face({ x, z }, { x: st.cx, z: st.cz }));
+  }
+  player.pitch = 0;
+}
+const settings = createSettings({
+  player, clock, fx, input, canvas: renderer.domElement, baseSpeed: clock.speed,
+  game: {
+    save: () => saves.save(),
+    restart,
+    travel,
+    places: PLACES,
+    status: () => {
+      if (!savesOn) return { canSave: false, text: ended ? '' : 'Saving is off for this session' };
+      const text = saves.savedAt ? `Saved ${ago(saves.savedAt)}${saves.dirty() ? ' · unsaved progress' : ''}` : 'Not saved yet';
+      return { canSave: started && !ended, text };
+    },
+  },
+});
 ctx.onRide = (riding) => { ctx.riding = riding; };
 const reticle = createReticle();
 // Where the hitch monitor says a hitch happened: a label the dev tour sets, or zone + nearest stack.
@@ -123,7 +213,7 @@ if (hitch) {
   // Wake in the cabin: the intro starts in bed; ?skip starts standing beside it.
   const w = ctx.house.wake;
   player.place(w.stand.x, w.stand.y, w.stand.z, w.standYaw);
-  const dev = params.get('spawn');
+  const dev = params.get('spawn')?.toLowerCase();
   if (dev && ctx.stacks[dev]) {
     const st = ctx.stacks[dev];
     const x = st.cx + 6, z = st.cz + 6;
@@ -143,6 +233,13 @@ if (hitch) {
     player.zone = 'tunnel';
     player.place(s.pos.x + f.x * 1.2, s.pos.y + 0.1, s.pos.z + f.z * 1.2, s.rotY + Math.PI);
   }
+  // ?at=x,y,z[,yawDeg[,pitchDeg]]: exactly where a debug report's player.feet (and yawDeg / pitchDeg) say.
+  const at = params.get('at')?.split(',').map(Number);
+  if (at && at.length >= 3 && at.slice(0, 3).every(Number.isFinite)) {
+    player.zone = at[1] < UNDERGROUND_Y ? 'tunnel' : 'surface';
+    player.place(at[0], at[1] + 0.02, at[2], THREE.MathUtils.degToRad(at[3] || 0));
+    if (Number.isFinite(at[4])) player.pitch = THREE.MathUtils.degToRad(at[4]);
+  }
 }
 
 // Footstep surfaces
@@ -150,6 +247,7 @@ const q = {};
 function surfaceAt(feet) {
   if (player.zone === 'tunnel') return ctx.riding ? 'metal' : ctx.tunnels.lounge?.inside(feet) ? 'wood' : 'cave';
   if (ctx.house.inside(feet)) return 'wood';
+  if (ctx.deck?.on(feet)) return 'wood';
   const b = ctx.bridgeSpan;
   if (b) {
     const rx = feet.x - b.a.x, rz = feet.z - b.a.z;
@@ -183,7 +281,7 @@ function begin() {
   veil.style.opacity = '0';
   audio.start();
   if (params.has('skip')) { fx.fade = 0; player.canMove = true; }
-  else sequence = createIntro(ctx);
+  else sequence = restored ? createResume(ctx) : createIntro(ctx);
   last = performance.now();
 }
 // The recessed door on the End stack has no visible control; standing over it and pressing is enough.
@@ -197,11 +295,14 @@ function apertureAhead() {
   return d < 3.4 && facing && Math.abs(player.feet.y - ap.center.y) < 1.2;
 }
 // What a press right now would do something to (the reticle's highlight uses the same test as the press).
-const pressableAhead = () => interact.enabled && (!!interact.held || apertureAhead() || !!interact.pick());
+// (Seated in a deck chair a press only stands you up, so nothing lights the dot.)
+const pressableAhead = () => interact.enabled && player.mode !== 'sit' && (!!interact.held || apertureAhead() || !!interact.pick());
 
 input.on('press', () => {
   if (!started || ended || settings.open) return;
   if (sequence && !sequence.done) return;
+  if (player.mode === 'sit') { player.standUp(); return; }   // seated in a deck chair (props/deck.js)
+  if (fx.scope > 0.5 && ctx.exitScope) { ctx.exitScope(); return; }   // at the telescope: any click leaves (ui/scopeExit.js)
   if (apertureAhead()) {
     ended = true;
     interact.enabled = false;
@@ -222,6 +323,24 @@ const debugReport = createDebugReport({
   skip: [sky.mesh, clouds.group],   // the sky dome and cloud sea would swallow every ray
   game: () => ({ started, ended, sequence: sequence ? { done: !!sequence.done } : null, elapsed, dpr, underground: !!wasUnder }),
 });
+
+// ---------- Leaving ----------
+// Browsers allow no custom UI on unload, only their own "Leave site?" prompt: it is asked for while there is progress
+// the save doesn't have. What is left unsaved anyway is kept aside on pagehide and offered on the next load.
+function onBeforeUnload(e) {
+  if (!saves.dirty()) return;
+  e.preventDefault();
+  e.returnValue = '';
+}
+// (Not in ?dev sessions: the dev server's reloads would ask every time. The pagehide snapshot still covers them.)
+let unloadGuard = false;
+setInterval(() => {
+  const want = started && !DEV && saves.dirty();
+  if (want === unloadGuard) return;
+  unloadGuard = want;
+  if (want) addEventListener('beforeunload', onBeforeUnload); else removeEventListener('beforeunload', onBeforeUnload);
+}, 1000);
+addEventListener('pagehide', () => { if (started) saves.writePending(); });
 
 // ---------- Resize & adaptive resolution ----------
 let captureSize = null;   // fixed output size while recording (dev capture)
@@ -303,6 +422,7 @@ function step(dt) {
     if (sequence) { sequence.update(dt); if (sequence.done && !ended) sequence = null; }
     player.update(dt);
     for (const u of ctx.updaters) u(dt);
+    saves.tick(dt);
   } else {
     input.consumeMouse();
   }
@@ -407,6 +527,19 @@ requestAnimationFrame(frame);
     renderer, scene, camera, target: fx.composer.readBuffer, lod: ctx.lod, hooks, states,
     onProgress: (f) => setProgress(0.55 + f * 0.45),
   });
+  // The saved game to wake into (asked about while loading, if it had to be): put it back, and draw one real frame
+  // of where it stands.
+  const snap = await resumeChoice;
+  if (snap) {
+    saves.restore(snap, { keepClock: params.has('t') });
+    saves.setBaseline(snap, snap.time);
+    restored = true;
+    saved.phase = clock.phase;
+    const at = eye(player.feet);
+    view(at, at.clone().add(player.forward()), { under: player.feet.y < UNDERGROUND_Y })();
+  } else {
+    saves.setBaseline(saves.snapshot());
+  }
   // Back exactly as built: the clock, the camera, the eyepiece and the zones (re-applied on the first frame).
   clock.phase = saved.phase; clock.update(0);
   updateAtmosphere(clock, 0);
@@ -419,13 +552,12 @@ requestAnimationFrame(frame);
     window.preloadStats = { readyAt: t, models: Math.round(loadedT - bootT), world: Math.round(preloadT - loadedT), ...stats };
     console.log(`[preload] ready ${t} ms after navigation: models ${window.preloadStats.models} ms, world ${window.preloadStats.world} ms, preload ${stats.times.total} ms`, stats);
   }
-  setProgress(1);
-  veil.classList.add('ready');
+  loader.ready();
   ready = true;
   if (queued) begin();
 }
 
-if (DEV) Object.assign(window, { THREE, ctx, player, clock, renderer, fx, scene, camera, sky, lighting, audio });
+if (DEV) Object.assign(window, { THREE, ctx, player, clock, renderer, fx, scene, camera, sky, lighting, audio, saves });
 if (DEV) {
   // Deterministic recording: stop the real-time loop, render at a fixed size, and advance the game by hand
   // (optionally with the audio engine running in an OfflineAudioContext for frame-exact sound).
@@ -433,6 +565,7 @@ if (DEV) {
     // width: 0 keeps the window's size (no render-target reallocation, for the hitch tour).
     begin({ width = 1280, height = 720, audioContext = null } = {}) {
       manual = true;
+      savesOn = false;   // a scripted tour is not progress
       started = true;
       if (width) { captureSize = [width, height]; resize(); }
       veil.style.opacity = '0';

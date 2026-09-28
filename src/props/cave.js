@@ -74,7 +74,7 @@ float pick4(vec4 v, float i) { return i < 0.5 ? v.x : i < 1.5 ? v.y : i < 2.5 ? 
 vec3 lampGlow(vec2 u) {
   float id = floor(u.x), kind = floor(u.y);
   float t = uObsTime;
-  if (kind > 19.5) return vec3(1.0, 0.8, 0.55) * mix(0.02, 3.2, pick4(uLine, kind - 20.0));
+  if (kind > 19.5) return vec3(1.0, 0.8, 0.55) * mix(0.02, 2.2, pick4(uLine, kind - 20.0));
   if (kind > 9.5) return vec3(1.0, 0.5, 0.14) * mix(0.025, 3.0, pick4(uSw, kind - 10.0));
   float v;
   if (kind < 0.5) { float period = 0.5 + oh1(id) * 2.5; v = step(0.4, oh(vec2(id, floor(t / period + oh1(id + 5.0))))); }
@@ -284,7 +284,7 @@ export function placeCave(ctx, asset, { origin, group, collider }) {
     const back = new THREE.Vector3(Math.sin(st.rotY), 0, Math.cos(st.rotY));
     ctx.lightPool.add({
       center: st.pos.clone(), radius: 8,
-      lights: [{ pos: st.pos.clone().addScaledVector(back, 2.2).setY(st.pos.y + 2.5), color: new THREE.Color(1, 0.8, 0.6), distance: 11, intensity: () => level[i] * 16 }],
+      lights: [{ pos: st.pos.clone().addScaledVector(back, 2.2).setY(st.pos.y + 2.5), color: new THREE.Color(1, 0.8, 0.6), distance: 11, intensity: () => level[i] * 8 }],
     });
   }
 

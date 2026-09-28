@@ -7,19 +7,22 @@ const N = 9;
 // Blade i of an iris of `radius`, in its pivot's frame (the pivot sits on the rim at angle 2πi/N): a curved leaf from
 // the rim to near the centre, extruded downward. k scales its thickness and tip for a small door. Blade i is blade 0
 // turned by 2πi/N about the centre, which createIris relies on.
+// Shut, the nine blades must cover the whole opening with no chinks: each hugs the rim for two sectors (80 deg), and
+// its tip reaches past the centre, so every point is under at least two blades (the centre under all of them).
 function bladeGeometry(radius, i, k = 1) {
-  const a0 = (i / N) * Math.PI * 2, a1 = ((i + 1.35) / N) * Math.PI * 2;
+  const a0 = (i / N) * Math.PI * 2, a1 = ((i + 2) / N) * Math.PI * 2, am = (a0 + a1) / 2;
   const P = new THREE.Vector2(Math.cos(a0) * radius, Math.sin(a0) * radius);
-  const Q = new THREE.Vector2(Math.cos(a1) * radius * 1.02, Math.sin(a1) * radius * 1.02);
-  const tip = new THREE.Vector2(Math.cos(a0 + 1.3) * 0.12 * k, Math.sin(a0 + 1.3) * 0.12 * k);
+  const Q = new THREE.Vector2(Math.cos(a1) * radius * 1.03, Math.sin(a1) * radius * 1.03);
+  const M = new THREE.Vector2(Math.cos(am) * radius * 1.1, Math.sin(am) * radius * 1.1);   // pulls the outer edge onto the rim
+  const tip = new THREE.Vector2(Math.cos(a0 + 1.3 + Math.PI) * 0.1 * radius, Math.sin(a0 + 1.3 + Math.PI) * 0.1 * radius);
   // Shape in pivot-local coords.
   const s = new THREE.Shape();
   const rel = (v) => v.clone().sub(P);
   s.moveTo(0, 0);
-  const q = rel(Q), t = rel(tip);
-  s.quadraticCurveTo(q.x * 0.55 + t.x * 0.1, q.y * 0.55 + t.y * 0.1, q.x, q.y);
+  const q = rel(Q), t = rel(tip), m = rel(M);
+  s.quadraticCurveTo(m.x, m.y, q.x, q.y);
   s.lineTo(t.x, t.y);
-  s.quadraticCurveTo(t.x * 0.4, t.y * 0.4 + 0.05 * k, 0, 0);
+  s.quadraticCurveTo(t.x * 0.35 + q.x * 0.1, t.y * 0.35 + q.y * 0.1, 0, 0);
   const g = new THREE.ExtrudeGeometry(s, { depth: 0.025 * k, bevelEnabled: false, curveSegments: 10 });
   g.rotateX(Math.PI / 2); // shape (x, y) -> world (x, z), extruded downward
   return { geo: mergeParts([{ geo: g }]), P };
@@ -36,8 +39,9 @@ export function createAperture(ctx, { center, radius = 1.75, parent, batcher, co
   parent.add(group);
   const bladeY = -0.2;
 
-  // Rim ring + recessed collar
+  // Rim ring + recessed collar, and a flat steel bezel just above the blades that hides their pivots and outer ends.
   batcher.add(new THREE.TorusGeometry(radius + 0.02, 0.07, 6, 48).rotateX(Math.PI / 2), M.metal, mat4(center.x, center.y - 0.04, center.z));
+  batcher.add(new THREE.RingGeometry(radius - 0.09, radius + 0.14, 64, 1).rotateX(-Math.PI / 2), M.metal, mat4(center.x, center.y - 0.1, center.z));
   // Rivets around the rim
   const rivet = new THREE.SphereGeometry(0.035, 6, 4);
   const rparts = [];

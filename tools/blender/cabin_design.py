@@ -650,12 +650,11 @@ def build_shell():
         B('wood', 0.36, 0.42, 0.36, 2.0, 0.11, -5.35, tint=WALNUT, bevel=0.01, col=True)
         lantern_box(2.0, 0.49, -5.35, 0.8)
         porch_swing(-4.0, -5.85)
-        plant_fern(-2.75, 0.45, -6.75, seed=11)
-        pot(-2.75, -0.1, -6.75, 0.24, 0.55, TERRA)
-        plant_fern(0.35, 0.45, -6.75, seed=12)
-        pot(0.35, -0.1, -6.75, 0.24, 0.55, TERRA)
-        C(-2.75, 0.3, -6.75, 0.5, 0.8, 0.5)
-        C(0.35, 0.3, -6.75, 0.5, 0.8, 0.5)
+        # Set back from the posts (and clear of the swing) so neither pots nor fronds touch the timber.
+        for (fx, seed) in ((-2.5, 11), (0.1, 12)):
+            plant_fern(fx, 0.45, -6.15, seed=seed)
+            pot(fx, -0.1, -6.15, 0.24, 0.55, TERRA)
+            C(fx, 0.3, -6.15, 0.5, 0.8, 0.5)
         rug('jute', -1.75, -D - 0.75, -0.65, -D - 0.12, y=-0.1)
 
     # ---- chimney (outside) ----
@@ -789,16 +788,47 @@ def sofa(x, z, ry, length=2.5):
     g.col(L, 0.9, 0.95, 0, 0.45, 0)
 
 
+def bm_arc_solid(section, th0, th1, segs):
+    """A closed (r, y) cross-section swept about the y axis from th0 to th1, with both ends capped: a solid arc."""
+    bm = bmesh.new()
+    rings = []
+    for i in range(segs + 1):
+        th = th0 + (th1 - th0) * i / segs
+        c, s_ = math.cos(th), math.sin(th)
+        rings.append([bm.verts.new((c * r, y, s_ * r)) for (r, y) in section])
+    n = len(section)
+    for a, b in zip(rings[:-1], rings[1:]):
+        for k in range(n):
+            j = (k + 1) % n
+            bm.faces.new((a[k], b[k], b[j], a[j]))
+    bm.faces.new(rings[0])
+    bm.faces.new(list(reversed(rings[-1])))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return bm
+
+
 def swivel_chair(x, z, ry, tint=CREAM):
     g = G(x, 0, z, ry)
     g.cyl('metal_black', 0.22, 0.25, 0.04, 0, 0.02, 0, 24, tint=BLACK)
     g.put(bm_box(0.78, 0.28, 0.74, 0.12, 3), 'fabric', 0, 0.3, 0.02, tint=tint, smooth=True, tile=0.25)
-    back = bm_lathe([(0.36, 0.0), (0.4, 0.2), (0.39, 0.42), (0.34, 0.46), (0.3, 0.44), (0.31, 0.22), (0.27, 0.02)], 28)
-    kill = [f for f in back.faces if f.calc_center_median().z > 0.12]
-    bmesh.ops.delete(back, geom=kill, context='FACES')
+    # The tub back and arms: a closed wall section swept round the back (z <= ~0.12) and capped at the arm ends, so
+    # it is solid from every side (it was an open lathe with its front cut away, hollow at the arm ends).
+    back = bm_arc_solid([(0.36, 0.0), (0.4, 0.2), (0.39, 0.42), (0.34, 0.46), (0.3, 0.44), (0.31, 0.22), (0.27, 0.02)],
+                        PI - 0.3, 2 * PI + 0.3, 24)
     g.put(back, 'fabric', 0, 0.42, 0.02, tint=tint, smooth=True, tile=0.25)
     g.put(bm_box(0.6, 0.12, 0.56, 0.05, 3), 'fabric', 0, 0.49, 0.06, tint=jitter(tint, 0.02), smooth=True, tile=0.25)
     g.col(0.8, 0.8, 0.8, 0, 0.4, 0)
+
+
+def two_sided(bm, t):
+    """A sheet with a back: a copy of its faces, t below (local -y) and facing the other way, joined along the rim."""
+    bm.normal_update()
+    top = list(bm.faces)
+    ret = bmesh.ops.duplicate(bm, geom=top)
+    back = [e for e in ret['geom'] if isinstance(e, bmesh.types.BMFace)]
+    bmesh.ops.translate(bm, vec=(0, -t, 0), verts=list({v for f in back for v in f.verts}))
+    bmesh.ops.reverse_faces(bm, faces=back)
+    return bm
 
 
 def sling_chair(x, z, ry):
@@ -806,8 +836,9 @@ def sling_chair(x, z, ry):
     for sx in (-1, 1):
         g.put(bm_tube([(sx * 0.3, 0.0, 0.32), (sx * 0.3, 0.45, 0.3), (sx * 0.3, 0.45, -0.3), (sx * 0.3, 0.0, -0.32)], 0.018, 6), 'wood', 0, 0, 0, tint=WALNUT, smooth=True)
         g.put(bm_tube([(sx * 0.3, 0.45, -0.3), (sx * 0.3, 0.85, -0.42)], 0.018, 6), 'wood', 0, 0, 0, tint=WALNUT, smooth=True)
-    g.put(bm_blanket(0.56, 0.62, (0, 0, 0, 0), 0.05, 0.004, 5), 'leather', 0, 0.32, 0.02, rx=0.12, tint=COGNAC, tile=0.4, smooth=True)
-    g.put(bm_blanket(0.56, 0.44, (0, 0, 0, 0), 0.05, 0.004, 6), 'leather', 0, 0.6, -0.34, rx=1.2, tint=COGNAC, tile=0.4, smooth=True)
+    # The seat and back slings, two-sided (a single sheet vanished from behind).
+    g.put(two_sided(bm_blanket(0.56, 0.62, (0, 0, 0, 0), 0.05, 0.004, 5), 0.006), 'leather', 0, 0.32, 0.02, rx=0.12, tint=COGNAC, tile=0.4, smooth=True)
+    g.put(two_sided(bm_blanket(0.56, 0.44, (0, 0, 0, 0), 0.05, 0.004, 6), 0.006), 'leather', 0, 0.6, -0.34, rx=1.2, tint=COGNAC, tile=0.4, smooth=True)
     g.col(0.7, 0.8, 0.7, 0, 0.4, 0)
 
 
@@ -848,8 +879,9 @@ def build_living():
     arc_lamp(-6.05, 0.1, 0.35)
     # Side table + lamp at the sofa's end
     CYL('wood', 0.22, 0.22, 0.04, -2.72, 0.56, -0.35, 24, tint=WALNUT, smooth=False)
-    CYL('metal_black', 0.015, 0.015, 0.54, -2.72, 0.27, -0.35, 6, tint=BLACK)
-    CYL('metal_black', 0.18, 0.18, 0.015, -2.72, 0.01, -0.35, 20, tint=BLACK)
+    # (Its foot stands on the wool rug, whose top is 0.02 up.)
+    CYL('metal_black', 0.015, 0.015, 0.52, -2.72, 0.29, -0.35, 6, tint=BLACK)
+    CYL('metal_black', 0.18, 0.18, 0.015, -2.72, 0.0275, -0.35, 20, tint=BLACK)
     table_lamp(-2.72, 0.58, -0.35, mul(TERRA, 1.0))
     C(-2.72, 0.3, -0.35, 0.45, 0.6, 0.45)
     # Console behind the sofa
@@ -1150,6 +1182,84 @@ def build_bedroom():
     empty('WAKE_stand', (sx, 0.02, sz), yaw=math.atan2(-dx, -dz))
 
 
+def pipe(pts, r, mat='brass', tint=WHITE, sides=16, r_end=None):
+    """Round tube along a path in a plane of constant x (fixed frame, so no twist where the path turns vertical)."""
+    bm = bmesh.new()
+    P = [Vector(p) for p in pts]
+    n = len(P)
+    rings = []
+    for i, p in enumerate(P):
+        t = (P[min(i + 1, n - 1)] - P[max(i - 1, 0)]).normalized()
+        N = Vector((1, 0, 0))
+        N = (N - t * N.dot(t)).normalized()
+        Bn = t.cross(N)
+        rr = r if r_end is None else r + (r_end - r) * i / max(1, n - 1)
+        rings.append([bm.verts.new(p + (N * math.cos(2 * PI * j / sides) + Bn * math.sin(2 * PI * j / sides)) * rr) for j in range(sides)])
+    for a, b in zip(rings[:-1], rings[1:]):
+        for j in range(sides):
+            k = (j + 1) % sides
+            bm.faces.new((a[j], a[k], b[k], b[j]))
+    emit(bm, mat, None, tint, 1.0, None, None, True)
+
+
+def tub_filler(x, z):
+    """Floor-mounted brass tub filler: domed escutcheon, riser, mixing body with two cross handles,
+    a gooseneck spout reaching over the tub rim (toward -z) and a hand shower in a cradle."""
+    AGED = mul(WHITE, 0.82)
+    lathe = lambda prof, y0, segs=28: emit(bm_lathe(prof, segs), 'brass', xf(x, y0, z), AGED, 1.0, None, None, True)
+    # Escutcheon, riser with collars, mixing body.
+    # (bm_lathe faces outward only when the profile climbs in y: every profile here runs bottom to top.)
+    lathe([(0.07, 0.0), (0.066, 0.01), (0.052, 0.022), (0.03, 0.03), (0.0, 0.03)], 0.0)
+    lathe([(0.02, 0.0), (0.026, 0.02), (0.024, 0.05), (0.02, 0.07), (0.019, 0.7), (0.0, 0.7)], 0.02)
+    for cy in (0.08, 0.66):
+        lathe([(0.0, 0.0), (0.028, 0.0), (0.03, 0.01), (0.028, 0.02), (0.0, 0.02)], cy)
+    lathe([(0.0, 0.0), (0.024, 0.0), (0.034, 0.02), (0.036, 0.1), (0.032, 0.13), (0.024, 0.15), (0.017, 0.16), (0.0, 0.16)], 0.72)
+    # Hot / cold cross handles on short stems out either side of the body.
+    for sx, cap in ((-1, (0.75, 0.12, 0.1)), (1, (0.12, 0.25, 0.7))):
+        hx = x + sx * 0.075
+        CYL('brass', 0.011, 0.013, 0.05, x + sx * 0.05, 0.8, z, 14, rz=PI / 2, tint=AGED)
+        CYL('brass', 0.017, 0.017, 0.016, hx, 0.8, z, 16, rz=PI / 2, tint=AGED)
+        for k in range(4):
+            a = k * PI / 2 + PI / 4
+            dy, dz = math.sin(a), math.cos(a)
+            TUBE('brass', [(hx, 0.8, z), (hx, 0.8 + dy * 0.045, z + dz * 0.045)], 0.005, 8, tint=AGED, r_end=0.004)
+            SPH('brass', 0.008, hx, 0.8 + dy * 0.047, z + dz * 0.047, 10, 6, tint=AGED)
+        CYL('ceramic', 0.011, 0.011, 0.006, hx + sx * 0.009, 0.8, z, 16, rz=PI / 2, tint=CERAMIC)
+        CYL('painted', 0.004, 0.004, 0.002, hx + sx * 0.0125, 0.8, z, 10, rz=PI / 2, tint=cap)
+    # Gooseneck: rises from the body, arcs over and drops toward the tub; flared aerator at the tip.
+    R, top = 0.2, 0.98
+    path = [(x, 0.87, z), (x, 0.93, z), (x, top, z)]
+    for k in range(1, 25):
+        th = PI * k / 24
+        path.append((x, top + R * math.sin(th), z - R + R * math.cos(th)))
+    path.append((x, top - 0.05, z - 2 * R))
+    pipe(path, 0.0135, tint=AGED)
+    lathe([(0.0, -0.032), (0.013, -0.032), (0.0165, -0.03), (0.016, -0.012), (0.0135, 0.0)], top - 0.05, 20)
+    emit(bm_lathe([(0.0, 0.0), (0.012, 0.0), (0.0, 0.0005)], 16), 'metal_black', xf(x, top - 0.0825, z - 2 * R), BLACK, 1.0, None, None, True)
+    # Hand shower resting upright in a cradle on the back (+z) of the riser, hose looping from the body.
+    cz = z + 0.045
+    B('brass', 0.03, 0.012, 0.04, x, 0.52, z + 0.03, tint=AGED)
+    TUBE('brass', [(x - 0.018, 0.52, cz + 0.005), (x - 0.018, 0.56, cz + 0.012)], 0.004, 8, tint=AGED)
+    TUBE('brass', [(x + 0.018, 0.52, cz + 0.005), (x + 0.018, 0.56, cz + 0.012)], 0.004, 8, tint=AGED)
+    lathe_h = lambda prof, y0: emit(bm_lathe(prof, 24), 'brass', xf(x, y0, cz + 0.012), AGED, 1.0, None, None, True)
+    lathe_h([(0.0, 0.0), (0.012, 0.0), (0.014, 0.02), (0.013, 0.18), (0.02, 0.2), (0.034, 0.23), (0.036, 0.245), (0.0, 0.25)], 0.46)
+    emit(bm_lathe([(0.0, 0.0), (0.033, 0.0), (0.0, 0.001)], 24), 'metal_black', xf(x, 0.7105, cz + 0.012), mul(BLACK, 1.4), 1.0, None, None, True)
+    hose = [(x, 0.76, z + 0.03), (x, 0.74, z + 0.09), (x, 0.55, z + 0.14), (x, 0.3, z + 0.15), (x, 0.2, z + 0.11),
+            (x, 0.24, z + 0.07), (x, 0.36, cz + 0.02), (x, 0.44, cz + 0.013), (x, 0.46, cz + 0.012)]
+    # Catmull-Rom through the hose's control points, so it hangs in a smooth loop rather than kinks.
+    H = [Vector(p) for p in hose]
+    H = [H[0]] + H + [H[-1]]
+    smooth = []
+    for i in range(1, len(H) - 2):
+        p0, p1, p2, p3 = H[i - 1], H[i], H[i + 1], H[i + 2]
+        for k in range(6):
+            t = k / 6
+            smooth.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t))
+    smooth.append(H[-2])
+    pipe(smooth, 0.0065, tint=mul(AGED, 0.85), sides=10)
+    C(x, 0.5, z + 0.02, 0.12, 1.0, 0.14)
+
+
 def build_bath():
     X0, X1, Z0, Z1 = PX1 + 0.06, IW, -ID, PZ2 - 0.06
     BOX('hex_tile', X0, 0.0, Z0, X1, 0.006, Z1, tile=1.0)
@@ -1158,15 +1268,15 @@ def build_bath():
     wall_layer('x', Z1 - 0.012, Z1, X0, X1, [], lambda u: 1.3, 'zellige', mul(SAGE, 1.35), 0.8, None)
     wall_layer('z', X0, X0 + 0.012, Z0, Z1, [(-1.55, -0.7, -0.05, 2.2)], lambda u: 2.3 if u < -3.0 else 1.3, 'zellige', mul(SAGE, 1.35), 0.8, None, breaks=(-3.0,))
     wall_layer('x', Z0, Z0 + 0.012, X0, X1, [(3.5, 4.7, 1.55, 2.55)], lambda u: 2.3 if u < 3.72 else 1.3, 'zellige', mul(SAGE, 1.35), 0.8, None, breaks=(3.72,))
-    for (a, b, c_, d_, h) in ((X0, X1, Z1 - 0.03, Z1 - 0.012, 1.3), (X0 + 0.012, X0 + 0.03, -3.0, Z1, 1.3)):
+    # Cap rails; the partition one stops at the door casing (-1.62 .. -0.63) on either side.
+    for (a, b, c_, d_, h) in ((X0, X1, Z1 - 0.03, Z1 - 0.012, 1.3), (X0 + 0.012, X0 + 0.03, -3.0, -1.62, 1.3), (X0 + 0.012, X0 + 0.03, -0.63, Z1, 1.3)):
         BOX('wood', a, h, c_, b, h + 0.03, d_, tint=WALNUT)
     # Freestanding tub under the east window, and a floor-mounted filler
     tub = bm_lathe([(0.0, 0.0), (0.28, 0.0), (0.34, 0.06), (0.38, 0.2), (0.405, 0.4), (0.42, 0.5), (0.43, 0.54), (0.415, 0.56),
                     (0.39, 0.555), (0.375, 0.5), (0.355, 0.32), (0.32, 0.14), (0.25, 0.07), (0.0, 0.06)], 40)
     emit(tub, 'ceramic', xf(5.55, 0.006, -2.5, 0, 0, 0, (0.95, 1.0, 2.05)), CERAMIC, 0.4, None, None, True)
     C(5.55, 0.3, -2.5, 0.85, 0.6, 1.8)
-    CYL('metal_black', 0.02, 0.028, 1.0, 5.55, 0.5, -1.35, 10, tint=BLACK)
-    emit(bm_torus(0.09, 0.02, 14, 8, arc=PI), 'metal_black', xf(5.55, 1.0, -1.44, PI / 2, 0, 0), BLACK, 1.0, None, None, True)
+    tub_filler(5.55, -1.5)
     B('wood', 0.9, 0.03, 0.22, 5.55, 0.58, -2.4, tint=WALNUT)
     candle(5.4, 0.595, -2.42, 0.1)
     book_stack(5.72, 0.595, -2.4, 1, 0.2)
@@ -1217,7 +1327,7 @@ def build_bath():
         B('wood', 0.03, 0.03, 0.42, X1 - 0.3 + 0.25 * t, 0.02 + 1.68 * t, -0.95, tint=WALNUT)
     throw_folded(X1 - 0.16, 1.1, -0.95, 0.06, 0.36, mul(SAND, 1.05), 0.0, (0.25, 0.3, 0.0, 0.0), 82)
     C(X1 - 0.2, 0.8, -0.95, 0.4, 1.6, 0.5)
-    plant_fern(5.95, 1.0, -3.95, seed=83, s=0.6)
+    plant_fern(5.95, 0.745, -3.95, seed=83, s=0.6)   # from the soil (pot top 0.77, soil 0.745)
     pot(5.95, 0.52, -3.95, 0.15, 0.25, CERAMIC)
     B('wood', 0.34, 0.5, 0.34, 5.95, 0.26, -3.95, tint=WALNUT, bevel=0.01, col=True)
     B('wood', 0.3, 0.3, 0.3, 4.75, 0.15, -3.6, tint=WALNUT, bevel=0.01, col=True)

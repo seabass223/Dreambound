@@ -6,6 +6,9 @@ const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
 const _move = new THREE.Vector3();
 const _prev = new THREE.Vector3();
+const SIT_TIME = 0.9;   // seconds to sit down or stand up
+const smooth = (t) => t * t * (3 - 2 * t);
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export class Player {
   constructor(camera, input, physics) {
@@ -17,7 +20,8 @@ export class Player {
     this.yaw = 0; this.pitch = 0; this.roll = 0;
     this.onGround = false;
     this.zone = 'surface';
-    this.mode = 'walk';          // walk | ladder | locked
+    this.mode = 'walk';          // walk | ladder | sit | locked
+    this.seat = null;            // the chair sat in (mode 'sit', see sit())
     this.canMove = false;
     this.lookHandler = null;     // when set, mouse drives this instead of the view
     this.ladder = null;
@@ -37,6 +41,7 @@ export class Player {
   }
 
   place(x, y, z, yaw = this.yaw) {
+    if (this.mode === 'sit') { this.mode = 'walk'; this.seat = null; }
     this.feet.set(x, y, z);
     this.vel.set(0, 0, 0);
     this.yaw = yaw;
@@ -51,6 +56,7 @@ export class Player {
   update(dt) {
     const m = this.input.consumeMouse();
     if (this.lookHandler) this.lookHandler(m.x, m.y);
+    else if (this.mode === 'sit') this.lookSeated(m);
     else if (this.canMove || this.mode === 'fallLook') {
       this.yaw -= m.x * this.sensitivity;
       this.pitch = clamp(this.pitch - m.y * this.sensitivity, -1.45, 1.45);
@@ -58,6 +64,7 @@ export class Player {
 
     if (this.mode === 'ladder') this.updateLadder(dt);
     else if (this.mode === 'walk') this.updateWalk(dt);
+    else if (this.mode === 'sit') this.updateSit(dt);
 
     this.updateCamera(dt);
   }
@@ -200,6 +207,77 @@ export class Player {
     }
   }
 
+  // ---- Sitting ----
+  // A seat is { eye (the seated eye, world), stand (the feet when standing up, world), yaw (looking straight out),
+  // yawRange, pitchMin, pitchMax (the look limits around it), onSit, onStand }. While seated the feet already stand at
+  // `stand` (so a save made now stands the player up there: main.js counts 'sit' as a safe pose), the camera eases
+  // between the eye it had and the seat's over SIT_TIME, and the mouse looks round within the limits. Pressing again or
+  // walking (once the keys have been let go after sitting down) stands up.
+  sit(seat) {
+    if (this.mode !== 'walk' || !this.canMove || this.lookHandler) return false;
+    this.mode = 'sit';
+    this.seat = seat;
+    this.sitFrom = this.camera.position.clone();
+    this.sitYaw0 = wrapAngle(this.yaw - seat.yaw);
+    this.sitPitch0 = this.pitch;
+    this.sitT = 0;
+    this.sitDir = 1;
+    this.sitArmed = false;
+    this.feet.copy(seat.stand);
+    this.vel.set(0, 0, 0);
+    this.onGround = true;
+    this.lastGroundY = this.feet.y;
+    this.history.length = 0;
+    seat.onSit?.();
+    return true;
+  }
+
+  standUp() {
+    if (this.mode !== 'sit' || this.sitDir < 0) return false;
+    this.sitDir = -1;
+    this.sitFrom = this.feet.clone().setY(this.feet.y + PLAYER.eye);
+    this.seat.onStand?.();
+    return true;
+  }
+
+  lookSeated(m) {
+    const s = this.seat;
+    if (this.sitDir > 0 && this.sitT < 1) {
+      // Settling in: turn to face out, whatever way the chair was approached from.
+      const e = smooth(this.sitT);
+      this.yaw = s.yaw + this.sitYaw0 * (1 - e);
+      this.pitch = THREE.MathUtils.lerp(this.sitPitch0, -0.06, e);
+      return;
+    }
+    this.yaw -= m.x * this.sensitivity;
+    this.pitch -= m.y * this.sensitivity;
+    const d = clamp(wrapAngle(this.yaw - s.yaw), -s.yawRange, s.yawRange);
+    this.yaw = s.yaw + d;
+    this.pitch = clamp(this.pitch, s.pitchMin, s.pitchMax);
+  }
+
+  updateSit(dt) {
+    this.sitT = clamp(this.sitT + this.sitDir * dt / SIT_TIME, 0, 1);
+    if (this.sitDir < 0) {
+      if (this.sitT <= 0) { this.mode = 'walk'; this.seat = null; this.lastGroundY = this.feet.y; }
+      return;
+    }
+    if (this.sitT < 1) return;
+    const a = this.canMove ? this.input.axis() : { x: 0, y: 0 };
+    const moving = a.x !== 0 || a.y !== 0;
+    if (!moving) this.sitArmed = true;
+    else if (this.sitArmed) this.standUp();
+  }
+
+  // Where the seated camera is: between the eye it came from (sitting down) or goes to (standing up) and the seat's.
+  seatedEye(out) {
+    const e = smooth(this.sitT);
+    out.copy(this.sitFrom).lerp(this.seat.eye, e);
+    // A little dip on the way, as the body folds into the chair.
+    out.y -= Math.sin(Math.PI * e) * 0.06;
+    return out;
+  }
+
   // ---- Camera ----
   updateCamera(dt) {
     if (!this.cameraControlled) return;
@@ -215,7 +293,8 @@ export class Player {
       roll = THREE.MathUtils.lerp(0, o.roll ?? 0, w);
     }
     const c = this.camera;
-    c.position.set(this.feet.x + Math.cos(this.yaw) * bobX, this.feet.y + eye + bobY, this.feet.z - Math.sin(this.yaw) * bobX);
+    if (this.mode === 'sit') this.seatedEye(c.position);
+    else c.position.set(this.feet.x + Math.cos(this.yaw) * bobX, this.feet.y + eye + bobY, this.feet.z - Math.sin(this.yaw) * bobX);
     if (this.extraCam) c.position.add(this.extraCam);
     const t = performance.now() / 1000;
     const sh = this.shake;

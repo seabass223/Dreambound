@@ -1,5 +1,6 @@
 import { DAY_SECONDS, NIGHT_SECONDS } from '../config.js';
 import { atmo } from '../render/atmosphere.js';
+import { h, button, card, section, hint, spacer, field, slider, toggle, colorPicker, closeColorPickers, confirmDialog, isDialogOpen } from './kit/index.js';
 
 const KEY = 'dreambound.settings.v1';
 const DEFAULTS = {
@@ -36,69 +37,58 @@ function save(s) {
 }
 
 const CSS = `
-#settings { position: fixed; inset: 0; display: none; place-items: center; background: rgba(4, 6, 10, 0.45);
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); cursor: default; z-index: 10;
-  font: 14px/1.4 Georgia, 'Times New Roman', serif; color: #e9e2d2; }
+#settings { position: fixed; inset: 0; display: none; place-items: center; z-index: 10; background: oklch(0.1 0.01 65 / 0.4);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); cursor: default; }
 #settings.open { display: grid; }
-#settings .card { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 22px 26px 18px;
-  background: rgba(18, 20, 26, 0.82); border: 1px solid rgba(233, 226, 210, 0.16); border-radius: 10px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
-#settings h2 { margin: 0 0 14px; font-weight: normal; font-size: 20px; letter-spacing: 0.08em; }
-#settings h3 { margin: 16px 0 6px; font-weight: normal; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: #b9ad94; }
-#settings .row { display: grid; grid-template-columns: 110px 1fr 48px; align-items: center; gap: 10px; margin: 7px 0; }
-#settings .row output { text-align: right; font-variant-numeric: tabular-nums; color: #cfc6b3; font-size: 13px; }
-#settings input[type=range] { width: 100%; accent-color: #d9b779; }
-#settings input[type=color] { width: 100%; height: 26px; border: 1px solid rgba(233, 226, 210, 0.2); border-radius: 4px; background: none; padding: 0; }
-#settings .check { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 0; }
-#settings .check input { accent-color: #d9b779; }
-#settings .hint { font-size: 12px; color: #9a927f; margin: 2px 0 0; }
-#settings .buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
-#settings button { font: inherit; color: #e9e2d2; background: rgba(233, 226, 210, 0.08); border: 1px solid rgba(233, 226, 210, 0.2);
-  border-radius: 6px; padding: 6px 14px; cursor: pointer; }
-#settings button:hover { background: rgba(233, 226, 210, 0.16); }
-#settings button.primary { background: rgba(217, 183, 121, 0.22); border-color: rgba(217, 183, 121, 0.5); }
+#settings > .ui-card { width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+#settings .ui-card-content { overflow: auto; flex: 1; min-height: 0; }
+#settings .game-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; }
 `;
 
-const HTML = `
-<div class="card" role="dialog" aria-label="Settings">
-  <h2>Settings</h2>
-  <h3>Movement</h3>
-  <div class="row"><label for="s-walk">Walk speed</label><input id="s-walk" type="range" min="0.5" max="2" step="0.05"><output id="o-walk"></output></div>
-  <h3>Image</h3>
-  <div class="row"><label for="s-gamma">Gamma</label><input id="s-gamma" type="range" min="0.6" max="1.8" step="0.02"><output id="o-gamma"></output></div>
-  <div class="row"><label for="s-brightness">Brightness</label><input id="s-brightness" type="range" min="0.4" max="2.2" step="0.02"><output id="o-brightness"></output></div>
-  <h3>Fog</h3>
-  <div class="row"><label for="s-fogDensity">Density</label><input id="s-fogDensity" type="range" min="0" max="4" step="0.05"><output id="o-fogDensity"></output></div>
-  <div class="row"><label for="s-fogLow">Low haze</label><input id="s-fogLow" type="range" min="0" max="4" step="0.05"><output id="o-fogLow"></output></div>
-  <div class="row"><label for="s-fogTint">Tint</label><input id="s-fogTint" type="color"><output></output></div>
-  <p class="hint">Low haze thickens the air toward the cloud sea. Grey tint is neutral.</p>
-  <h3>Time</h3>
-  <div class="row"><label for="s-time">Time of day</label><input id="s-time" type="range" min="0" max="0.9999" step="0.0005"><output id="o-time"></output></div>
-  <label class="check"><input id="s-pause" type="checkbox"> Pause the day/night cycle</label>
-  <h3>Color grading</h3>
-  <div class="row"><label for="s-shadows">Shadows</label><input id="s-shadows" type="color"><output></output></div>
-  <div class="row"><label for="s-mids">Midtones</label><input id="s-mids" type="color"><output></output></div>
-  <div class="row"><label for="s-highs">Highlights</label><input id="s-highs" type="color"><output></output></div>
-  <p class="hint">Grey is neutral. Push a color to tint that range.</p>
-  <div class="row"><label for="s-blend">Blend</label><input id="s-blend" type="range" min="0" max="1" step="0.01"><output id="o-blend"></output></div>
-  <div class="row"><label for="s-balance">Balance</label><input id="s-balance" type="range" min="-1" max="1" step="0.01"><output id="o-balance"></output></div>
-  <h3>Interface</h3>
-  <label class="check"><input id="s-pointer" type="checkbox"> Pointer</label>
-  <label class="check"><input id="s-debugReports" type="checkbox"> Debug reports</label>
-  <p class="hint">With debug reports on, F8 or a middle click copies what you are looking at, where you stand and the game state to the clipboard.</p>
-  <div class="buttons"><button id="s-reset" type="button">Reset</button><button id="s-resume" class="primary" type="button">Resume</button></div>
-</div>`;
+const x2 = (v) => v.toFixed(2);
+const times = (v) => v.toFixed(2) + '×';
+// The panel, as data: every row is built by the UI kit from its entry. key: a settings value (saved); get/set: a
+// live value that isn't a setting (the clock).
+const FORM = [
+  ['Movement', [
+    { key: 'walk', label: 'Walk speed', type: 'slider', min: 0.5, max: 2, step: 0.05, format: times },
+  ]],
+  ['Image', [
+    { key: 'gamma', label: 'Gamma', type: 'slider', min: 0.6, max: 1.8, step: 0.02, format: x2 },
+    { key: 'brightness', label: 'Brightness', type: 'slider', min: 0.4, max: 2.2, step: 0.02, format: x2 },
+  ]],
+  ['Fog', [
+    { key: 'fogDensity', label: 'Density', type: 'slider', min: 0, max: 4, step: 0.05, format: times },
+    { key: 'fogLow', label: 'Low haze', type: 'slider', min: 0, max: 4, step: 0.05, format: times },
+    { key: 'fogTint', label: 'Tint', type: 'color' },
+    { type: 'hint', text: 'Low haze thickens the air toward the cloud sea. Grey tint is neutral.' },
+  ]],
+  ['Time', [
+    { key: 'time', label: 'Time of day', type: 'slider', min: 0, max: 0.9999, step: 0.0005, format: phaseToClock, live: true },
+    { key: 'pauseCycle', label: 'Pause the day/night cycle', type: 'switch' },
+  ]],
+  ['Color grading', [
+    { key: 'shadows', label: 'Shadows', type: 'color' },
+    { key: 'mids', label: 'Midtones', type: 'color' },
+    { key: 'highs', label: 'Highlights', type: 'color' },
+    { type: 'hint', text: 'Grey is neutral. Push a color to tint that range.' },
+    { key: 'blend', label: 'Blend', type: 'slider', min: 0, max: 1, step: 0.01, format: (v) => Math.round(v * 100) + '%' },
+    { key: 'balance', label: 'Balance', type: 'slider', min: -1, max: 1, step: 0.01, format: (v) => (v > 0 ? '+' : '') + v.toFixed(2) },
+  ]],
+  ['Interface', [
+    { key: 'pointer', label: 'Pointer', type: 'switch' },
+    { key: 'debugReports', label: 'Debug reports', type: 'switch' },
+    { type: 'hint', text: 'With debug reports on, F8 or a middle click copies what you are looking at, where you stand and the game state to the clipboard.' },
+  ]],
+];
 
 // Escape opens and closes the panel. Values apply live and persist in localStorage.
-export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1 }) {
+// game: { save() -> bool, restart(), status() -> { text, canSave }, travel(place), places: [[key, label]] }
+// (main.js, core/save.js).
+export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1, game = null }) {
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
-  const root = document.createElement('div');
-  root.id = 'settings';
-  root.innerHTML = HTML;
-  document.body.appendChild(root);
-  const $ = (id) => root.querySelector('#' + id);
 
   const s = load();
   const api = { open: false, values: s, onChange: null };
@@ -117,47 +107,78 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
     fx.grade.blend = s.blend;
     fx.grade.balance = s.balance;
     clock.speed = s.pauseCycle ? 0 : baseSpeed;
-    $('o-walk').textContent = s.walk.toFixed(2) + '×';
-    $('o-gamma').textContent = s.gamma.toFixed(2);
-    $('o-brightness').textContent = s.brightness.toFixed(2);
-    $('o-fogDensity').textContent = s.fogDensity.toFixed(2) + '×';
-    $('o-fogLow').textContent = s.fogLow.toFixed(2) + '×';
-    $('o-blend').textContent = Math.round(s.blend * 100) + '%';
-    $('o-balance').textContent = (s.balance > 0 ? '+' : '') + s.balance.toFixed(2);
     save(s);
+    api.onChange?.(s);
   };
+
+  // Live values that aren't settings.
+  const live = {
+    time: {
+      get: () => clock.phase,
+      set: (v) => { clock.phase = v; clock.update(0); },
+    },
+  };
+  const read = (f) => (f.live ? live[f.key].get() : s[f.key]);
+  const write = (f, v) => { if (f.live) live[f.key].set(v); else { s[f.key] = v; apply(); } };
+
+  // Build every row through the kit.
+  const controls = {};
+  const make = (f) => {
+    if (f.type === 'hint') return hint(f.text);
+    const onInput = (v) => write(f, v);
+    const c = f.type === 'slider' ? slider({ min: f.min, max: f.max, step: f.step, value: read(f), format: f.format, onInput })
+      : f.type === 'switch' ? toggle({ checked: read(f), onChange: onInput })
+      : f.type === 'color' ? colorPicker({ value: read(f), neutral: DEFAULTS[f.key], onInput })
+      : null;
+    controls[f.key] = c;
+    return field({ label: f.label, control: c, inline: f.type === 'switch' });
+  };
+
+  // The game: save and restart.
+  const status = h('span', { class: 'ui-muted' });
+  const saveBtn = button({
+    label: 'Save', variant: 'secondary', size: 'sm',
+    onClick: () => { const ok = game?.save(); refreshGame(ok === false ? 'Could not save (storage unavailable)' : null); },
+  });
+  const restartBtn = button({
+    label: 'Restart', variant: 'outline', size: 'sm',
+    onClick: async () => {
+      const yes = await confirmDialog({
+        title: 'Start over?',
+        description: 'This clears your saved game and wakes you in the cabin again. Settings are kept.',
+        confirmLabel: 'Restart', destructive: true,
+      });
+      if (yes) game?.restart();
+    },
+  });
+  // Travel: straight to a place (and back into the game).
+  const travelRow = game?.places?.length ? h('div', { class: 'game-row' }, ...game.places.map(([key, label]) =>
+    button({ label, variant: 'secondary', size: 'sm', onClick: () => { game.travel(key); close(true); } }))) : null;
+  function refreshGame(msg = null) {
+    const st = game?.status() ?? { text: '', canSave: false };
+    status.textContent = msg ?? st.text;
+    saveBtn.disabled = !st.canSave;
+  }
+
+  const resetBtn = button({ label: 'Reset settings', variant: 'ghost', onClick: () => { Object.assign(s, DEFAULTS); apply(); sync(); } });
+  const resumeBtn = button({ label: 'Resume', onClick: () => close(true) });
+  const panel = card({
+    title: 'Settings', role: 'dialog', 'aria-label': 'Settings',
+    content: [
+      game ? section('Game', h('div', { class: 'game-row' }, saveBtn, restartBtn, spacer(), status)) : null,
+      travelRow ? section('Travel', travelRow) : null,
+      ...FORM.map(([title, fields]) => section(title, ...fields.map(make))),
+    ].filter(Boolean),
+    footer: [resetBtn, spacer(), resumeBtn],
+  });
+  const root = h('div', { id: 'settings' }, panel.el);
+  document.body.appendChild(root);
 
   const sync = () => {
-    $('s-walk').value = s.walk;
-    $('s-gamma').value = s.gamma;
-    $('s-brightness').value = s.brightness;
-    $('s-pause').checked = s.pauseCycle;
-    $('s-pointer').checked = s.pointer;
-    $('s-debugReports').checked = s.debugReports;
-    $('s-shadows').value = s.shadows;
-    $('s-mids').value = s.mids;
-    $('s-highs').value = s.highs;
-    $('s-blend').value = s.blend;
-    $('s-balance').value = s.balance;
-    $('s-fogDensity').value = s.fogDensity;
-    $('s-fogLow').value = s.fogLow;
-    $('s-fogTint').value = s.fogTint;
-    $('s-time').value = clock.phase;
-    $('o-time').textContent = phaseToClock(clock.phase);
+    for (const [, fields] of FORM) for (const f of fields) if (controls[f.key]) controls[f.key].set(read(f));
   };
 
-  for (const k of ['walk', 'gamma', 'brightness', 'blend', 'balance', 'fogDensity', 'fogLow']) $('s-' + k).addEventListener('input', (e) => { s[k] = parseFloat(e.target.value); apply(); });
-  for (const k of ['shadows', 'mids', 'highs', 'fogTint']) $('s-' + k).addEventListener('input', (e) => { s[k] = e.target.value; apply(); });
-  $('s-pause').addEventListener('change', (e) => { s.pauseCycle = e.target.checked; apply(); });
-  for (const k of ['pointer', 'debugReports']) $('s-' + k).addEventListener('change', (e) => { s[k] = e.target.checked; apply(); });
-  $('s-time').addEventListener('input', (e) => {
-    clock.phase = parseFloat(e.target.value);
-    clock.update(0);
-    $('o-time').textContent = phaseToClock(clock.phase);
-  });
-  $('s-reset').addEventListener('click', () => { Object.assign(s, DEFAULTS); apply(); sync(); });
-  $('s-resume').addEventListener('click', () => close(true));
-  // Keep the game from seeing clicks and keys meant for the panel.
+  // Keep the game from seeing clicks meant for the panel.
   root.addEventListener('mousedown', (e) => e.stopPropagation());
 
   let lastClose = 0;
@@ -165,6 +186,7 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
     if (api.open) return;
     api.open = true;
     sync();
+    refreshGame();
     root.classList.add('open');
     input.keys.clear();
     if (document.pointerLockElement) document.exitPointerLock();
@@ -173,6 +195,7 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
     if (!api.open) return;
     api.open = false;
     lastClose = performance.now();
+    closeColorPickers();
     root.classList.remove('open');
     if (relock) { try { canvas.requestPointerLock?.()?.catch?.(() => {}); } catch { /* ignore */ } }
   }
@@ -183,18 +206,18 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
   // While the panel is open, keep the time readout following the running clock.
   api.tick = () => {
     if (!api.open) return;
-    if (document.activeElement !== $('s-time')) $('s-time').value = clock.phase;
-    $('o-time').textContent = phaseToClock(clock.phase);
+    const t = controls.time;
+    if (!t.active) t.set(clock.phase);
   };
 
   addEventListener('keydown', (e) => {
-    if (e.code !== 'Escape' || !input.started) return;
+    if (e.code !== 'Escape' || !input.started || isDialogOpen()) return;
     e.preventDefault();
     api.toggle();
   });
   // Browsers swallow the Escape that releases pointer lock, so treat losing the lock as "open".
   document.addEventListener('pointerlockchange', () => {
-    if (!document.pointerLockElement && input.started && !api.open && performance.now() - lastClose > 300 && !api.suppress) open();
+    if (!document.pointerLockElement && input.started && !api.open && performance.now() - lastClose > 300 && !api.suppress && !isDialogOpen()) open();
   });
 
   apply();

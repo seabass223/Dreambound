@@ -120,7 +120,7 @@ function sharedAssets(asset) {
     const n = m.material?.name || '';
     return n.startsWith('elev_x_') ? 'ext' : n.startsWith('elev_i_') ? 'int' : n === 'elev_glow' ? 'glow' : null;
   };
-  const partOf = (o) => { for (let p = o; p; p = p.parent) if (/^(LEAF_|BTN_call_)/.test(p.name)) return p; return null; };
+  const partOf = (o) => { for (let p = o; p; p = p.parent) if (/^(LEAF_|BTN_call_|BTN_cap_)/.test(p.name)) return p; return null; };
   const m4 = new THREE.Matrix4();
   // Every mesh under `root` (or, with no root, every static one), per material group, in root's space.
   const collect = (root) => {
@@ -158,6 +158,10 @@ function sharedAssets(asset) {
     leaves: [leaf('LEAF_L'), leaf('LEAF_R')],
     callUp: merge(collect(nodes.BTN_call_up).ext), callDown: merge(collect(nodes.BTN_call_down).ext),
     up: btn('BTN_up', -0.78, 1.34), down: btn('BTN_down', -0.78, 1.16),
+    // The Up / Down caps (each in its pivot's space, at its face), pushed in and lit by the game.
+    caps: nodes.BTN_cap_up ? { up: leaf('BTN_cap_up'), down: leaf('BTN_cap_down') } : null,
+    // A thin ring round each pressed button: dull steel at rest, a warm glow while its request is pending.
+    ringGeo: new THREE.TorusGeometry(0.0215, 0.0016, 6, 28),
     tex: asset, intU, extU,
     extMat: outsideMaterial(asset, extU),
     hitGeo: new THREE.BoxGeometry(1, 1, 1),
@@ -178,6 +182,19 @@ export function createElevator(ctx, { id, ends }) {
   const lampMat = new THREE.MeshBasicMaterial({ name: 'elevator_lamp', color: new THREE.Color(2.4, 2.0, 1.4) });
   const insideMat = insideMaterial(S.tex, S.intU);
   let lit = -1;
+  // Buttons: each { mesh, rest, axis (the way it presses in), t (press animation 0..1), ring, lit }.
+  const buttons = [];
+  const RING_OFF = new THREE.Color(0.16, 0.16, 0.16), RING_ON = new THREE.Color(2.6, 1.55, 0.55);
+  const addButton = (mesh, axisZ, parent, ringPos) => {
+    const ring = new THREE.Mesh(S.ringGeo, new THREE.MeshBasicMaterial({ name: 'elevator_btn_ring', color: RING_OFF.clone() }));
+    ring.position.copy(ringPos);
+    parent.add(ring);
+    const b = { mesh, rest: mesh.position.clone(), axisZ, t: 0, ring, lit: false };
+    buttons.push(b);
+    return b;
+  };
+  const light = (b, on) => { if (b && b.lit !== on) { b.lit = on; b.ring.material.color.copy(on ? RING_ON : RING_OFF); } };
+  const push = (b) => { if (b) b.t = 1; };
   // Stops from the top down; Up and Down move one stop along them.
   const stops = ['top', 'bottom', 'lounge'].filter((k) => ends[k]?.pos);
 
@@ -215,6 +232,8 @@ export function createElevator(ctx, { id, ends }) {
     call.position.set(cp[0], cp[1], cp[2]);
     call.castShadow = true; call.receiveShadow = true;
     root.add(call);
+    // The call button faces out (+z); its ring sits on the bezel, just proud of it.
+    const callBtn = addButton(call, -1, root, new THREE.Vector3(cp[0], cp[1], cp[2] - 0.009));
 
     // Static car walls for collision.
     const col = def.collider;
@@ -230,8 +249,18 @@ export function createElevator(ctx, { id, ends }) {
     const worldPos = new THREE.Vector3(0, 0, 0.03).applyMatrix4(wm);
     const door = ctx.physics.addOBB({ x: worldPos.x, z: worldPos.z, hx: HOLE.hw + 0.1, hz: 0.08, ry: def.rotY, y0: def.pos.y - 0.5, y1: def.pos.y + 3, zone: def.zone });
 
+    // The Up / Down caps face into the car (-z) and press toward +z.
+    const capBtns = {};
+    if (S.caps) {
+      for (const k of ['up', 'down']) {
+        const c = S.caps[k], m = new THREE.Mesh(c.int, insideMat);
+        m.position.copy(c.pos);
+        root.add(m);
+        capBtns[k] = addButton(m, 1, root, new THREE.Vector3(c.pos.x, c.pos.y, c.pos.z + 0.01));
+      }
+    }
     const end = {
-      key, root, leaves, door, open: 0, target: 0, def, inv: wm.clone().invert(),
+      key, root, leaves, door, open: 0, target: 0, def, inv: wm.clone().invert(), callBtn, capBtns,
       soundPos: new THREE.Vector3(0, 1.3, -1).applyMatrix4(wm),
     };
     el.ends[key] = end;
@@ -272,15 +301,18 @@ export function createElevator(ctx, { id, ends }) {
 
   el.call = (key) => {
     sound('click', key);
+    const b = el.ends[key].callBtn;
+    push(b);
     if (el.busy || !live()) return;
     if (el.at === key) { setDoors(key, true); return; }
-    // Car is at another stop: bring it here.
+    // Car is at another stop: bring it here. The button stays lit until the doors open.
+    light(b, true);
     el.busy = true;
     const ride = legTime(el.at, key);
     setDoors(el.at, false);
     ctx.later(DOOR_TIME, () => {
       ctx.audio?.play('elevatorDistant', { pos: el.ends[key].soundPos, duration: ride });
-      ctx.later(ride, () => { el.at = key; el.busy = false; setDoors(key, true); });
+      ctx.later(ride, () => { el.at = key; el.busy = false; light(b, false); setDoors(key, true); });
     });
   };
 
@@ -288,8 +320,13 @@ export function createElevator(ctx, { id, ends }) {
   // stop, do nothing.
   el.press = (key, dest) => {
     sound('click', key);
+    const b = el.ends[key].capBtns[dest === 'top' ? 'up' : 'down'];
+    push(b);
     const other = stops[stops.indexOf(key) + (dest === 'top' ? -1 : 1)];
     if (el.busy || !live() || el.at !== key || !other) return;
+    // Lit for the ride; the same button in the car at the far end is lit on arrival and goes out as the doors open.
+    const bo = el.ends[other].capBtns[dest === 'top' ? 'up' : 'down'];
+    light(b, true);
     el.busy = true;
     setDoors(key, false);
     const ride = legTime(key, other);
@@ -299,6 +336,8 @@ export function createElevator(ctx, { id, ends }) {
       ctx.audio?.play('elevatorRide', { duration: ride, attached: riding, car: riding, pos: el.ends[key].soundPos });
       ctx.later(ride, () => {
         el.at = other;
+        light(b, false);
+        light(bo, true);
         if (riding) {
           // Carry the player's pose from this car to the identical car at the other end.
           const from = el.ends[key].root, to = el.ends[other].root;
@@ -308,7 +347,7 @@ export function createElevator(ctx, { id, ends }) {
           ctx.player.place(local.x, local.y + 0.02, local.z, ctx.player.yaw + (to.rotation.y - from.rotation.y));
           ctx.onRide?.(false);
         }
-        ctx.later(0.6, () => { el.busy = false; setDoors(other, true); });
+        ctx.later(0.6, () => { el.busy = false; light(bo, false); setDoors(other, true); });
       });
     });
   };
@@ -321,6 +360,13 @@ export function createElevator(ctx, { id, ends }) {
       insideMat.color.setScalar(k ? 1 : 0.07);
     }
     S.extU.uElevFill.value.copy(FILL).multiplyScalar(atmo.uUnderground.value);
+    // Pressed buttons: in 3 mm at once, then spring back out over ~0.25 s.
+    for (const b of buttons) {
+      if (b.t <= 0) continue;
+      b.t = Math.max(0, b.t - dt / 0.25);
+      const d = 0.003 * Math.min(1, b.t * 1.6);
+      b.mesh.position.copy(b.rest).setZ(b.rest.z + b.axisZ * d);
+    }
     let shut = false;
     for (const e of Object.values(el.ends)) {
       const prev = e.open;

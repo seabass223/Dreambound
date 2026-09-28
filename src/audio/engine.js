@@ -35,6 +35,8 @@ export class AudioEngine {
       pink: this.noiseBuffer('pink', 4, rate, make),
       brown: this.noiseBuffer('brown', 4, rate, make),
       impulse: this.impulse(3.2, 2.6, rate, make),
+      fireMod: this.fireModBuffer(),
+      fireGrains: this.fireGrainBank(rate),
     };
   }
 
@@ -83,6 +85,8 @@ export class AudioEngine {
     this.white = P?.white ?? this.noiseBuffer('white');
     this.pink = P?.pink ?? this.noiseBuffer('pink');
     this.brown = P?.brown ?? this.noiseBuffer('brown');
+    this.fireMod = P?.fireMod ?? this.fireModBuffer();
+    this.fireGrains = P?.fireGrains ?? this.fireGrainBank(ac.sampleRate);
 
     this.buildWind();
     this.buildInsects();
@@ -119,6 +123,102 @@ export class AudioEngine {
       for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay);
     }
     return buf;
+  }
+
+  // An AudioBuffer made with or without a context (prepare() runs before there is one).
+  newBuffer(channels, length, rate) {
+    return this.ctx ? this.ctx.createBuffer(channels, length, rate)
+      : new AudioBuffer({ numberOfChannels: channels, length, sampleRate: rate });
+  }
+
+  // Fire modulation: 60 s of smoothly wandering random values in about -1..1 (white noise through three one-pole
+  // low-passes at ~1.2 Hz, so it has no knots, steps or cycles). Looped at different playback rates and offsets it
+  // gives every fire layer its own slow breathing or fast flicker without a single LFO, which is what made the old
+  // fire chug like a train.
+  fireModBuffer(seconds = 60, rate = 8000) {
+    const n = seconds * rate, buf = this.newBuffer(1, n, rate), d = buf.getChannelData(0);
+    const a = 1 - Math.exp(-2 * Math.PI * 1.2 / rate);
+    let y1 = 0, y2 = 0, y3 = 0, sum = 0, sq = 0;
+    for (let i = -rate * 4; i < n; i++) {           // 4 s of warm-up so the start is not a fade-in from 0
+      y1 += a * (Math.random() * 2 - 1 - y1); y2 += a * (y1 - y2); y3 += a * (y2 - y3);
+      if (i >= 0) { d[i] = y3; sum += y3; sq += y3 * y3; }
+    }
+    const mean = sum / n, sd = Math.sqrt(sq / n - mean * mean) || 1;
+    for (let i = 0; i < n; i++) d[i] = Math.tanh((d[i] - mean) / (sd * 2.2));
+    // Blend the loop's last half second into its start so the wrap has no step.
+    const x = rate >> 1;
+    for (let i = 0; i < x; i++) { const k = i / x; d[n - x + i] = d[n - x + i] * (1 - k) + d[i] * k; }
+    return buf;
+  }
+
+  // Fire crackle grains, rendered once into one mono buffer: tiny ember ticks, crackles (a few micro-impulses a few
+  // ms apart, like a knot of sap bursting), low wooden pops that ring briefly, and rare bright snaps (a split with a
+  // second crack after it). Each grain is a noise burst with a fast random decay through its own random band-pass
+  // (RBJ biquad), and is baked at a random level. The emitter plays slices of it with pitch and timing drawn afresh.
+  fireGrainBank(rate) {
+    const bp = (x, f, Q) => {                       // in-place constant-peak band-pass
+      const w = 2 * Math.PI * f / rate, al = Math.sin(w) / (2 * Q), a0 = 1 + al;
+      const b0 = al / a0, b2 = -al / a0, a1 = -2 * Math.cos(w) / a0, a2 = (1 - al) / a0;
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+      for (let i = 0; i < x.length; i++) {
+        const y = b0 * x[i] + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = x[i]; y2 = y1; y1 = y; x[i] = y;
+      }
+      return x;
+    };
+    const R = (a, b) => a + Math.random() * (b - a);
+    const burst = (x, at, tau, amp) => {            // decaying noise impulse into x from sample `at`
+      const n = Math.min(x.length - at, Math.ceil(tau * rate * 7));
+      for (let i = 0; i < n; i++) x[at + i] += (Math.random() * 2 - 1) * amp * Math.exp(-i / (tau * rate));
+    };
+    const make = (type) => {
+      let dur, x;
+      if (type === 'tick') {
+        dur = R(0.006, 0.014); x = new Float32Array(Math.ceil(dur * rate));
+        burst(x, 0, R(0.0003, 0.0012), 1);
+        bp(x, R(2400, 6500), R(0.7, 1.8));
+      } else if (type === 'crackle') {
+        dur = R(0.025, 0.045); x = new Float32Array(Math.ceil(dur * rate));
+        const k = 2 + Math.floor(Math.random() * 5);
+        for (let j = 0; j < k; j++) burst(x, Math.floor(Math.pow(Math.random(), 1.6) * 0.016 * rate), R(0.0002, 0.0012), R(0.3, 1));
+        bp(x, R(1300, 4800), R(0.8, 2.5));
+      } else if (type === 'pop') {
+        dur = R(0.07, 0.13); x = new Float32Array(Math.ceil(dur * rate));
+        const body = new Float32Array(x.length), click = new Float32Array(x.length);
+        burst(body, 0, R(0.0015, 0.004), 1); burst(click, 0, R(0.0003, 0.0008), 1);
+        bp(body, R(260, 850), R(3, 7)); bp(click, R(1800, 3800), 1.2);
+        const pk = (a) => a.reduce((m, v) => Math.max(m, Math.abs(v)), 1e-9), pb = pk(body), pc = pk(click);
+        for (let i = 0; i < x.length; i++) x[i] = body[i] / pb + 0.6 * click[i] / pc;
+      } else {                                      // snap
+        dur = R(0.1, 0.16); x = new Float32Array(Math.ceil(dur * rate));
+        burst(x, 0, R(0.001, 0.0025), 1);
+        burst(x, Math.floor(R(0.006, 0.03) * rate), R(0.0005, 0.0015), R(0.3, 0.7));
+        const ring = bp(Float32Array.from(x), R(900, 2200), R(5, 9));
+        bp(x, R(2000, 5000), 0.7);
+        for (let i = 0; i < x.length; i++) x[i] += ring[i] * 2.5;
+      }
+      let peak = 1e-9;
+      for (let i = 0; i < x.length; i++) peak = Math.max(peak, Math.abs(x[i]));
+      const level = { tick: R(0.2, 0.5), crackle: R(0.35, 0.8), pop: R(0.5, 0.85), snap: R(0.8, 1) }[type];
+      const fade = Math.floor(0.002 * rate);
+      for (let i = 0; i < x.length; i++) x[i] *= level / peak * Math.min(1, (x.length - i) / fade);
+      return x;
+    };
+    const counts = { tick: 28, crackle: 24, pop: 10, snap: 6 };
+    const parts = [], grains = {};
+    let len = 0;
+    for (const type in counts) {
+      grains[type] = [];
+      for (let i = 0; i < counts[type]; i++) {
+        const x = make(type);
+        grains[type].push([len / rate, x.length / rate]);
+        parts.push([len, x]);
+        len += x.length + Math.floor(0.005 * rate);  // a little silence between slices
+      }
+    }
+    const buf = this.newBuffer(1, len, rate), d = buf.getChannelData(0);
+    for (const [at, x] of parts) d.set(x, at);
+    return { buf, grains };
   }
 
   src(buffer, loop = true, rate = 1) {
@@ -283,21 +383,93 @@ export class AudioEngine {
       e.level = 0.35;
       e.range = 90;
     } else if (e.name === 'fire' || e.name === 'firepit') {
-      // Crackling fire: a soft roar plus random pops. The garden fire pit sits on the outdoor bus.
-      const s = this.src(this.brown);
-      const lp = this.filter('lowpass', e.name === 'fire' ? 380 : 520, 0.6);
-      s.connect(lp).connect(this.gain(0.6)).connect(g);
-      const c = this.src(this.white);
-      const bp = this.filter('bandpass', 2600, 1.2);
-      const cg = this.gain(0);
-      const pop = ac.createOscillator(); pop.type = 'square'; pop.frequency.value = 11.3;
-      const pop2 = ac.createOscillator(); pop2.type = 'square'; pop2.frequency.value = 3.7;
-      const pa = this.gain(0.12), pb = this.gain(0.1);
-      pop.connect(pa).connect(cg.gain); pop2.connect(pb).connect(cg.gain);
-      c.connect(bp).connect(cg).connect(g);
-      [s, c, pop, pop2].forEach((n) => n.start());
-      e.level = e.name === 'fire' ? 0.3 : 0.24;
-      e.range = e.name === 'fire' ? 14 : 18;
+      // A wood fire, after Farnell's "Designing Sound" fire model, with nothing periodic in it:
+      //  - roar: brown noise low-passed, breathing slowly (the fire's draught);
+      //  - lapping: band-passed pink noise whose level and centre wander a few times a second (flames licking);
+      //  - hiss: high-passed white noise with a fast irregular flicker (gas and steam escaping);
+      //  - crackles: grains from fireGrainBank() at Poisson (exponentially spaced) times, rate following a slowly
+      //    wandering "heat", with random pitch and level, sometimes in quick sap-fizz clusters, and now and then a
+      //    log settling (a low knock, a swell of roar and a flurry of crackles).
+      // All modulation comes from the fireMod buffer (smoothed noise) at unrelated rates and offsets, never an LFO.
+      // The hearth (indoors, on the world bus with the room's reverb) is closer and softer; the garden pit, on the
+      // outdoor bus, is a little brighter and airier.
+      const pit = e.name === 'firepit';
+      const mod = (rate, depth, param) => {            // smoothed random added to an AudioParam
+        const m = ac.createBufferSource();
+        m.buffer = this.fireMod; m.loop = true; m.playbackRate.value = rate * (0.9 + Math.random() * 0.2);
+        m.connect(this.gain(depth)).connect(param);
+        m.start(0, Math.random() * 60);
+      };
+      const roar = this.src(this.brown), roarG = this.gain(pit ? 0.42 : 0.5);
+      // (High-passed too: brown noise's sub-bass flutter below ~60 Hz reads as an engine's putter, not a fire.)
+      roar.connect(this.filter('highpass', 65, 0.6)).connect(this.filter('lowpass', pit ? 420 : 320, 0.5)).connect(roarG).connect(g);
+      mod(0.35, pit ? 0.16 : 0.14, roarG.gain);
+      const swell = this.gain(1);                        // log-settle surges ride on this
+      const lap = this.src(this.pink), lapBP = this.filter('bandpass', pit ? 650 : 480, 0.9), lapG = this.gain(pit ? 0.2 : 0.15);
+      lap.connect(lapBP).connect(lapG).connect(swell);
+      mod(2.3, pit ? 220 : 150, lapBP.frequency);
+      mod(3.1, pit ? 0.17 : 0.13, lapG.gain);
+      const hiss = this.src(this.white), hissG = this.gain(pit ? 0.03 : 0.018);
+      hiss.connect(this.filter('highpass', pit ? 2400 : 3200, 0.6)).connect(this.filter('lowpass', pit ? 9000 : 7000, 0.5)).connect(hissG).connect(swell);
+      mod(11, pit ? 0.026 : 0.016, hissG.gain);
+      swell.connect(g);
+      [roar, lap, hiss].forEach((n) => n.start(0, Math.random() * 3));
+      // Crackle voices, shared by every grain: bright (on top), soft (behind the logs) and deep (buried embers).
+      const cg = this.gain(pit ? 0.55 : 0.45);
+      cg.connect(g);
+      const bright = this.gain(1), soft = this.gain(0.45), deep = this.gain(0.28);
+      bright.connect(cg);
+      soft.connect(this.filter('lowpass', pit ? 3800 : 3000, 0.6)).connect(cg);
+      deep.connect(this.filter('lowpass', 1300, 0.6)).connect(cg);
+      const { buf, grains } = this.fireGrains;
+      const grain = (type, t, voice, pitch = 0.8 + Math.random() * 0.45) => {
+        const list = grains[type], [off, dur] = list[Math.floor(Math.random() * list.length)];
+        const s = ac.createBufferSource();
+        s.buffer = buf; s.playbackRate.value = pitch;
+        s.connect(voice); s.start(t, off, dur);
+      };
+      const expo = (mean) => -Math.log(1 - Math.random()) * mean;
+      const pickVoice = (pB, pS) => { const r = Math.random(); return r < pB ? bright : r < pB + pS ? soft : deep; };
+      let heat = 1, heatTarget = 1, heatTimer = 0, settle = 8 + expo(30), next = -1;
+      const event = (t) => {
+        const r = Math.random();
+        if (r < 0.5) grain('tick', t, pickVoice(0.25, 0.4));
+        else if (r < 0.86) grain('crackle', t, pickVoice(0.35, 0.4));
+        else if (r < 0.975) grain('pop', t, pickVoice(0.3, 0.45), 0.75 + Math.random() * 0.5);
+        else grain('snap', t, bright, 0.85 + Math.random() * 0.3);
+        if (Math.random() < 0.12) {                      // a sap fizz: a quick run of ticks
+          let tk = t;
+          for (let k = 3 + Math.floor(Math.random() * 8); k > 0; k--) {
+            tk += 0.004 + expo(0.018);
+            grain(Math.random() < 0.8 ? 'tick' : 'crackle', tk, pickVoice(0.15, 0.45));
+          }
+        }
+      };
+      const logSettle = (t) => {                          // a log shifts: knock, surge, flurry
+        grain('pop', t, deep, 0.55 + Math.random() * 0.2);
+        grain('pop', t + 0.01 + Math.random() * 0.03, soft, 0.7 + Math.random() * 0.3);
+        swell.gain.setTargetAtTime(1.6 + Math.random() * 0.6, t + 0.05, 0.25);
+        swell.gain.setTargetAtTime(1, t + 0.8 + Math.random() * 0.6, 1.4);
+        let tk = t + 0.08;
+        for (let k = 6 + Math.floor(Math.random() * 12); k > 0; k--) {
+          tk += expo(0.09);
+          grain(Math.random() < 0.6 ? 'crackle' : 'tick', tk, pickVoice(0.35, 0.4));
+        }
+        heat = Math.min(1.8, heat + 0.5);
+      };
+      e.tick = (dt) => {
+        // Heat wanders between long random holds; it sets the crackle rate (about 3-11 a second).
+        heatTimer -= dt;
+        if (heatTimer <= 0) { heatTimer = 2 + expo(5); heatTarget = 0.55 + Math.random() * Math.random() * 1.1; }
+        heat += (heatTarget - heat) * Math.min(1, dt * 0.4);
+        const now = this.now(), rate = (pit ? 6.5 : 5.5) * heat;
+        if (next < now) next = now + 0.03 + expo(1 / rate);   // (re)starting after a gap: no burst of catch-up
+        while (next < now + 0.2) { event(next); next += expo(1 / rate); }
+        settle -= dt;
+        if (settle <= 0) { settle = 12 + expo(35); logSettle(now + 0.05); }
+      };
+      e.level = pit ? 0.24 : 0.28;
+      e.range = pit ? 18 : 14;
     } else if (e.name === 'electronics') {
       // An old computer room: mains buzz, fan whirr, a faint high whine, plus random relay clicks,
       // chirps, tape servo bursts and teleprinter chatter scheduled from tick().

@@ -117,6 +117,19 @@ export class Forest {
 
   radiusOf(species) { return species === 'pine' ? 0.3 : species === 'broadleaf' ? 0.26 : 0; }
 
+  // The foliage's reach at scale 1: for each 0.5 m of height, the widest the crown gets there (from the actual cards,
+  // plus a margin for the sway), as [{ y0, y1, r }]. For keeping crowns clear of things, e.g. the dome's glass.
+  footprint(species) {
+    const cache = (this._footprints ||= {});
+    if (cache[species]) return cache[species];
+    const p = SPECIES[species].make().foliage.attributes.position, bands = [];
+    for (let i = 0; i < p.count; i++) {
+      const k = Math.max(0, Math.floor(p.getY(i) / 0.5)), r = Math.hypot(p.getX(i), p.getZ(i));
+      bands[k] = Math.max(bands[k] ?? 0, r);
+    }
+    return (cache[species] = bands.map((r, k) => ({ y0: k * 0.5, y1: k * 0.5 + 0.5, r: r + 0.25 })).filter((b) => b.r > 0));
+  }
+
   build(parent, lod) {
     const M = materials();
     const dummy = new THREE.Object3D();

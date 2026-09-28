@@ -264,8 +264,12 @@ def car_inside():
     x0, x1, y0, y1 = PANEL
     box({'-z': 'i_steel', '+x': ('i_steel', 'lo'), '-x': ('i_steel', 'lo'), '+y': ('i_steel', 'lo'), '-y': ('i_steel', 'lo')},
         x0, x1, y0, y1, CZ0 - 0.006, CZ0, 1)
-    for (bx, by) in BTNS.values():
-        disc_stack('i_btn', bx, by, CZ0 - 0.006, [(BEZ_R, 0.004), (BTN_R, 0.010)], -1, 20)
+    # The bezels are fixed; each cap is its own part so the game can push it in (and light it) when pressed.
+    for k, (bx, by) in BTNS.items():
+        disc_stack('i_btn', bx, by, CZ0 - 0.006, [(BEZ_R, 0.004)], -1, 20)
+        part('BTN_cap_' + k, (bx, by, CZ0 - 0.006 - 0.014), bake=True)
+        with into('BTN_cap_' + k):
+            disc_stack('i_btn', bx, by, CZ0 - 0.010, [(BTN_R, 0.010)], -1, 20)
     # Ceiling lamp: an enamelled housing, an opal diffuser and a two-bar guard.
     lx, lz = 0.33, 0.17
     dx, dz = 0.29, 0.13
@@ -885,10 +889,11 @@ def paint_ext(G, px_per_m):
     alb[skin] = gc[None, :] * (1 + 0.25 * (bA - 0.5))[skin][:, None]
     rough[skin] = 0.55
     metal[skin] = 0.7
-    # bolts: galvanised, the rust comes later
-    alb[boltk] = np.array([0.40, 0.40, 0.41], np.float32)
-    rough[boltk] = 0.62
-    metal[boltk] = 0.6
+    # bolts: dull, weathered galvanising (a glossier finish read as glinting studs under the tunnel lights);
+    # the rust comes later
+    alb[boltk] = np.array([0.34, 0.34, 0.35], np.float32)
+    rough[boltk] = 0.9
+    metal[boltk] = 0.18
     # sill: aluminium chequer plate, the lozenge tops polished by feet where people walk
     th, ttop = _tread(x, z)
     walk = _ss(0.75, 0.35, np.abs(x)) * tread

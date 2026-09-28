@@ -77,9 +77,17 @@ LAD_PITCH = 0.3                  # rung spacing
 LAD_SO = 0.2                     # the curved ladder's standoff from the dome skin, between its ends
 STA_RC, STA_Y = 2.47, 9.58       # the station deck: its centre's distance from the axis along the ladder's meridian; its top
 STA_HX, STA_HZ = 0.55, 0.7       # its half width (across) and half depth (along the meridian; +z outward, to the ladder)
-STA_IZ, STA_IR = -0.2, 0.25     # the iris set in the deck: centre (station z) and blade radius (the End's door is 1.75)
-STA_BTN = (0.16, 0.085)          # the button plate just in front of it: centre (station z) and button spacing
-STA_WELL = 0.15                  # depth of the well under the iris (the game lays the telescope's scales on its floor)
+STA_IZ, STA_IR = -0.08, 0.25    # the iris, in the panel's frame: centre (panel z; raised so the gaps above and below the
+                                 # buttons match) and blade radius (the End's door is 1.75)
+STA_BTN = (0.37, 0.085)          # the buttons, in a row below the iris: centre (panel z) and button spacing
+# The control panel on the back railing, at chest height and leaning back so it faces up at you: its frame is the deck's
+# (origin at the deck top centre) moved to the iris centre and turned STA_PT about x (0 would lie flat, facing up), so
+# its +y (out of the face) points 20 deg above level toward the ladder end and its +z runs down the face.
+STA_PY, STA_PZ, STA_PT = 1.28, -0.56, math.radians(70.0)
+STA_PX = 0.5                     # half width of the face
+STA_PZ0, STA_PZ1 = -0.59, 0.5    # its top and bottom edges (panel z; the open blades reach 0.5 above the iris centre)
+STA_WELL = 0.065                 # depth of the well behind the iris (the game lays the telescope's scales on its floor;
+                                 # shallow, so they sit centred in the opening seen at an angle)
 
 def D(d):
     return math.radians(d)
@@ -306,7 +314,10 @@ def build_shell():
         return (k, k * 0.99, k * 0.97)
     emit(bm, 'plaster', None, CREAMP, 1.6, uvfn=cyl_uv(R_OUT, 1.6), colfn=weather, smooth=SIDES)
     # Belt course and the cornice the dome rides on.
-    emit(bm_ring(R_OUT - 0.01, R_OUT + 0.06, 2.22, 2.3, 144), 'plaster', None, mul(CREAMP, 0.95), 1.6, uvfn=cyl_uv(R_OUT, 1.6), smooth=SIDES)
+    # Plaster band, broken for the doorway (whole, it ran across the opening at head height).
+    band = bm_ring(R_OUT - 0.01, R_OUT + 0.06, 2.22, 2.3, 144)
+    bmesh.ops.delete(band, geom=[f for f in band.faces if (lambda c: abs(c.x) < DOOR_W + 0.05 and c.z < 0)(f.calc_center_median())], context='FACES')
+    emit(band, 'plaster', None, mul(CREAMP, 0.95), 1.6, uvfn=cyl_uv(R_OUT, 1.6), smooth=SIDES)
     emit(bm_ring(R_IN + 0.05, R_OUT + 0.14, WALL_TOP, WALL_TOP + 0.07, 144), 'steel', None, GUNMETAL, 0.5, uvfn=cyl_uv(R_OUT, 0.5), smooth=SIDES)
     emit(bm_ring(R_OUT + 0.1, R_OUT + 0.16, WALL_TOP - 0.12, WALL_TOP + 0.07, 144), 'steel', None, GUNMETAL, 0.5, uvfn=cyl_uv(R_OUT, 0.5), smooth=SIDES)
     # Wall colliders (gap at the door).
@@ -317,7 +328,8 @@ def build_shell():
             continue
         C(x, 2.0, z, 2 * PI * (R_IN + R_OUT) / 2 / 60 + 0.06, 4.0, R_OUT - R_IN + 0.05, -a)
 
-    # Door frame, threshold, lintel; the riveted steel door stands open against the wall.
+    # Door frame, threshold, lintel; the riveted steel door, a part the game swings on its hinge (built shut across
+    # the opening: driver 'door' 0 = shut, 1 = swung open outward against the wall).
     zi, zo = -(R_IN - 0.08), -(R_OUT + 0.06)
     for s in (-1, 1):
         BOX('metal_black', s * DOOR_W - 0.05, FL - 0.02, zo, s * DOOR_W + 0.05, DOOR_H + 0.06, zi, tint=BLACK)
@@ -325,9 +337,13 @@ def build_shell():
     BOX('metal_black', -DOOR_W - 0.05, DOOR_H - 0.04, zo, DOOR_W + 0.05, DOOR_H + 0.1, zi, tint=BLACK)
     BOX('steel', -DOOR_W, FL - 0.03, zo - 0.02, DOOR_W, FL + 0.012, zi, tint=GUNMETAL)
     hinge = Vector((DOOR_W + 0.06, 0, -(R_OUT + 0.08)))
-    u = Vector((0.42, 0, -1)).normalized()
-    beam('painted', tuple(hinge + Vector((0, FL + 0.03 + 1.1, 0))), tuple(hinge + u * 1.34 + Vector((0, FL + 0.03 + 1.1, 0))), 0.07, 2.18, OXBLOOD)
-    mid = hinge + u * 0.67
+    u = Vector((-1, 0, 0))
+    DOOR_OPEN = -math.atan2(-Vector((0.42, 0, -1)).normalized().z, -Vector((0.42, 0, -1)).normalized().x)   # shut -> open
+    part('Door', tuple(hinge), axis=(0, 1, 0), driver='door', ratio=DOOR_OPEN)
+    _door_ctx = into('Door')
+    _door_ctx.__enter__()
+    beam('painted', tuple(hinge + Vector((0, FL + 0.03 + 1.1, 0))), tuple(hinge + u * 1.40 + Vector((0, FL + 0.03 + 1.1, 0))), 0.07, 2.18, OXBLOOD)
+    mid = hinge + u * 0.70
     nrm = Vector((-u.z, 0, u.x))
     for side in (-1, 1):
         pc = mid + nrm * side * 0.04 + Vector((0, FL + 1.55, 0))
@@ -338,9 +354,11 @@ def build_shell():
                 SPH('painted', 0.013, rp.x, rp.y, rp.z, 6, 4, tint=mul(OXBLOOD, 0.8))
     pc = mid + Vector((0, FL + 1.55, 0))
     emit(bm_cyl(0.16, 0.16, 0.012, 24), 'glass', xf(pc.x, pc.y, pc.z, math.atan2(u.x, u.z), 0, PI / 2))
-    lp = hinge + u * 1.2 + nrm * 0.07 + Vector((0, FL + 1.1, 0))
-    B('metal_black', 0.03, 0.26, 0.04, lp.x, lp.y, lp.z, math.atan2(u.x, u.z), tint=BLACK)
-    C(*(hinge + u * 0.67 + Vector((0, 1.3, 0))), 1.4, 2.6, 0.12, math.atan2(u.x, u.z) + PI / 2)
+    for side in (-1, 1):   # a pull handle on each face
+        lp = hinge + u * 1.25 + nrm * side * 0.07 + Vector((0, FL + 1.1, 0))
+        B('metal_black', 0.03, 0.26, 0.04, lp.x, lp.y, lp.z, math.atan2(u.x, u.z), tint=BLACK)
+    _door_ctx.__exit__(None, None, None)
+    # (No baked collider: the game blocks the doorway while the door is shut.)
     # Canopy over the door, on two brackets, and a caged lamp.
     emit(bm_prism([(-(R_OUT + 0.02), 2.98), (-(R_OUT + 0.95), 2.84), (-(R_OUT + 0.95), 2.9), (-(R_OUT + 0.02), 3.04)], -1.05, 1.05, 'z'), 'metal_black', None, BLACK)
     for s in (-1, 1):
@@ -352,7 +370,7 @@ def build_shell():
 
     # Clerestory windows: steel frames, stone sills, three lights each.
     for wa in WINDOWS:
-        g = wall_g(wa, (R_IN + R_OUT) / 2)
+        g = wall_g(wa, (R_IN + R_OUT) / 2, y=0.0)   # heights are model heights, as the wall's cut (not floor-relative)
         dep = R_OUT - R_IN + 0.12
         for s in (-1, 1):
             g.box('metal_black', 0.07, WIN_Y1 - WIN_Y0 + 0.1, dep, s * WIN_W, (WIN_Y0 + WIN_Y1) / 2, 0, tint=BLACK)
@@ -635,7 +653,8 @@ def build_pier():
     # Static azimuth ring gear on the pier head.
     emit(bm_gear(AZ_RING_N, AZ_M, 0.08, 0.62), 'steel', xf(0, 2.24, 0, 0, -PI / 2, 0), STEELG, 0.4)
 
-CONSOLE_A, CONSOLE_R = 215.0, 3.35
+CONSOLE_A, CONSOLE_R = 215.0, 2.35   # just off the pier's checker-plate ring (r 1.65)
+CONSOLE_LIFT = 0.45                  # on legs, so the panel is at chest height and you see the telescope over it
 AZ_TURNS, ALT_TURNS = 6.0, 16.0    # handwheel turns per radian of dome / telescope
 
 def handwheel(name, M, r, phase_drive):
@@ -725,8 +744,16 @@ def dial(name, Mp, lx, lz, driver, ratio):
 def build_console():
     a = D(CONSOLE_A)
     x, _, z = pol(CONSOLE_R, a)
-    g = G(x, FL, z, PI - a)      # local +z faces the operator (away from the pier)
+    g = G(x, FL + CONSOLE_LIFT, z, PI - a)      # local +z faces the operator (away from the pier)
     with into('Interior'):
+        # Four square steel legs down to the floor, with foot plates and a low stretcher front and back.
+        for sx in (-1, 1):
+            for sz in (-1, 1):
+                g.box('steel', 0.05, CONSOLE_LIFT + 0.02, 0.05, sx * 0.62, -CONSOLE_LIFT / 2 + 0.01, sz * 0.2 - 0.02, tint=GUNMETAL)
+                g.box('steel', 0.1, 0.012, 0.1, sx * 0.62, -CONSOLE_LIFT + 0.006, sz * 0.2 - 0.02, tint=GUNMETAL)
+            g.box('steel', 0.03, 0.03, 0.4, sx * 0.62, -CONSOLE_LIFT + 0.12, -0.02, tint=GUNMETAL)
+        for sz in (-1, 1):
+            g.box('steel', 1.24, 0.03, 0.03, 0, -CONSOLE_LIFT + 0.12, sz * 0.2 - 0.02, tint=GUNMETAL)
         for s in (-1, 1):
             g.put(bm_prism([(-0.32, 0.0), (0.32, 0.0), (0.25, 0.1), (0.21, 0.94), (-0.24, 0.94), (-0.28, 0.1)], s * 0.72 - 0.035, s * 0.72 + 0.035, 'z'), 'painted', 0, 0, 0, tint=MACHINE)
         g.box('painted', 1.4, 0.8, 0.46, 0, 0.52, -0.03, tint=MACHINE, bevel=0.02)
@@ -746,7 +773,7 @@ def build_console():
             M = on_panel(Mp, -0.2 + k * 0.13, 0.13, 0.006)
             emit(bm_box(0.03, 0.05, 0.02), 'metal_black', M, BLACK)
             emit(bm_cyl(0.006, 0.004, 0.06, 6), 'steel', M @ Matrix.Translation((0, 0.008, 0.03)) @ Matrix.Rotation(0.5 - PI / 2, 4, 'X'), STEELG)
-        g.col(1.55, 1.05, 0.62, 0, 0.52, 0)
+        g.col(1.55, 1.05 + CONSOLE_LIFT, 0.62, 0, 0.52 - CONSOLE_LIFT / 2, 0)
     Mp = Mg(g, 0, 0.97, 0, 0, D(28))
     dial('AzNeedle', Mp, -0.38, -0.02, 'yaw', -1.0)
     dial('AltNeedle', Mp, 0.38, -0.02, 'pitch', -2.2)
@@ -755,15 +782,16 @@ def build_console():
     with into('Interior'):
         # Armored conduit from the console to the pier, along the floor.
         p0 = Vector(g.p(0, 0.05, -0.2))
-        pts = [p0, p0 * 0.75 + Vector((0, 0.0, 0)), Vector((p0.x * 0.35, FL + 0.04, p0.z * 0.35)), Vector((p0.x * 0.22, FL + 0.3, p0.z * 0.22))]
-        pts[1].y = FL + 0.035
+        pd = Vector(g.p(0, -CONSOLE_LIFT + 0.05, -0.2))   # down a rear leg to the floor first
+        pts = [p0, pd, p0 * 0.75 + Vector((0, 0.0, 0)), Vector((p0.x * 0.35, FL + 0.04, p0.z * 0.35)), Vector((p0.x * 0.22, FL + 0.3, p0.z * 0.22))]
+        pts[2].y = FL + 0.035
         TUBE('rubber', [tuple(p) for p in pts], 0.035, 8, tint=BLACK)
 
 def build_viewer():
     """The periscope eyepiece: a brass column with training handles and a hooded eyepiece. Pressing it
     looks through the telescope."""
-    a = D(236)
-    x, _, z = pol(3.72, a)
+    a = D(252)
+    x, _, z = pol(2.3, a)   # beside the pier, like the console, clear of its gearbox
     g = G(x, FL, z, PI - a)       # local +z faces the operator
     part('Viewer', g.p(0, 0, 0))
     with into('Viewer'):
@@ -979,10 +1007,14 @@ def build_electronics():
             emit(quad(0.21, 0.296), 'poster', Mf, WHITE, uvfn=region_uv(Mf, 0.21, 0.296, REG_PAPER))
         g = gs[0]
         g.put(bm_lathe([(0.0, 0.0), (0.04, 0.0), (0.042, 0.1), (0.038, 0.1), (0.036, 0.004), (0.0, 0.004)], 16), 'ceramic', -0.42, 0.76, 0.12, tint=CREAMP)
-        g.cyl('metal_black', 0.07, 0.08, 0.02, 0.5, 0.77, -0.05, 16, tint=BLACK)
-        TUBE('metal_black', [g.p(0.5, 0.78, -0.05), g.p(0.5, 1.1, -0.05), g.p(0.45, 1.3, 0.05), g.p(0.38, 1.3, 0.18)], 0.01, 6, tint=BLACK)
-        g.put(bm_lathe([(0.02, 0.0), (0.05, -0.03), (0.09, -0.12), (0.095, -0.13)], 16), 'painted', 0.38, 1.33, 0.18, rx=-0.4, tint=ORANGE70, smooth=True)
-        SPH('emissive', 0.025, *g.p(0.38, 1.27, 0.2), 8, 6)
+        # (On the open desk top, clear of the console riser behind it; the shade is closed on top and has an inside
+        # as well as an outside, so it hides the bulb from every angle. bm_lathe faces outward when y climbs.)
+        g.cyl('metal_black', 0.07, 0.08, 0.02, 0.45, 0.77, 0.1, 16, tint=BLACK)
+        TUBE('metal_black', [g.p(0.45, 0.78, 0.1), g.p(0.45, 1.1, 0.1), g.p(0.42, 1.28, 0.17), g.p(0.38, 1.3, 0.24)], 0.01, 6, tint=BLACK)
+        shade = [(0.095, -0.13), (0.09, -0.12), (0.05, -0.03), (0.02, 0.0), (0.0, 0.004)]
+        g.put(bm_lathe(shade, 16), 'painted', 0.38, 1.33, 0.24, rx=-0.4, tint=ORANGE70, smooth=True)
+        g.put(bm_lathe([(r - 0.004, y - 0.002) for (r, y) in reversed(shade[:4])], 16), 'painted', 0.38, 1.33, 0.24, rx=-0.4, tint=mul(CREAMP, 0.9), smooth=True)
+        SPH('emissive', 0.025, *g.p(0.38, 1.27, 0.26), 8, 6)
         chair(*pol(3.72, D(112))[::2], PI - D(112) + 0.25, ORANGE70)
         chair(*pol(3.65, D(136))[::2], PI - D(136) - 0.4, BROWN70)
 
@@ -1370,46 +1402,58 @@ def build_station():
         return Vector((x, y, z)), y - STA_Y
     ex, ez, op = hx - 0.03, hz - 0.03, 0.33        # railing line, and the half width of the ladder's opening
     with into('Dome'):
-        # Tread-plate deck with a round hole for the iris: quads between the hole and the edge, on rays that include
-        # the four corners. Top and underside.
+        # Tread-plate deck, top and underside.
+        for y0, up in ((0.0, True), (-0.012, False)):
+            q = [(-hx, -hz), (hx, -hz), (hx, hz), (-hx, hz)]
+            emit(bm_poly([(x_, y0, z_) for (x_, z_) in (q if not up else q[::-1])]), 'plate', M0, mul(STEELG, 1.6), 0.5)
+        # The control panel's face: a plate with a round hole for the iris (quads between the hole and the edge, on
+        # rays that include the four corners), front and back, in the panel's frame.
+        MP = M0 @ Matrix.Translation((0, STA_PY, STA_PZ)) @ Matrix.Rotation(STA_PT, 4, 'X')
         cz, ri = STA_IZ, STA_IR + 0.012
-        corners = [math.atan2(sz_ - cz, sx_) % (2 * PI) for (sx_, sz_) in ((hx, hz), (-hx, hz), (-hx, -hz), (hx, -hz))]
+        corners = [math.atan2(sz_ - cz, sx_) % (2 * PI) for (sx_, sz_) in ((STA_PX, STA_PZ1), (-STA_PX, STA_PZ1), (-STA_PX, STA_PZ0), (STA_PX, STA_PZ0))]
         angs = sorted(set([round(2 * PI * k / 40, 9) for k in range(40)] + [round(a, 9) for a in corners]))
         def edge(a):
             dx, dz = math.cos(a), math.sin(a)
-            t = hx / abs(dx) if abs(dx) > 1e-9 else 1e9
+            t = STA_PX / abs(dx) if abs(dx) > 1e-9 else 1e9
             if dz > 1e-9:
-                t = min(t, (hz - cz) / dz)
+                t = min(t, (STA_PZ1 - cz) / dz)
             elif dz < -1e-9:
-                t = min(t, (-hz - cz) / dz)
+                t = min(t, (STA_PZ0 - cz) / dz)
             return (dx * t, cz + dz * t)
         for y0, up in ((0.0, True), (-0.012, False)):
             bm = bmesh.new()
-            inner = [bm.verts.new((math.cos(a) * ri, y0, cz + math.sin(a) * ri)) for a in angs]
+            inner = [bm.verts.new((math.cos(a) * ri, y0, cz + math.sin(a) * ri)) for a in angs]   # (y0: face / its back)
             outer = [bm.verts.new((edge(a)[0], y0, edge(a)[1])) for a in angs]
             for k in range(len(angs)):
                 j = (k + 1) % len(angs)
                 f = (inner[k], inner[j], outer[j], outer[k])
                 bm.faces.new(f if up else f[::-1])
-            emit(bm, 'plate', M0, mul(STEELG, 1.6), 0.5)       # (the pier's ring is white: it's indoors)
+            emit(bm, 'painted', MP, mul(GUNMETAL, 0.85), 0.5)
+        # The panel's case behind the face (sides, back) and two brackets clamped to the top rail.
+        for s in (-1, 1):
+            emit(bm_box(0.02, 0.2, STA_PZ1 - STA_PZ0), 'painted', MP @ Matrix.Translation((s * (STA_PX - 0.01), -0.1, (STA_PZ0 + STA_PZ1) / 2)), mul(GUNMETAL, 0.75))
+        for zz in (STA_PZ0 + 0.01, STA_PZ1 - 0.01):
+            emit(bm_box(2 * STA_PX, 0.2, 0.02), 'painted', MP @ Matrix.Translation((0, -0.1, zz)), mul(GUNMETAL, 0.75))
+        emit(bm_box(2 * STA_PX, 0.02, STA_PZ1 - STA_PZ0), 'painted', MP @ Matrix.Translation((0, -0.2, (STA_PZ0 + STA_PZ1) / 2)), mul(GUNMETAL, 0.7))
+        for s in (-1, 1):   # brackets from the mid rail up to the case's underside
+            g.box('steel', 0.05, 0.36, 0.06, s * 0.3, 0.73, -(hz - 0.03) + 0.03, tint=GUNMETAL)
         # Edge frame under the plate, railing posts and the top rail (the silhouette).
         for s in (-1, 1):
             g.box('steel', 2 * hx, 0.05, 0.04, 0, -0.037, s * (hz - 0.02), tint=GUNMETAL)
             g.box('steel', 0.04, 0.05, 2 * hz - 0.08, s * (hx - 0.02), -0.037, 0, tint=GUNMETAL)
-        for (lx, lz) in ((-ex, -ez), (ex, -ez), (-ex, ez), (ex, ez), (-op, ez), (op, ez), (-ex, 0), (ex, 0), (0, -ez)):
+        for (lx, lz) in ((-ex, -ez), (ex, -ez), (-ex, ez), (ex, ez), (-op, ez), (op, ez), (-ex, 0), (ex, 0)):   # (none mid-back: the panel)
             g.box('steel', 0.035, 1.07, 0.035, lx, 0.535, lz, tint=STEELG)
-        def runs(y, h, w, mat='steel', tint=STEELG):
+        def runs(y, h, w, mat='steel', tint=STEELG, back=True):
             for s in (-1, 1):
                 g.box(mat, w, h, 2 * ez, s * ex, y, 0, tint=tint)                          # sides
                 g.box(mat, ex - op, h, w, s * (ex + op) / 2, y, ez, tint=tint)              # outer end, either side of the opening
-            g.box(mat, 2 * ex, h, w, 0, y, -ez, tint=tint)                                   # inner end
-        runs(1.05, 0.04, 0.04)
+            if back:
+                g.box(mat, 2 * ex, h, w, 0, y, -ez, tint=tint)                               # inner end
+        runs(1.05, 0.04, 0.04, back=False)     # (the panel takes the top rail's place at the back)
         with layer('near'):
             runs(0.55, 0.03, 0.03)
             runs(0.05, 0.1, 0.012, tint=mul(STEELG, 0.9))                                   # toe boards
-            # Safety bars across the opening (like the power tower's): you get on by looking down over them.
-            for yb in (0.55, 1.0):
-                g.box('painted', 2 * op, 0.045, 0.045, 0, yb, ez, tint=HATCH_YELLOW)
+            # (No bars across the ladder's opening: walking into it facing out puts you on the ladder.)
             # Legs to the dome, longer toward the outer edge, with pads on the skin and cross braces.
             legs = {}
             for lz in (-hz + 0.06, -0.25, 0.25, hz - 0.05):
@@ -1426,8 +1470,11 @@ def build_station():
                 beam('steel', g.p(s * (hx - 0.05), -0.08, 0.25), g.p(s * (hx - 0.05), legs[(s, lz)] + 0.06, lz), 0.012, 0.03, GUNMETAL)
             # The iris: a rim bead and rivets on the deck, the blade housing under the plate (the open blades slide
             # into it) and the well below.
-            Mi = M0 @ Matrix.Translation((0, 0, STA_IZ))
-            emit(bm_torus(STA_IR + 0.014, 0.01, 40, 6), 'steel', Mi @ Matrix.Translation((0, -0.004, 0)), STEELG, smooth=True)
+            Mi = MP @ Matrix.Translation((0, 0, STA_IZ))
+            # A thin steel bezel on the face over the blades' outer ends (their pivots), and the rim bead on it.
+            bez = bm_ring(STA_IR - 0.01, STA_IR + 0.065, 0.001, 0.006, 64)
+            emit(bez, 'steel', Mi, mul(STEELG, 0.95), smooth=SIDES)
+            emit(bm_torus(STA_IR - 0.004, 0.006, 48, 6), 'steel', Mi @ Matrix.Translation((0, 0.006, 0)), STEELG, smooth=True)
             for k in range(18):
                 a = 2 * PI * (k + 0.5) / 18
                 emit(bm_sphere(0.0065, 6, 4), 'steel', Mi @ Matrix.Translation((math.cos(a) * (STA_IR + 0.042), 0.0, math.sin(a) * (STA_IR + 0.042))), mul(STEELG, 0.9), smooth=True)
@@ -1439,19 +1486,19 @@ def build_station():
             emit(bm_cyl(STA_IR + 0.004, STA_IR + 0.004, STA_WELL - 0.044, 40, caps=False), 'metal_black', Mi @ Matrix.Translation((0, -(STA_WELL + 0.056) / 2, 0)), GUNMETAL, smooth=SIDES)
             emit(bm_disk(STA_IR + 0.004, 40, up=False), 'metal_black', Mi @ Matrix.Translation((0, -STA_WELL - 0.006, 0)), GUNMETAL)
             emit(bm_disk(STA_IR, 40), 'metal_black', Mi @ Matrix.Translation((0, -STA_WELL, 0)), mul(PANELBLK, 0.8))
-            # The button plate: a low steel wedge sloping toward you, three bezels and cups (the game adds the caps).
+            # The buttons on the face above the iris: a raised strip, three bezels and cups (the game adds the caps).
             bz, bsp = STA_BTN
-            z0, z1, hb, hf = bz - 0.06, bz + 0.06, 0.075, 0.04
-            emit(bm_prism([(z0, 0.0), (z1, 0.0), (z1, hf), (z0, hb)], -0.16, 0.16, 'z'), 'painted', M0, mul(GUNMETAL, 0.8))
-            alpha = math.atan2(hb - hf, z1 - z0)
-            Mf = M0 @ Matrix.Translation((0, (hb + hf) / 2, bz)) @ Matrix.Rotation(alpha, 4, 'X')
+            hb = hf = 0.012
+            emit(bm_box(0.32, 0.012, 0.12), 'painted', MP @ Matrix.Translation((0, 0.006, bz)), mul(GUNMETAL, 0.8))
+            alpha = 0.0
+            Mf = MP @ Matrix.Translation((0, hb, bz))
             for k in (-1, 0, 1):
                 emit(bm_torus(0.027, 0.005, 24, 6), 'steel', Mf @ Matrix.Translation((k * bsp, 0.001, 0)), STEELG, smooth=True)
                 emit(bm_cyl(0.023, 0.023, 0.004, 20), 'metal_black', Mf @ Matrix.Translation((k * bsp, 0.001, 0)), BLACK)
             for (sx_, sz_) in ((-0.14, -0.045), (0.14, -0.045), (-0.14, 0.045), (0.14, 0.045)):
                 emit(bm_cyl(0.006, 0.006, 0.004, 8), 'steel', Mf @ Matrix.Translation((sx_, 0.001, sz_)), GUNMETAL, smooth=True)
     empty('STATION', g.p(0, 0, 0), ry=g.ry, hx=hx, hz=hz, iris=[0.0, 0.0, STA_IZ, STA_IR],
-          btn=[(hb + hf) / 2, bz, alpha, bsp], well=[-STA_WELL, STA_IR])
+          btn=[hb, bz, alpha, bsp], well=[-STA_WELL, STA_IR], panel=[STA_PY, STA_PZ, STA_PT, STA_PX, STA_PZ0, STA_PZ1])
 
 def bake_all():
     """AO as usual, then the rear hatch's small parts borrow texels from bigger surfaces: at ~10 texels per metre
@@ -1556,7 +1603,7 @@ def borrow_ladder_ao(sc):
         return Vector((dx * g.c - dz * g.s, p.y - g.y, dx * g.s + dz * g.c))
     def on_deck(p, margin=0.1):
         q = local(p)
-        return abs(q.x) < STA_HX + margin and -STA_HZ - margin < q.z < STA_HZ + margin and -0.9 < q.y < 1.2
+        return abs(q.x) < STA_HX + margin and -STA_HZ - max(margin, 0.35) < q.z < STA_HZ + margin and -0.9 < q.y < 1.85
     fixed = lambda r0: lambda p, n, a: abs(wrap(ang(p) - D(LAD_A))) < 0.1 and r0 < math.hypot(p.x, p.z) < 6.2 and p.y < LAD_Y + 0.05
     L = D(LAD_LON)
     side = lambda p: p.x * math.cos(L) + p.z * math.sin(L)

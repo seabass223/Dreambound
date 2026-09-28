@@ -1,0 +1,61 @@
+/* Dreambound UI theme: shadcn/ui design tokens in tweakcn's format (https://tweakcn.com). To retheme, make a theme
+   in tweakcn and paste its :root / .dark blocks over these. The game's UI always runs in .dark (kit/index.js puts the
+   class on <html>); :root is kept as the matching light variant so a pasted theme drops in unchanged.
+   "Brass & Dusk": warm, near-black neutrals with an old-brass primary, serif type. */
+:root {
+  --background: oklch(0.97 0.008 85);
+  --foreground: oklch(0.22 0.012 70);
+  --card: oklch(0.99 0.005 85);
+  --card-foreground: oklch(0.22 0.012 70);
+  --popover: oklch(0.99 0.005 85);
+  --popover-foreground: oklch(0.22 0.012 70);
+  --primary: oklch(0.62 0.11 75);
+  --primary-foreground: oklch(0.99 0.005 85);
+  --secondary: oklch(0.92 0.012 80);
+  --secondary-foreground: oklch(0.28 0.015 70);
+  --muted: oklch(0.93 0.01 80);
+  --muted-foreground: oklch(0.5 0.02 75);
+  --accent: oklch(0.9 0.03 80);
+  --accent-foreground: oklch(0.28 0.015 70);
+  --destructive: oklch(0.55 0.19 28);
+  --destructive-foreground: oklch(0.98 0.005 85);
+  --border: oklch(0.86 0.012 80);
+  --input: oklch(0.86 0.012 80);
+  --ring: oklch(0.62 0.11 75);
+  --radius: 0.5rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.12);
+  --shadow-lg: 0 20px 60px -10px oklch(0 0 0 / 0.35);
+  --tracking-normal: 0.01em;
+}
+
+.dark {
+  --background: oklch(0.16 0.008 65);
+  --foreground: oklch(0.92 0.022 85);
+  --card: oklch(0.19 0.01 65);
+  --card-foreground: oklch(0.92 0.022 85);
+  --popover: oklch(0.21 0.011 65);
+  --popover-foreground: oklch(0.92 0.022 85);
+  --primary: oklch(0.79 0.1 80);
+  --primary-foreground: oklch(0.2 0.02 65);
+  --secondary: oklch(0.26 0.012 65);
+  --secondary-foreground: oklch(0.9 0.02 85);
+  --muted: oklch(0.24 0.01 65);
+  --muted-foreground: oklch(0.69 0.028 80);
+  --accent: oklch(0.3 0.022 72);
+  --accent-foreground: oklch(0.94 0.02 85);
+  --destructive: oklch(0.63 0.17 30);
+  --destructive-foreground: oklch(0.98 0.005 85);
+  --border: oklch(0.92 0.022 85 / 13%);
+  --input: oklch(0.92 0.022 85 / 18%);
+  --ring: oklch(0.79 0.1 80 / 65%);
+  --radius: 0.5rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.3);
+  --shadow-lg: 0 24px 70px -12px oklch(0 0 0 / 0.65);
+  --tracking-normal: 0.01em;
+}

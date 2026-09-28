@@ -90,9 +90,9 @@ export function createStation(ctx, { root, nodes, st, doorAngle, domeAngle, cent
       if (tan) tan.subVectors(P[i + 1], P[i]).transformDirection(cur);
       return out;
     },
-    // From the deck: stand at the opening facing out, look down over the bars and press forward.
+    // From the deck: walk into the opening at the ladder's end, facing out, and you step onto the ladder.
     grab(p, a) {
-      if (!aligned || a.y <= 0 || p.pitch > -0.3) return null;
+      if (!aligned || a.y <= 0) return null;
       const q = _a.copy(p.feet).applyMatrix4(SWi);
       if (q.z < sta.hz - 0.55 || Math.abs(q.x) > 0.3 || Math.abs(q.y) > 0.4) return null;
       p.forward(_b);
@@ -121,9 +121,17 @@ export function createStation(ctx, { root, nodes, st, doorAngle, domeAngle, cent
   const WA = new THREE.Matrix4().multiplyMatrices(MA, F);
   const box = (x, y, z, w, h, d) => colB.addGeometry(new THREE.BoxGeometry(w, h, d), WA.clone().multiply(mat4(x, y, z)));
   box(0, -0.05, 0, sta.hx * 2, 0.1, sta.hz * 2);
+  // Rail walls on three sides; the ladder's end is open either side of its 0.66 m gap (walking into the gap facing
+  // out puts you on the ladder: see dome.grab).
   for (const s of [-1, 1]) {
     box(s * (sta.hx - 0.03), 0.6, 0, 0.06, 1.3, sta.hz * 2);
-    box(0, 0.6, s * (sta.hz - 0.03), sta.hx * 2, 1.3, 0.06);
+    box(s * (sta.hx + 0.33) / 2, 0.6, sta.hz - 0.03, sta.hx - 0.33, 1.3, 0.06);
+  }
+  box(0, 0.6, -(sta.hz - 0.03), sta.hx * 2, 1.3, 0.06);
+  if (sta.panel) {   // the panel's case, leaning back over the rear rail
+    const [py, pz, pt, px, z0, z1] = sta.panel;
+    colB.addGeometry(new THREE.BoxGeometry(px * 2, 0.22, z1 - z0), WA.clone().multiply(mat4(0, py, pz))
+      .multiply(new THREE.Matrix4().makeRotationX(pt)).multiply(mat4(0, -0.1, (z0 + z1) / 2)));
   }
   let stationCol = null;
 
@@ -134,9 +142,12 @@ export function createStation(ctx, { root, nodes, st, doorAngle, domeAngle, cent
   root.add(spin);
   const bits = new THREE.Group();
   spin.add(bits);
-  const at = (x, y, z) => F.clone().multiply(mat4(x, y, z));
+  // The control panel on the back railing (sta.panel: [y, z, tilt, ...]): the iris, its well and the buttons sit in its
+  // frame, +y out of the face (up at you), +z down the face. Older models had them in the deck (no panel).
+  const PF = sta.panel ? F.clone().multiply(mat4(0, sta.panel[0], sta.panel[1])).multiply(new THREE.Matrix4().makeRotationX(sta.panel[2])) : F;
+  const at = (x, y, z) => PF.clone().multiply(mat4(x, y, z));
   const iris = createIris({ radius: irisR, parent: bits, frame: at(0, 0, irisZ) });
-  const FB = at(0, btnY, btnZ).multiply(new THREE.Matrix4().makeRotationX(btnTilt));   // the sloped button face, +y out of it
+  const FB = at(0, btnY, btnZ).multiply(new THREE.Matrix4().makeRotationX(btnTilt));   // the button face, +y out of it
   const capMat = patchMaterial(new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0, name: 'station-buttons' }));
   const caps = new THREE.InstancedMesh(buttonGeometry(), capMat, 3);
   caps.name = 'station-buttons';
@@ -185,10 +196,12 @@ export function createStation(ctx, { root, nodes, st, doorAngle, domeAngle, cent
       ctx.audio?.play('switch', { pos, rate: 0.45 });  // a dull click
     }
   };
-  const open = () => {
+  // instant: already open, no sound (restoring a saved game, core/save.js).
+  const open = (instant = false) => {
     if (st.stationOpen) return;
     st.stationOpen = true;
     dial.visible = true;
+    if (instant) { openT = 1; iris.set(1); return; }
     scrape = ctx.audio?.loop('scrape', { pos: worldOf(at(0, 0, irisZ)) }) ?? null;
   };
 

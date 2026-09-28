@@ -7,6 +7,7 @@ import { atmo, atmoState } from '../render/atmosphere.js';
 import { clamp } from '../core/rng.js';
 import { rigged, UV_VERT, createRig, collectParts, partIndex } from '../render/rig.js';
 import { FAR_BAND, mergeable } from '../render/lod.js';
+import { createScopeExit } from '../ui/scopeExit.js';
 import { createStation } from './observatoryStation.js';
 import { VIEW_DROP } from '../world/skyTarget.js';
 
@@ -290,9 +291,9 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
   const slitAngle = (yaw) => Math.atan2(-Math.cos(yaw), -Math.sin(yaw)) - root.rotation.y;
   const yaw0 = st.yaw, psi0 = slitAngle(st.yaw);
   const domeAngle = (yaw) => psi0 - (yaw - yaw0);
-  let wind = 0, shut = 1;   // shut: the rear hatch's panel (built open in Blender, so 1 swings it shut)
+  let wind = 0, shut = 1, doorS = 0;   // doorS: the front door, 0 shut (as built) .. 1 swung open against the wall   // shut: the rear hatch's panel (built open in Blender, so 1 swings it shut)
   const apply = () => {
-    const val = { yaw: domeAngle(st.yaw), pitch: st.pitch, wind, hatch: shut };
+    const val = { yaw: domeAngle(st.yaw), pitch: st.pitch, wind, hatch: shut, door: doorS };
     for (let i = 1; i < parts.length; i++) rig.uRigP.value[i].w = (val[parts[i].driver] ?? 0) * parts[i].ratio;
   };
   apply();
@@ -356,9 +357,11 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     ctx.fx.scopeAz = st.yaw;
     ctx.fx.scopeAlt = st.pitch;
   };
+  const exitButton = typeof document !== 'undefined' && document.head && document.body ? createScopeExit(() => exitView()) : null;
   const exitView = () => {
     if (!viewing) return;
     viewing = false;
+    exitButton?.show(false);
     ctx.fx.scope = 0;
     ctx.scopeFogMul = 1;
     cam.fov = baseFov; cam.updateProjectionMatrix();
@@ -372,6 +375,7 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     onPress: () => {
       if (viewing) return exitView();
       viewing = true;
+      exitButton?.show(true);
       ctx.fx.scope = 1;
       ctx.scopeFogMul = 0.3;   // good optics cut through the haze
       cam.fov = 3.2; cam.updateProjectionMatrix();
@@ -429,7 +433,44 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
       st.pitch = aim.pitch;
       return aim;
     },
+    // Put the panel at `v` (0 shut .. 1 open) at once (restoring a saved game, core/save.js).
+    set: (v) => {
+      st.hatch = clamp(v, 0, 1);
+      shut = 1 - st.hatch * st.hatch * (3 - 2 * st.hatch);
+      apply();
+    },
   };
+
+  // ---- the front door: shut until you open it. A click (on the leaf, wherever it stands) swings it out against the
+  // wall, or back shut; while it is mostly shut it blocks the doorway. ----
+  const doorPart = parts.find((q) => q && q.driver === 'door');
+  let doorOpen = 0, doorGoal = 0, updateDoor = () => {};
+  if (doorPart) {
+    const hinge = doorPart.pivot, fl = meta.floorY ?? 0.28;
+    // A click target that turns with the leaf: the rig's rotation about +Y at the hinge, from the leaf built shut
+    // along -X (see the design's DOOR_OPEN).
+    const swing = new THREE.Group();
+    swing.position.copy(hinge);
+    root.add(swing);
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 0.14), new THREE.MeshBasicMaterial({ visible: false }));
+    leaf.position.set(-0.7, fl + 1.13, 0);
+    swing.add(leaf);
+    const wc = root.localToWorld(new THREE.Vector3(hinge.x - 0.7, 0, hinge.z));
+    const blocker = ctx.physics.addOBB({ x: wc.x, z: wc.z, hx: 0.75, hz: 0.1, ry: root.rotation.y, y0: center.y - 0.5, y1: center.y + 3, zone: 'surface' });
+    const soundPos = root.localToWorld(new THREE.Vector3(hinge.x - 0.7, fl + 1.2, hinge.z));
+    ctx.interact.add({
+      name: 'observatory:door', meshes: [leaf], range: 2.7,
+      onPress: () => { doorGoal = doorGoal ? 0 : 1; ctx.audio?.play(doorGoal ? 'hingeOpen' : 'hingeClose', { pos: soundPos }); },
+    });
+    updateDoor = (dt) => {
+      if (doorOpen === doorGoal) return;
+      doorOpen = doorGoal > doorOpen ? Math.min(1, doorOpen + dt / 1.4) : Math.max(0, doorOpen - dt / 1.4);
+      doorS = doorOpen * doorOpen * (3 - 2 * doorOpen);
+      swing.rotation.y = doorS * doorPart.ratio;
+      swing.updateMatrixWorld(true);
+      blocker.enabled = doorOpen < 0.3;
+    };
+  }
 
   // ---- service ladders up the back and the roof station (props/observatoryStation.js): they meet, and the station
   // can be stood on, only while the telescope points at the Dome stack. ----
@@ -442,6 +483,7 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     M.emissive.color.setRGB(3.2 * k, 2.3 * k, 1.3 * k);
     wind += dt * (2.5 + 1.5 * Math.sin(timeU.value * 0.07) + Math.sin(timeU.value * 0.31));
     updateHatch(dt);
+    updateDoor(dt);
     apply();
     station?.update(dt);
     if (viewing) {

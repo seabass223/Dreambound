@@ -108,7 +108,7 @@ export function tunnelGeometry(points, { radius = 1.8, floor = 1.15, noise = 0.3
 }
 
 // Remove triangles of `geo` near an opening (point + axis) so a tunnel can pass through.
-export function carveOpening(geo, mouth, axis, radius, { minY = -Infinity } = {}) {
+export function carveOpening(geo, mouth, axis, radius, { minY = -Infinity, tMin = -1.5, tMax = 4 } = {}) {
   const p = geo.attributes.position;
   const src = geo.index ? geo.index.array : [...Array(p.count).keys()];
   const keep = [];
@@ -120,11 +120,154 @@ export function carveOpening(geo, mouth, axis, radius, { minY = -Infinity } = {}
     rel.subVectors(c, mouth);
     const t = rel.dot(axis);
     const perp = rel.addScaledVector(axis, -t).length();
-    if (t > -1.5 && t < 4 && perp < radius && c.y > minY) continue;
+    if (t > tMin && t < tMax && perp < radius && c.y > minY) continue;
     keep.push(src[i], src[i + 1], src[i + 2]);
   }
   geo.setIndex(keep);
   return geo;
+}
+
+// The rock round a cave's tunnel (see buildCave): a shell swept along the tube's axis, 0.35 m clear of the tube's
+// rough wall at its lip and 1-3 m thick behind it, much thicker toward `toward` (into the cliff) and on top, with
+// ragged, set-back edges at the mouth. Its lip is stitched to the tube's first ring, vertex for vertex, and the back
+// is capped, so it is closed everywhere. `tube` is tunnelGeometry(pts, { radial: 14 }).
+function caveShell(pts, tube, { seed = 1, toward = null, ceiling = null, radial = 14 }) {
+  const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+  const fr = curve.computeFrenetFrames(1, false);
+  const N = fr.normals[0], B = fr.binormals[0], T = curve.getTangentAt(0).normalize();
+  const L = curve.getLength();
+  const K = 4, R2 = radial * K;   // shell vertices per tube vertex round the lip
+  // TubeGeometry's direction for angle v (so the shell's angles line up with the tube's vertices).
+  const dirOf = (v, out) => out.set(0, 0, 0).addScaledVector(N, -Math.cos(v)).addScaledVector(B, Math.sin(v));
+  const into = new THREE.Vector3();
+  const pos = [], idx = [];
+  const put = (v) => { pos.push(v.x, v.y, v.z); return pos.length / 3 - 1; };
+  const P = (i) => new THREE.Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+  const _n = new THREE.Vector3(), _e1 = new THREE.Vector3(), _e2 = new THREE.Vector3();
+  // A triangle, wound so it faces `facing`.
+  const tri = (a, b, c, facing) => {
+    const A = P(a);
+    _n.crossVectors(_e1.subVectors(P(b), A), _e2.subVectors(P(c), A));
+    if (_n.dot(facing) < 0) idx.push(a, c, b); else idx.push(a, b, c);
+  };
+  const c = new THREE.Vector3(), d = new THREE.Vector3(), q = new THREE.Vector3();
+  const inner0 = 1.75 + 0.35;
+  // The rock's outer surface along direction dv (unit, across the tunnel): the nearest of a few rough slab planes,
+  // so the cross-section is a craggy buttress standing out of the cliff rather than a ring round a pipe: a face toward
+  // the open air, a roof leaning back into the cliff, a chamfer and a bottom just under the ledge, and (buried) the
+  // cliff side. Each plane is pushed about by noise; then crags on top. t: metres along the tunnel from its open end.
+  const UP = new THREE.Vector3(0, 1, 0), sea = new THREE.Vector3(), roof = new THREE.Vector3(), cham = new THREE.Vector3();
+  const planes = [];
+  const outerR = (j, t, dv) => {
+    q.copy(c).addScaledVector(dv, 2.5);
+    const n1 = fbm3(q.x * 0.5, q.y * 0.5, q.z * 0.5, 3, seed + 21), n2 = fbm3(q.x * 0.5 + 7.1, q.y * 0.5, q.z * 0.5, 3, seed + 25);
+    const crag = fbm3(q.x * 1.6, q.y * 1.6, q.z * 1.6, 2, seed + 22), grit = fbm3(q.x * 3.4, q.y * 3.4, q.z * 3.4, 2, seed + 24);
+    let r = Infinity;
+    for (const [n, h] of planes) {
+      const k = dv.dot(n);
+      if (k > 0.05) r = Math.min(r, h / k);
+    }
+    r = Math.min(r, 6.2);   // (directions nearly along every plane would otherwise shoot out as slivers)
+    r += 0.55 * n1 + 0.35 * crag + 0.15 * grit;
+    if (ceiling != null && dv.y > 0.05) r = Math.min(r, (ceiling - c.y) / dv.y);   // under the stack's top
+    r = Math.max(r, inner0 + 0.15 + 0.1 * n2);
+    // Near the mouth the rock is barely drawn in (the face round the opening is a broken face, not a rolled rim).
+    return inner0 + (r - inner0) * (0.82 + 0.18 * THREE.MathUtils.smoothstep(t, 0.0, 0.8));
+  };
+  const setPlanes = () => {
+    // into: toward the cliff (horizontal). Without it, a plain rough collar all round.
+    if (!toward) { planes.length = 0; for (const n of [UP, UP.clone().negate(), N, N.clone().negate(), B, B.clone().negate()]) planes.push([n, 2.9]); return; }
+    sea.copy(into).negate();
+    roof.copy(UP).addScaledVector(into, -0.2).normalize();
+    cham.copy(UP).negate().addScaledVector(into, -1).normalize();
+    planes.length = 0;
+    planes.push([sea, 2.9], [roof, 3.1], [UP.clone().negate(), 1.45], [cham, 2.6], [into, 6.0], [UP.clone().addScaledVector(into, 1).normalize(), 5.5]);
+  };
+  const nS = Math.max(8, Math.ceil(L / 0.22));
+  const rings = [];
+  for (let i = 0; i <= nS; i++) {
+    const s = i / nS;
+    curve.getPointAt(s, c);
+    if (toward) into.set(toward.x - c.x, 0, toward.z - c.z).normalize();
+    setPlanes();
+    const ring = [];
+    for (let j = 0; j < R2; j++) {
+      dirOf((j / R2) * Math.PI * 2, d);
+      const rr = outerR(j, s * L, d);   // (outerR uses q: take the radius before building the point)
+      ring.push(put(q.copy(c).addScaledVector(d, rr)));
+    }
+    rings.push(ring);
+  }
+  // The mouth's face: the first ring set back unevenly along the tunnel, a broken edge (less than the ring spacing, or
+  // the surface would fold over into fins).
+  const jagAt = (j, k) => fbm3(Math.cos((j / R2) * 6.283) * 1.9, Math.sin((j / R2) * 6.283) * 1.9, seed * 0.37 + k, 2, seed + 23);
+  for (let j = 0; j < R2; j++) {
+    const i = rings[0][j], back = (0.5 + 0.5 * jagAt(j, 0)) * 0.8 * (L / nS);
+    pos[i * 3] += T.x * back; pos[i * 3 + 1] += T.y * back; pos[i * 3 + 2] += T.z * back;
+  }
+  // Round the back: a few shrinking rings and a pole beyond the tube's end.
+  const end = curve.getPointAt(1, new THREE.Vector3());
+  for (const [k, back] of [[0.8, 0.5], [0.5, 0.9], [0.2, 1.15]]) {
+    const ring = rings[rings.length - 1].map((vi) => {
+      const v = P(vi).sub(end);
+      const along = v.dot(T);
+      v.addScaledVector(T, -along).multiplyScalar(k);
+      return put(v.add(end).addScaledVector(T, along + back));
+    });
+    rings.push(ring);
+  }
+  const pole = put(end.clone().addScaledVector(T, 1.25));
+  const axisAt = (vi) => { const v = P(vi); return end.clone().addScaledVector(T, v.clone().sub(end).dot(T)); };
+  for (let i = 0; i < rings.length - 1; i++) {
+    for (let j = 0; j < R2; j++) {
+      const a = rings[i][j], b = rings[i][(j + 1) % R2], c2 = rings[i + 1][j], d2 = rings[i + 1][(j + 1) % R2];
+      const out = P(a).sub(axisAt(a));
+      tri(a, b, d2, out); tri(a, d2, c2, out);
+    }
+  }
+  const last = rings[rings.length - 1];
+  for (let j = 0; j < R2; j++) tri(last[j], last[(j + 1) % R2], pole, T);
+  // The lip: the tube's first ring (its own vertices, so no gap) to the shell's first ring, facing out of the mouth.
+  const tp = tube.attributes.position;
+  const inner = [];
+  for (let j = 0; j <= radial; j++) inner.push(put(new THREE.Vector3(tp.getX(j), tp.getY(j), tp.getZ(j))));
+  const lipFacing = T.clone().negate();
+  // A rugged band midway across the face (pushed in and out along the tunnel), between the tube and the rim.
+  const o = rings[0], mid = [];
+  for (let j = 0; j < R2; j++) {
+    const vo = P(o[j]), vi = P(inner[Math.min(radial, Math.round(j / K))]);
+    const m = vo.lerp(vi, 0.45 + 0.1 * jagAt(j, 3.1));
+    m.addScaledVector(T, 0.25 * jagAt(j, 7.3) + 0.12);
+    mid.push(put(m));
+  }
+  for (let j = 0; j < R2; j++) {
+    const n = (j + 1) % R2;
+    tri(mid[j], o[j], o[n], lipFacing); tri(mid[j], o[n], mid[n], lipFacing);
+  }
+  for (let j = 0; j < radial; j++) {
+    const a = inner[j], b = inner[j + 1], m = K * j + K / 2;
+    for (let k = K * j; k < m; k++) tri(a, mid[k], mid[(k + 1) % R2], lipFacing);
+    tri(a, mid[m], b, lipFacing);
+    for (let k = m; k < K * j + K; k++) tri(b, mid[k], mid[(k + 1) % R2], lipFacing);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  // Faceted, like broken rock (and like the cliff's own relief), rather than a smooth mound.
+  const flat = g.toNonIndexed();
+  flat.computeVertexNormals();
+  // Texture coordinates for the rock map: each face projected along its dominant axis (a box mapping).
+  const fp = flat.attributes.position, fn = flat.attributes.normal, uv = new Float32Array(fp.count * 2), S = 0.45;
+  for (let i = 0; i < fp.count; i += 3) {
+    const ax = Math.abs(fn.getX(i)), ay = Math.abs(fn.getY(i)), az = Math.abs(fn.getZ(i));
+    for (let k = i; k < i + 3; k++) {
+      const x = fp.getX(k), y = fp.getY(k), z = fp.getZ(k);
+      const [u, v] = ax >= ay && ax >= az ? [z, y] : ay >= az ? [x, z] : [x, y];
+      uv[k * 2] = u * S; uv[k * 2 + 1] = v * S;
+    }
+  }
+  flat.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return mergeParts([{ geo: flat, color: 0x8a8378 }]);
 }
 
 // A lumpy rock mass (for cave hoods and outcrops), outward-only displacement.
@@ -259,7 +402,8 @@ export function scatter(stack, count, rng, accept = () => true, { margin = 3, tr
 
 // Cave passage: a short tunnel covered by a rock hood, ending at an elevator plate.
 // mouth = floor-level point at the opening; dir = horizontal heading into the cave.
-export function buildCave(ctx, { mouth, dir, length = 4.6, batcher, collider, seed = 1 }) {
+// toward: the stack's centre (the cliff side); the shell grows into the wall that way.
+export function buildCave(ctx, { mouth, dir, length = 4.6, batcher, collider, seed = 1, toward = null }) {
   const M = materials();
   const up = new THREE.Vector3(0, 1, 0);
   const c0 = mouth.clone().addScaledVector(up, 1.15);
@@ -269,17 +413,14 @@ export function buildCave(ctx, { mouth, dir, length = 4.6, batcher, collider, se
   const p = tube.attributes.position, col = tube.attributes.color;
   for (let i = 0; i < p.count; i++) {
     const t = new THREE.Vector3(p.getX(i), p.getY(i), p.getZ(i)).sub(mouth).dot(dir) / length;
-    const k = 0.9 - Math.min(1, Math.max(0, t)) * 0.75;
+    const k = 0.62 - Math.min(1, Math.max(0, t)) * 0.5;   // (the mouth's rock is no lighter than the face round it)
     col.setXYZ(i, k, k * 0.97, k * 0.94);
   }
   batcher.add(tube, M.stone);
   collider.addGeometry(tube);
-  const ry = Math.atan2(dir.x, dir.z);
-  const hoodCenter = mouth.clone().addScaledVector(dir, length * 0.5 + 1.6).addScaledVector(up, 0.9);
-  const hood = rockMass(new THREE.Vector3(), new THREE.Vector3(3.4, 3.3, length * 0.5 + 1.9), seed + 4, 4);
-  hood.applyMatrix4(mat4(hoodCenter.x, hoodCenter.y, hoodCenter.z, ry));
-  carveOpening(hood, mouth.clone().addScaledVector(up, 1.1), dir.clone().negate(), 1.45);
-  hood.computeVertexNormals();
+  // The rock round the tunnel: a thick, rough shell swept along it (caveShell), built on the tube's own open end so
+  // there is no seam to see through, thickening into the cliff behind so it reads as part of it.
+  const hood = caveShell(pts, tube, { seed, toward, ceiling: toward ? toward.y - 0.9 : null });
   batcher.add(hood, M.cliff);
   collider.addGeometry(hood);
   const platePos = mouth.clone().addScaledVector(dir, length);

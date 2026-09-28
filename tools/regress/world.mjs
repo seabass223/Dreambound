@@ -193,7 +193,7 @@ export async function buildHeadless({ walls } = {}) {
   const imp = (p) => import(SRC + p);
   const config = await imp('config.js');
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const [cabin, observatory, cave, lounge, elevator, towerKit] = await Promise.all(['cabin.glb', 'observatory.glb', 'cave.glb', 'lounge.glb', 'elevator.glb', 'tower_kit.glb'].map((f) => parseGlb(GLTFLoader, f)));
+  const [cabin, observatory, cave, lounge, elevator, towerKit, deck] = await Promise.all(['cabin.glb', 'observatory.glb', 'cave.glb', 'lounge.glb', 'elevator.glb', 'tower_kit.glb', 'deck.glb'].map((f) => parseGlb(GLTFLoader, f)));
   const { Physics } = await imp('player/collision.js');
   const { Stack } = await imp('world/terrain.js');
   const { Flowers } = await imp('world/flowers.js');
@@ -228,6 +228,7 @@ export async function buildHeadless({ walls } = {}) {
     loungeAsset: { gltf: lounge, lm: tex(), wood: tex(), leather: tex(), map: tex(), card: tex(), dots: tex(), rug: tex(), prints: tex(), floor: tex() },
     elevatorAsset: { gltf: elevator, extAlbedo: tex(), extNormal: tex(), extOrm: tex(), intAlbedo: tex(), intLm: tex() },
     towerKitAsset: { gltf: towerKit, albedo: tex(), normal: tex(), orm: tex() },
+    deckAsset: { gltf: deck, ao: tex(), wood: tex(), normal: tex() },
   });
   const buildMs = performance.now() - t0;
   Stack.prototype.build = build;

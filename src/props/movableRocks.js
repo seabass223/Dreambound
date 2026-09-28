@@ -80,7 +80,17 @@ export function createMovableRocks(ctx, stack, spots, { blockers = [], targets =
     if (moving && scrape) scrape.setPos?.(moving.mesh.position);
     if (!moving && scrape) { scrape.stop(); scrape = null; }
   });
+  // Put boulder i at world x, z at once (restoring a saved game, core/save.js); no push rules, no hook.
+  const place = (i, x, z) => {
+    const rk = rocks[i];
+    if (!rk || !Number.isFinite(x) || !Number.isFinite(z)) return;
+    const y = stack.heightAt(x, z) ?? rk.mesh.position.y - rk.r * 0.35;
+    rk.col.x = x; rk.col.z = z;
+    rk.col.y0 = y - 1; rk.col.y1 = y + rk.r * 1.6;
+    rk.mesh.position.set(x, y + rk.r * 0.35, z);
+    state.positions[i] = { x, z };
+  };
   // For tests and the console: the boulders, the rules and the targets.
-  ctx.boulders = { rocks, blockers, targets, canMoveTo, checkSolved };
+  ctx.boulders = { rocks, blockers, targets, canMoveTo, checkSolved, place };
   return rocks;
 }

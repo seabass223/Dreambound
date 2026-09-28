@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { atmo } from './atmosphere.js';
 import { NOISE_GLSL, SKY_UNIFORMS_GLSL, SKY_FUNC_GLSL } from './glsl.js';
 import { CENTER_DIR } from './constellation.js';
+import { MOON_GLSL, moonMap, moonMapFlat, moonExtinction } from './moon.js';
 
 const vert = /* glsl */ `
 varying vec3 vDir;
@@ -19,6 +20,7 @@ uniform vec3 uConstDir;
 varying vec3 vDir;
 ${NOISE_GLSL}
 ${SKY_FUNC_GLSL}
+${MOON_GLSL}
 
 vec3 rotY(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(c * v.x + s * v.z, v.y, -s * v.x + c * v.z); }
 vec3 rotX(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x, c * v.y - s * v.z, s * v.y + c * v.z); }
@@ -42,7 +44,11 @@ void main() {
   vec3 col = skyGradient(dir);
   col += sunAndGlow(dir);
 
-  float starVis = uStars * uNight * smoothstep(-0.02, 0.18, dir.y);
+  // The moon (render/moon.js): where this pixel falls on its disc (derivatives, so out here in uniform control flow).
+  Moon moon = moonAt(dir);
+  float moonCov = moon.cov * smoothstep(-0.02, 0.02, dir.y);
+
+  float starVis = uStars * uNight * smoothstep(-0.02, 0.18, dir.y) * (1.0 - moonCov);   // the disc hides them
   // A dark patch round the Rocks constellation (render/constellation.js), so the turning field never crowds it:
   // no stars within 1.5 deg of its centre, all back by 3 deg.
   float starMask = smoothstep(0.99863, 0.99966, dot(dir, uConstDir));
@@ -61,21 +67,11 @@ void main() {
     col += (starCol * (s + sparkle) * 0.9 * (1.0 - starMask) + milky) * starVis;
   }
 
-  // Moon
-  float md = dot(dir, uMoonDir);
-  float moonR = 0.99990;
-  float disk = smoothstep(moonR - 0.00002, moonR + 0.00001, md);
-  if (disk > 0.0) {
-    vec3 t1 = normalize(cross(uMoonDir, vec3(0.0, 1.0, 0.0)));
-    vec3 t2 = cross(t1, uMoonDir);
-    vec2 uv = vec2(dot(dir, t1), dot(dir, t2)) * 70.0;
-    float maria = smoothstep(0.45, 0.75, fbm(uv * 1.3 + 3.0));
-    vec3 moonCol = vec3(1.0, 0.97, 0.9) * (1.0 - maria * 0.35);
-    float vis = mix(0.12, 1.0, uNight);
-    col = mix(col, moonCol * 2.2 * vis, disk * smoothstep(-0.02, 0.02, dir.y));
-  }
-  float halo = pow(max(md, 0.0), 900.0) * 0.12 + pow(max(md, 0.0), 60.0) * 0.012;
-  col += vec3(0.55, 0.62, 0.8) * halo * uNight;
+  // Its light, dimmed and reddened by the air low down. By day the sky's own light lies over it (added, so its dark
+  // side is sky and its lit side pale and low in contrast, with no aureole); at night it is brighter on screen (the
+  // exposure opens) with a soft aureole and earthshine.
+  col += moonGlow(moon) * uMoonExt * uNight * smoothstep(-0.05, 0.05, dir.y);
+  if (moonCov > 0.0) col += moonSurface(moon) * uMoonExt * mix(0.5, 0.2, uNight) * moonCov;
 
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -84,8 +80,9 @@ void main() {
 `;
 
 export function createSky() {
+  const moonExt = { value: new THREE.Color(1, 1, 1) };
   const mat = new THREE.ShaderMaterial({
-    uniforms: { ...atmo, uStars: { value: 1 }, uConstDir: { value: CENTER_DIR.clone() } },
+    uniforms: { ...atmo, uStars: { value: 1 }, uConstDir: { value: CENTER_DIR.clone() }, uMoonMap: { value: moonMap() }, uMoonExt: moonExt },
     vertexShader: vert,
     fragmentShader: frag,
     side: THREE.BackSide,
@@ -97,9 +94,9 @@ export function createSky() {
   mesh.renderOrder = -10;
   mesh.name = 'sky';
 
-  // A low-cost copy (no stars) used to render the environment map for image-based lighting.
+  // A low-cost copy (no stars, a plain moon: moonMapFlat) used to render the environment map for image-based lighting.
   const envMat = mat.clone();
-  envMat.uniforms = { ...atmo, uStars: { value: 0 }, uConstDir: { value: CENTER_DIR.clone() } };
+  envMat.uniforms = { ...atmo, uStars: { value: 0 }, uConstDir: { value: CENTER_DIR.clone() }, uMoonMap: { value: moonMapFlat() }, uMoonExt: moonExt };
   const envScene = new THREE.Scene();
   const envMesh = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), envMat);
   envScene.add(envMesh);
@@ -107,6 +104,9 @@ export function createSky() {
   return {
     mesh,
     envScene,
-    update(camera) { mesh.position.copy(camera.position); },
+    update(camera) {
+      mesh.position.copy(camera.position);
+      moonExtinction(atmo.uMoonDir.value, moonExt.value);
+    },
   };
 }

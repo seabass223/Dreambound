@@ -61,7 +61,7 @@ export function buildTower(ctx) {
   const endR = stack.cliffRadius(thC, DEPTH, stack.edgeR(thC)) + 2.1;
   const mouth = new THREE.Vector3(cx + Math.cos(thC) * endR, cfg.top - DEPTH, cz + Math.sin(thC) * endR);
   const into = new THREE.Vector3(Math.sin(thC), 0, -Math.cos(thC));
-  const cave = buildCave(ctx, { mouth, dir: into, length: 4.6, batcher, collider, seed: 31 });
+  const cave = buildCave(ctx, { mouth, dir: into, length: 4.6, batcher, collider, seed: 31, toward: new THREE.Vector3(cx, cfg.top, cz) });
   addCaveBulb(ctx, cave.platePos, cave.plateRot, batcher);
   const samples = [];
   for (let i = 0; i <= 24; i++) {

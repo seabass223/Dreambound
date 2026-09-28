@@ -9,16 +9,17 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. A faint line fills the black screen while the world loads and warms up; when it gives way to the breathing light, click to begin (a click made earlier is kept, and the game starts as soon as it is ready). `npm run build` produces a static bundle in `dist/`.
+Open http://localhost:5173. A loading bar fills the black screen while the world loads and warms up, with the current stage and a countdown; when it gives way to the breathing light and "Click to begin", click (a click made earlier is kept, and the game starts as soon as it is ready). `npm run build` produces a static bundle in `dist/`.
 
 ## Controls
 
 - **Mouse**: look around. A faint dot marks the centre of your view; it grows and brightens over anything you can press (the same test Space / E / click use). It hides during the wake-up fade, cutscenes, the telescope eyepiece (which has its own reticle) and the settings panel. The OS cursor shows whenever the game doesn't hold the mouse (settings open, or after closing them with Escape until you click back in).
 - **W A S D**: walk (hold **Shift** to walk faster)
 - **Space / E / left click**: use whatever is in the center of your view
+- **Deck chairs**: on the view deck at the Dome stack's west rim, aim at an Adirondack chair and press Space / E / click to sit in it, facing out over the cloud sea toward the Rocks and the sunset. Seated, the mouse looks round (up to 100° either way, 40° down, 35° up) and the keys don't walk; press again, or **W A S D**, to stand up in front of the chair.
 - **Ladders**: walk into one and press **W**. To climb down from the top, look down over the edge and press **W**.
 - **Observatory**: hold Space (or the mouse button) on a handwheel and move the mouse to turn it. The left wheel turns the dome, and the right wheel raises the telescope. Press the periscope eyepiece to look through the telescope. While you look, the mouse does nothing; only the handwheels aim it. Move or press again to step away.
-- **Escape**: opens settings (walk speed, gamma, brightness, fog density / low haze / tint, time of day, pause the day/night cycle, shadow/midtone/highlight color grading with blend and balance, and under Interface: **Pointer** (the centre dot, on by default) and **Debug reports** (off by default, see below)). Press Escape again to close it, then click to recapture the mouse, or press Resume. Settings are saved in the browser.
+- **Escape**: opens settings (walk speed, gamma, brightness, fog density / low haze / tint, time of day, pause the day/night cycle, shadow/midtone/highlight color grading with blend and balance, and under Interface: **Pointer** (the centre dot, on by default) and **Debug reports** (off by default, see below)). Press Escape again to close it, then click to recapture the mouse, or press Resume. Settings are saved in the browser. At the top of the panel, **Save** saves the game and **Restart** (after a confirmation) starts over from the very beginning; see Saving.
 - **F8 / middle click**: with **Debug reports** on, copies a debug report to the clipboard (see Debug reports).
 
 ## Dev URL parameters
@@ -30,7 +31,23 @@ Open http://localhost:5173. A faint line fills the black screen while the world 
 | `?t=0.3` | Starting time of day (0–1 across the 13-minute cycle; 0 = sunrise, about 0.54 = sunset) |
 | `?speed=10` | Speeds up the day/night clock |
 | `?spawn=rocks` | Starts on a named stack: `dome`, `rocks`, `mountain`, `tower`, `end`, `hub` (the cave hub, facing the generator) or `lounge` (the lounge under the Tower, facing the desk) |
+| `?at=-43.3,-10.35,-40.6,127,15` | Starts exactly at a point: feet x,y,z (as a debug report's `player.feet`), optionally yaw and pitch in degrees (`yawDeg`, `pitchDeg`). Below y = -1500 it starts in the tunnels. Implies `?nosave` |
+| `?nosave` | Neither loads nor writes the saved game (no "left without saving" prompt either). `?spawn=` implies it, and so does `window.capture.begin()` (the dev tours) |
 | `?walls=0` | Turns off the stack wall/edge rework (weathered colours, wall material, wall relief, rolling tops) to compare with the original terrain. `?walls=-shader,+bake` toggles single stages (`uv`, `bake`, `shader`, `geo`, `calmSmooth`, `relief`); see `src/config.js` `WALLS` |
+
+## Saving
+
+The game saves to the browser (`localStorage`, key `dreambound.save.v1`, versioned JSON; `src/core/save.js`) when you press **Save** in the Escape panel. Loading the page always resumes from the save: after the usual loading line, the click fades you in where you left off instead of waking in bed. With no save it is the normal intro. **Restart** asks for confirmation, deletes the save (settings are kept) and reloads into the intro.
+
+A save holds the player's feet, yaw, pitch and zone, the time of day, and every piece of progress: the generator switches and `ctx.power`, the Rocks boulders (positions, push order, `solved`), the Tower's catwalk switches and LED levels, the observatory's dome yaw, telescope pitch, rear hatch and roof-station iris, and which stop each elevator waits at. Restoring puts them back through the props' own APIs (`ctx.boulders.place`, `ctx.towerSwitches.set`, `ctx.observatory.hatch.set`, `ctx.observatory.station.open(true)`, ...), sets `ctx.restoring` while it runs, and then calls `ctx.onSwitches` / `ctx.onTowerSwitches` (and `ctx.onRocksSolved` if the save is solved and the world wasn't), so later puzzles that react to those hooks are re-applied too. The pose saved is the newest *safe* one: standing on the ground (or seated in a deck chair, which saves the spot in front of the chair where you'd stand up), free to move, not in a sequence, a fall, on a ladder, riding an elevator, at the eyepiece or holding a handwheel (sampled 4 times a second); saving mid-ride keeps the pose from before the ride, with the elevators as they were then. A player restored inside an elevator car finds its doors open. Not saved: cabin doors (they start shut), anything mid-animation (a hatch mid-swing resumes from where it was) and the ending: once the End door opens nothing more is saved, so a reload goes back to the last save before it.
+
+**Leaving without saving.** Browsers don't allow a page to show its own dialog on unload, only their generic "Leave site?" prompt. So: while there is progress the save doesn't have (moved more than 1.5 m, or any puzzle state changed; the clock alone doesn't count), the page asks for that prompt (`beforeunload`; not in `?dev` sessions, where the dev server reloads constantly). Whatever you leave with anyway is written on `pagehide` as a separate pending snapshot (`dreambound.save.pending.v1`). On the next load, if it is newer than the save, a dialog asks "You left without saving. Save that progress?" before the game takes the mouse: **Save** makes it the save and resumes from it, **Discard** throws it away and resumes from the old save (or the intro).
+
+## UI kit
+
+The Escape panel and the dialogs are built from a small vanilla component kit in `src/ui/kit/` (no framework): shadcn/ui conventions on design tokens in [tweakcn](https://tweakcn.com)'s format. `theme.css` holds the tokens (`--background`, `--card`, `--primary`, `--muted`, `--border`, `--input`, `--ring`, `--radius`, ... for `:root` and `.dark`; the game runs in `.dark`, a warm near-black with an old-brass primary). To retheme, paste a tweakcn export over it. `kit.css` styles the components; `index.js` exports the factories: `button` (variants `default`, `secondary`, `outline`, `destructive`, `ghost`), `card`, `section`, `field` (a labelled row: label, control, value readout), `slider`, `toggle` (a switch), `select`, `colorPicker`, `openDialog` / `confirmDialog` (modal, with an overlay; they release pointer lock and keep every key from the game while open) and `h()` for plain elements. Controls return `{ el, get(), set(v) }`. `src/ui/settings.js` describes the panel as data (`FORM`) and builds every row through the kit; the settings key and values in `localStorage` are unchanged.
+
+`colorPicker` is an in-page picker (the settings used `<input type=color>`, which in Firefox opens the operating system's dialog): a swatch button opens a panel under its row with a saturation/brightness square, a hue bar, a hex field and a **Neutral** reset (`#808080`). Drag with the mouse, pen or touch, or use the arrow keys (Shift for bigger steps); the grade and fog tint follow live.
 
 ## Debug reports
 
@@ -55,28 +72,28 @@ Numbers are rounded to 3 decimals and long arrays are cut to their last 64 entri
 src/
   main.js            renderer, loop, zones, sequences glue
   config.js          stack positions/heights, cycle lengths, player tuning
-  core/              input, day clock, interaction ray, seeded noise
-  ui/                Escape settings panel, centre dot (reticle), debug reports
-  render/            sky, clouds, atmosphere palette, lighting, post FX, materials, procedural textures, LOD, the preloader, fire
+  core/              input, day clock, interaction ray, seeded noise, saved games (save.js)
+  ui/                Escape settings panel, centre dot (reticle), debug reports; ui/kit/: the UI components and theme (see UI kit)
+  render/            sky (and its moon), clouds, atmosphere palette, lighting, post FX, materials, procedural textures, LOD, the preloader, fire
   world/             terrain generator, stacks/*, tunnels, trees/grass, flowers, rock piles, water + spray FX, bridge, builders (batching + colliders)
-  props/             cabin, observatory, cave, lounge and elevator loaders, sequoia, power tower (and its catwalk kit), aperture door, alarm clock, movable rocks
+  props/             cabin, observatory, cave, lounge and elevator loaders, sequoia, power tower (and its catwalk kit), the Dome's view deck, aperture door, alarm clock, movable rocks
   player/            capsule controller + BVH collision
-  sequences/         intro (waking), fall (dream respawn), ending
+  sequences/         intro (waking), resume (fading into a saved game), fall (dream respawn), ending
   audio/engine.js    all sound, synthesized with Web Audio
   dev/               ?dev tools: bench() and hitchTour() (bench.js), the hitch monitor (hitch.js)
-public/models/       cabin, observatory, cave, lounge, elevator and tower-kit GLBs + baked atlases/textures, built by tools/blender
+public/models/       cabin, observatory, cave, lounge, elevator, tower-kit and deck GLBs + baked atlases/textures, built by tools/blender
 tools/blender/       dbkit.py (toolkit), build_*.py (runners), *_design.py (the models)
 tools/regress/       headless regression harness: `node tools/regress/run.mjs` rebuilds the world in Node and checks every feature anchor and walk route against the baseline (see its README)
 ```
 
-Everything is procedural: geometry, textures (drawn to canvas), and audio. The exceptions are the cabin with its geodesic dome, the Mountain observatory, the underground cave with its generator, the lounge under the Tower, the elevator (car, landing doors and frame, shared by every elevator end), and the power tower's catwalk kit (switch boxes, capacitors and solar panels). They are modeled by script in Blender and loaded as GLBs.
+Everything is procedural: geometry, textures (drawn to canvas), and audio. The exceptions are the cabin with its geodesic dome, the Mountain observatory, the underground cave with its generator, the lounge under the Tower, the elevator (car, landing doors and frame, shared by every elevator end), the power tower's catwalk kit (switch boxes, capacitors and solar panels) and the view deck on the Dome stack (platform, chairs, table and lantern). They are modeled by script in Blender and loaded as GLBs.
 
 ## Blender models
 
 `tools/blender/dbkit.py` is the shared toolkit. Each asset has two files:
 
-- A design file: `cabin_design.py`, `observatory_design.py`, `cave_design.py`, `lounge_design.py`, `elevator_design.py` or `tower_kit_design.py`, written in game coordinates (+Y up).
-- A runner: `build_cabin.py`, `build_observatory.py`, `build_cave.py`, `build_lounge.py`, `build_elevator.py` or `build_tower_kit.py`.
+- A design file: `cabin_design.py`, `observatory_design.py`, `cave_design.py`, `lounge_design.py`, `elevator_design.py`, `tower_kit_design.py` or `deck_design.py`, written in game coordinates (+Y up).
+- A runner: `build_cabin.py`, `build_observatory.py`, `build_cave.py`, `build_lounge.py`, `build_elevator.py`, `build_tower_kit.py` or `build_deck.py`.
 
 A build does three things:
 
@@ -84,7 +101,7 @@ A build does three things:
 2. It bakes a shared ambient-occlusion atlas (Cycles, second UV set). The cave, the lounge and the elevator instead bake their own textures and lightmaps (see below).
 3. It exports `public/models/<asset>.glb` and `<asset>_ao.png`, and saves `tools/blender/<asset>.blend`.
 
-Rebuild after editing a design (Blender 5.2, about 20 s for the cabin, 60 s for the observatory, 90 s for the lounge, 3 min for the cave, 3.5 min for the tower kit and 4 min for the elevator):
+Rebuild after editing a design (Blender 5.2, about 5 s for the deck, 20 s for the cabin, 60 s for the observatory, 90 s for the lounge, 3 min for the cave, 3.5 min for the tower kit and 4 min for the elevator):
 
 ```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/blender/build_cabin.py
@@ -108,6 +125,10 @@ Rebuild after editing a design (Blender 5.2, about 20 s for the cabin, 60 s for 
 
 ```bash
 "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/blender/build_tower_kit.py
+```
+
+```bash
+"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python tools/blender/build_deck.py
 ```
 
 To see a design in a running Blender (through the MCP bridge), run `STAGE = 'build'` and then exec the runner.
@@ -140,7 +161,7 @@ The great room's fireplace and the garden's fire pit burn with real-time volumet
 - **Light.** One warm `PointLight` per fire (no shadows): the hearth's 0.45 m in front of the opening (so the back of the chimney never sees it), the pit's 0.65 m above the logs. Both exist from the start, at the scene root, so every lit shader is compiled with them; they flicker by intensity only (a few incommensurate sines), are divided by the night exposure like the lamps, and go to 0 once their fire is distance-culled or underground. The ember meshes glow with the hearth's flicker.
 - **Look.** Bounded HDR (clamped at 6) so the bloom (threshold 1.35) picks up the core without blowing out, and no NaN or Inf reaches the bloom or the room probe; the flame (not the sparks) is on the probe layer, so mirrors and tile reflect it. Fog comes from the scene's fog function (its transmittance at the fire), and each fire fades out before the LOD hides it.
 - **Cost.** Two draw calls per fire (flame and sparks), both shader materials with no light dependence, compiled by the preloader. The hearth is drawn with the rooms (55–75 m), the pit out to 60–80 m. At 1920×1080 on the reference machine: about +0.3 ms per frame averaged over every heading in the great room and the garden (mostly the two lights, which every lit pixel pays), +0.5 ms looking at the pit from a chair, +1.4 ms with it filling the screen from 1.3 m.
-- **Sound.** The `fire` (hearth, on the indoor bus with the room's reverb send) and `firepit` (outdoor bus, muffled from inside the house) emitters at `FIRE_hearth` and `FIRE_pit`.
+- **Sound.** The `fire` (hearth, on the indoor bus with the room's reverb send) and `firepit` (outdoor bus, muffled from inside the house) emitters at `FIRE_hearth` and `FIRE_pit`. After Farnell's fire model in *Designing Sound*, with nothing periodic in it: a soft low-passed roar that breathes slowly, band-passed lapping and a high hiss that flicker irregularly (all driven by a 60 s smoothed-noise buffer at unrelated rates, never an LFO), and crackles, pops and rare snaps from a bank of pre-rendered grains (`fireGrainBank()`, made in `prepare()`) played at Poisson-random times with random pitch and level, sometimes in quick sap-fizz runs, plus an occasional log settling (a low knock, a swell and a flurry). The pit is a little brighter and airier than the hearth.
 
 What Fire Pro does that this doesn't: a real fluid simulation (flames that flow around obstacles, respond to forces and interaction), fire emitted from arbitrary meshes, self-shadowing and scattering in thick smoke, and depth integration. Those need a simulated 3D grid and a depth pre-pass, several milliseconds on their own, so the fire here is procedural noise instead.
 
@@ -218,6 +239,14 @@ The struts that fix each capacitor's channel to the lattice, its two leads up in
 
 Named empties: `BOX`, `TAG_0` to `TAG_2`, `SLIDER`, `CAP` and `PANEL` (each part's frame), and `META` (`swb`, `cap`, `termP` and `termN` where the capacitor's leads leave its terminals, and `jbox` the panel's gland).
 
+### The view deck
+
+A small weathered-cedar deck on the Dome stack's west-northwest rim (centre at x −16.5, z 49, about 6.5 m in from the edge), facing heading 152° (atan2(z, x)): out over the cloud sea to the Rocks with its waterfall and the End beyond, with the sun going down to the right of it. `tools/blender/deck_design.py` models it in its own frame (origin on the ground at the footprint's centre, +z toward the view): a 3 × 2.4 m platform 20 cm high with a picture-frame border, butt-jointed field boards, screws, joists and a fascia that runs into the ground, a step at the back, two Adirondack chairs side by side (after the garden's `adirondack()` in `cabin_design.py`, reworked for close viewing: sloped stringers, rounded arms, fanned back slats), a slatted end table between them and a small carriage lantern on it (after `lantern_box()`).
+
+- **Textures:** `deck_wood.png` and `deck_wood_normal.png` are a seamless 1 m tile of weathered cedar (grain lines, silvering, checks) baked from a Blender procedural shader (`bake_tile`); `deck_ao.png` is the baked AO atlas. The vertex tints vary the boards and warm the chairs.
+- **In the game** (`src/props/deck.js`, placed by `DECK` in `src/world/stacks/dome.js`): 3 draw calls (wood, black metal, the lantern's panes) plus the lantern's additive glow sprite, which strengthens at night (no light). The ground under it is levelled, trees and shrubs keep 2.5 m off it and out of a wedge of view from it (22° left, 42° right of straight out), grass and pebbles keep off the boards (the skips are taken after each placement's random draws, so nothing else on any stack moves). It has its own collider (`deck`): the model's boxes (platform, step, chairs, table) and a sloped skirt, so it can be stepped onto from any side. Footsteps on it sound as wood. LOD: hidden past 70–90 m.
+- **Sitting** (`Player.sit` / `standUp` in `src/player/controller.js`, mode `'sit'`): each chair has an exact hit box; a press eases the camera over 0.9 s to the seated eye (1.1 m above the deck, against the back slats) and turns you to face out. The feet already stand at the chair's stand-up spot (in front of it, on the deck), so saving while seated saves that spot. Named empties: `CHAIR_i`, `SEAT_i`, `STAND_i`, `LANTERN`, `META`.
+
 ## The Rocks stack
 
 `src/world/stacks/rocks.js` lays it out; the pieces live in their own modules.
@@ -262,6 +291,15 @@ Named empties: `BOX`, `TAG_0` to `TAG_2`, `SLIDER`, `CAP` and `PANEL` (each part
 - `ctx.towerLEDs[i]` (0 green, 1 yellow, 2 red): `level` (0 to 1; red starts at 1, green and yellow at 0) scales that LED's breathing and halo, so a puzzle lights one by raising it or dims or silences it; `peak` is its full emissive. The breathing sets `mat.emissiveIntensity` and the halo's opacity every frame.
 - `ctx.state.towerSwitches`: the catwalk switch boxes, `[box][switch]`, each `'top'`, `'center'` or `'bottom'` (all `'center'` at start). Box `i` sits under `ctx.towerLEDs[i]` (0 green, 1 yellow, 2 red); switches are numbered left to right as you face the box. `ctx.onTowerSwitches(state)` fires on every press, and `ctx.towerSwitches.set(box, switch, value)` moves a slider without the click or the hook.
 
+## The moon
+
+The moon is part of the sky dome's shader (`src/render/sky.js`, `MOON_GLSL` in `src/render/moon.js`): no extra draw call. It is a lit sphere 2.2° across (the real moon is 0.52°; it fills most of the eyepiece's 2.5° field), on the path `DayClock` gives it (`clock.moonDir`, roughly opposite the sun). The sun lights it from `clock.sunDir`, so its phase is whatever their places make it: nearly full all night, gibbous in the late afternoon (`?t=0.47`), a thin crescent near the noon sun.
+
+- **Surface:** a 1024 × 1024 near-side map (`src/render/moonMapGen.js`): albedo with the familiar maria laid out roughly as on the real moon, ray craters (a Tycho, a Copernicus, a Kepler, an Aristarchus), about 7000 smaller craters (crowded in the highlands, sparse on the maria), and the craters' slopes and heights. Made on the sphere, so craters foreshorten toward the limb. No image files.
+- **Shading:** lunar-Lambert reflectance (the flat-looking full moon, with a gentle darkening to the limb), the map's slopes tilting the normal, crater shadows marched over the height field along the terminator when the moon is big on screen (the eyepiece), and earthshine on the night side after dark. The disc's edge is anti-aliased analytically, and it hides the stars behind it.
+- **Day and night:** its light is added to the sky's, so by day its dark side is sky and its lit side pale and low in contrast, with no aureole; after dark it is brighter on screen (the exposure opens), with a soft aureole round it. Low down, the air dims and reddens it (`moonExtinction`, air mass). The environment-map copy of the sky draws a plain moon (`moonMapFlat`).
+- **Loading:** the map is made by a worker (`moonMap.worker.js`, about 0.3 s) from the moment the sky is made, while the page is busy with the models and the world build. If it isn't back when the preloader uploads the texture (or there is no worker), the upload makes it on the spot. `sky.mesh.material.uniforms.uMoonMap.value.userData.made` says when and how (`?dev`).
+
 ## Performance notes
 
 Budget: no area may exceed **10 ms per frame** at 1920×1080 on the reference machine (RTX 3060), including its worst single frame; the typical frame should stay near half that. Check with `await bench()` in a `?dev` session. It stands in every area (cabin, garden, each stack, bridge, observatory inside and out, the telescope, the cave), turns through 8 headings, and prints the average and worst frame, draw calls and triangles per area.
@@ -281,6 +319,7 @@ Three.js frustum-culls every object against the camera's field of view. `ctx.lod
   - The lounge under the Tower: hidden beyond 40–55 m (no fade; it is only ever seen from inside).
   - The power tower's kits: each LED's switch box and panel 30–36 m (one draw call each, never drawn from the ground); the nine sliders 22–26 m (their bounds span the whole catwalk); the three capacitors (one draw call) are never distance-culled.
   - Boulders: 110–140 m.
+  - The Dome's view deck (3 draw calls and the lantern's glow): 70–90 m.
   - The Rocks constellation is never distance-culled (it is in the sky); it just isn't drawn by day or underground.
   - Pebbles: 45–60 m; big stones 110–140 m.
   - Shrubs: 45–65 m.
@@ -296,12 +335,12 @@ Three.js frustum-culls every object against the camera's field of view. `ctx.lod
 
 ### The preloader (`src/render/preload.js`)
 
-Three.js compiles a shader the first time a material is drawn in a new state, and uploads geometry and textures on first draw; Windows drivers (ANGLE) finish a shader only on its first real draw. Left alone, every new view would stall. So everything the GPU will ever need is made behind the black screen, before the player can wake, while a hairline on the veil fills (`index.html`; the models' download, the world build, then the preload). Clicking early is kept: the game starts the moment it is ready.
+Three.js compiles a shader the first time a material is drawn in a new state, and uploads geometry and textures on first draw; Windows drivers (ANGLE) finish a shader only on its first real draw. Left alone, every new view would stall. So everything the GPU will ever need is made behind the black screen, before the player can wake, while the loading bar fills (`src/ui/loadingVeil.js`; the models' download, the world build, then the preload). The bar is paced by time, not by raw progress: each load records when it reached each fraction of progress (`localStorage` key `dreambound.loadProfile.v1`) and the next load maps progress through that curve, so the fill moves at an even rate to its end and the countdown is the last load's remaining time, adjusted to this load's pace. The synchronous world build is covered by a CSS transition, which keeps moving while the page is blocked. The very first load has no history, so it shows "estimating…" until the preload starts. Clicking early is kept: the game starts the moment it is ready.
 
 `main.js` builds the world, makes the ending's clock and steam up front (hidden; `prepareEnding`), then runs `preload()`, sliced into short tasks so the page stays responsive:
 
 1. **Compile.** Every material in the scene, then every LOD fade twin, with `renderer.compileAsync` (the driver compiles in parallel, off the main thread) for the render target the scene really renders into (the composer's linear target: compiled for the screen, they would be compiled again), with the scene's lights, fog and environment. r186 compiles hidden objects too, so the tunnels, the lounge, the cars and the interiors are included.
-2. **Textures.** Every texture any material, shader uniform or `onBeforeCompile` uniform holds is uploaded (`initTexture`).
+2. **Textures.** Every texture any material, shader uniform or `onBeforeCompile` uniform holds is uploaded (`initTexture`), the moon's map among them (see The moon).
 3. **Draw.** Everything is made visible (both zones, every LOD level and fade twin, far stand-ins, instanced levels with at least one instance, interiors, the scope's station dial, the constellation, water and spray, sky, clouds, stars, the ending's props), frustum culling off, and drawn a slice of the scene at a time into a small target of the same format, with the sun's shadow map rendering: vertex and instance buffers upload, the shadow depth programs compile, and the driver does its draw-time work.
 4. **Hooks.** Things that allocate on first use: the cabin's reflection probe captures all six faces (its cube target and PMREM), the environment map is refreshed, and the sound's noise and reverb buffers are made (`AudioEngine.prepare`: an `AudioBuffer` needs no `AudioContext`, so no click). The click only creates the context and wires the graph.
 5. **States.** One real frame, every pass, of each representative state: the cabin, the surface by day and by night, the cave hub, the lounge, the eyepiece (fov 3.2, scope overlay) by day and on the constellation at night, and the cabin again.

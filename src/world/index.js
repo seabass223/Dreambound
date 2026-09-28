@@ -23,10 +23,13 @@ class Pebbles {
   addAt(x, y, z, s, geo = this.geometries[0]) {
     this.items[this.geometries.indexOf(geo)].push({ x, y, z, s, ry: this.rng.float(0, 6.28) });
   }
-  scatter(stack, n, rng, accept) {
+  // keep(x, z): false drops a stone after its random draws, so the others stay where they were.
+  scatter(stack, n, rng, accept, keep = null) {
     for (const p of scatter(stack, n, rng, accept, { margin: 1.5 })) {
       const s = Math.pow(rng.next(), 3) * 0.45 + 0.08;
-      this.addAt(p.x, p.y + s * 0.2, p.z, s, this.geometries[rng.int(0, 2)]);
+      const geo = this.geometries[rng.int(0, 2)];
+      if (!keep || keep(p.x, p.z)) this.addAt(p.x, p.y + s * 0.2, p.z, s, geo);
+      else this.rng.float(0, 6.28);   // (its rotation's draw)
     }
   }
   // Pebbles fade out close by; the big stones (dry-stone walls, river boulders) carry further.

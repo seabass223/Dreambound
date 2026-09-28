@@ -90,7 +90,10 @@ export class LodSystem {
     target.traverse((o) => {
       if ((o.isMesh || o.isPoints) && o.material && !Array.isArray(o.material) && o.material.visible !== false) meshes.push(o);
     });
-    const e = { target, fin, out, dynamic, name, fade, meshes, base: meshes.map((m) => m.material), sphere: new THREE.Sphere(), state: 2 };
+    // `stale`: measured again on the first update, once the whole world is assembled and placed: a prop registered
+    // before its group was moved into position (the observatory's far stand-in was) would otherwise keep bounds at
+    // the origin, and show or hide by its distance from there.
+    const e = { target, fin, out, dynamic, name, fade, meshes, base: meshes.map((m) => m.material), sphere: new THREE.Sphere(), state: 2, stale: true };
     this.bounds(e);
     this.entries.push(e);
     return e;
@@ -128,7 +131,7 @@ export class LodSystem {
     const s = (this.scale = lodScale.value = lodScaleFor(cam));
     _cam.setFromMatrixPosition(cam.matrixWorld);
     for (const e of this.entries) {
-      if (e.dynamic) this.bounds(e);
+      if (e.dynamic || e.stale) { this.bounds(e); e.stale = false; }
       const d = e.sphere.center.distanceTo(_cam);
       const near = Math.max(0, d - e.sphere.radius) * s, far = (d + e.sphere.radius) * s;
       let st = 2;                                                     // 0 hidden, 1 fading, 2 solid

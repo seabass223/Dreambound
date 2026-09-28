@@ -656,29 +656,29 @@
    "stack": "dome",
    "speed": 0.5,
    "pass": false,
-   "reason": "eye within 0.4 m of the wall from 8.521 m down (walk t=4.1s, fade 0); worst 0.37 m at 8.521 m down",
+   "reason": "eye within 0.4 m of the wall from 8.517 m down (walk t=4.1s, fade 0); worst 0.37 m at 8.517 m down",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.366,
-   "eyeMinVisible": 0.366,
+   "eyeMin": 0.365,
+   "eyeMinVisible": 0.365,
    "eyeBands": [
-    0.366,
-    2.117,
-    2.502
+    0.365,
+    2.118,
+    2.505
    ],
    "breach": {
     "phase": "walk",
     "t": 4.1,
     "fade": 0,
-    "depth": 8.521
+    "depth": 8.517
    },
    "worstAt": {
     "phase": "walk",
     "t": 4.1,
     "fade": 0,
-    "depth": 8.521
+    "depth": 8.517
    },
-   "trace": "395ed3e96cdb97ae16ddf0027e77acca"
+   "trace": "6b04d2af2eae0093e87c39f51b37a808"
   },
   {
    "id": "R6:dome:rim:0deg:1.5",
@@ -689,21 +689,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.745,
-   "eyeMinVisible": 0.745,
+   "eyeMin": 0.735,
+   "eyeMinVisible": 0.735,
    "eyeBands": [
-    0.745,
-    1.798,
-    2.455
+    0.735,
+    1.804,
+    2.461
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.483,
     "fade": 0,
-    "depth": 1.698
+    "depth": 1.672
    },
-   "trace": "32491ac0eba26aa833817f35adf25a5b"
+   "trace": "5092c73778975feb0bee4a6fcb75b7f7"
   },
   {
    "id": "R6:dome:rim:0deg:3.4",
@@ -714,21 +714,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.527,
-   "eyeMinVisible": 1.527,
+   "eyeMin": 1.526,
+   "eyeMinVisible": 1.526,
    "eyeBands": [
-    1.527,
-    4.775,
-    2.713
+    1.526,
+    4.751,
+    2.714
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.867,
     "fade": 0,
-    "depth": 1.628
+    "depth": 1.569
    },
-   "trace": "ba4f5fece95c2221e58b26b09efe461b"
+   "trace": "1901770873cee8ed3160c923c8f3dd4f"
   },
   {
    "id": "R6:dome:rim:0deg:6.2",
@@ -739,21 +739,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.501,
-   "eyeMinVisible": 2.501,
+   "eyeMin": 2.548,
+   "eyeMinVisible": 2.548,
    "eyeBands": [
-    2.501,
-    9.438,
-    12.786
+    2.548,
+    9.416,
+    12.774
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.6,
+    "t": 0.617,
     "fade": 0,
-    "depth": 1.238
+    "depth": 1.316
    },
-   "trace": "61e982dbc25a92516b2ec475288023b2"
+   "trace": "8f2503900b46540dae2feb3d2c0c3c39"
   },
   {
    "id": "R6:dome:rim:5deg:0.5",
@@ -761,29 +761,29 @@
    "stack": "dome",
    "speed": 0.5,
    "pass": false,
-   "reason": "eye within 0.4 m of the wall from 8.212 m down (walk t=3.95s, fade 0); worst 0.38 m at 9.19 m down",
+   "reason": "eye within 0.4 m of the wall from 8.181 m down (walk t=3.95s, fade 0); worst 0.38 m at 9.159 m down",
    "landedAt": null,
    "landedBy": null,
    "eyeMin": 0.379,
    "eyeMinVisible": 0.379,
    "eyeBands": [
     0.379,
-    1.749,
-    1.514
+    1.752,
+    1.515
    ],
    "breach": {
     "phase": "walk",
     "t": 3.95,
     "fade": 0,
-    "depth": 8.212
+    "depth": 8.181
    },
    "worstAt": {
     "phase": "walk",
     "t": 4,
     "fade": 0,
-    "depth": 9.19
+    "depth": 9.159
    },
-   "trace": "8a8d7aa6a9984241891b7909ba329df4"
+   "trace": "14fda32d5f5598d3453d32b430e75ac6"
   },
   {
    "id": "R6:dome:rim:5deg:1.5",
@@ -794,21 +794,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.728,
-   "eyeMinVisible": 0.728,
+   "eyeMin": 0.71,
+   "eyeMinVisible": 0.71,
    "eyeBands": [
-    0.728,
-    1.372,
-    1.538
+    0.71,
+    1.367,
+    1.528
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.4,
+    "t": 1.45,
     "fade": 0,
-    "depth": 1.369
+    "depth": 1.329
    },
-   "trace": "4ee5e61f15efa7dd7045e9dc0c18c3cc"
+   "trace": "77ae05681aaaf1c8396ef449d33243d2"
   },
   {
    "id": "R6:dome:rim:5deg:3.4",
@@ -819,21 +819,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.548,
-   "eyeMinVisible": 1.548,
+   "eyeMin": 1.406,
+   "eyeMinVisible": 1.406,
    "eyeBands": [
-    1.548,
-    4.169,
-    2.695
+    1.406,
+    3.981,
+    2.54
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.817,
+    "t": 0.833,
     "fade": 0,
-    "depth": 1.338
+    "depth": 1.294
    },
-   "trace": "aa155190f682262de377b32590f6b8ee"
+   "trace": "c76148f1660796f7a06ad17816022e1b"
   },
   {
    "id": "R6:dome:rim:5deg:6.2",
@@ -848,17 +848,17 @@
    "eyeMinVisible": 2.472,
    "eyeBands": [
     2.472,
-    8.939,
-    12.035
+    8.948,
+    12.045
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.583,
     "fade": 0,
-    "depth": 1.35
+    "depth": 1.324
    },
-   "trace": "a0157747575fb5b4607627cd874eceb7"
+   "trace": "248fc02f2d6079b6553c0ff743e4b0e3"
   },
   {
    "id": "R6:dome:rim:10deg:0.5",
@@ -866,7 +866,7 @@
    "stack": "dome",
    "speed": 0.5,
    "pass": false,
-   "reason": "eye within 0.4 m of the wall from 8.065 m down (walk t=4s, fade 0); worst 0.36 m at 9.044 m down",
+   "reason": "eye within 0.4 m of the wall from 8.066 m down (walk t=4s, fade 0); worst 0.36 m at 9.045 m down",
    "landedAt": null,
    "landedBy": null,
    "eyeMin": 0.358,
@@ -880,15 +880,15 @@
     "phase": "walk",
     "t": 4,
     "fade": 0,
-    "depth": 8.065
+    "depth": 8.066
    },
    "worstAt": {
     "phase": "walk",
     "t": 4.05,
     "fade": 0,
-    "depth": 9.044
+    "depth": 9.045
    },
-   "trace": "b1c3ac57482dab12621301b1c667ea11"
+   "trace": "bb9b6b69ae5e0e40e8ada2f861a38808"
   },
   {
    "id": "R6:dome:rim:10deg:1.5",
@@ -1499,21 +1499,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.712,
-   "eyeMinVisible": 0.712,
+   "eyeMin": 0.843,
+   "eyeMinVisible": 0.843,
    "eyeBands": [
-    0.712,
-    2.628,
-    1.537
+    0.843,
+    2.526,
+    1.533
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.45,
+    "t": 1.333,
     "fade": 0,
-    "depth": 0.903
+    "depth": 0.98
    },
-   "trace": "8ed72a651055c1f15c7e30754982ebe0"
+   "trace": "0ef361533c7e09381f28db50a0548c2b"
   },
   {
    "id": "R6:dome:rim:40deg:3.4",
@@ -2924,21 +2924,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.538,
-   "eyeMinVisible": 1.538,
+   "eyeMin": 1.556,
+   "eyeMinVisible": 1.556,
    "eyeBands": [
-    1.538,
-    2.39,
-    2.101
+    1.556,
+    2.363,
+    2.079
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.8,
+    "t": 0.817,
     "fade": 0,
-    "depth": 1.721
+    "depth": 1.776
    },
-   "trace": "bc835bd070c8749f68e30533a9c03191"
+   "trace": "87d96ad6c9bc53fa65d58c1e07c432d5"
   },
   {
    "id": "R6:dome:rim:110deg:6.2",
@@ -3054,16 +3054,16 @@
    "eyeBands": [
     2.551,
     8.366,
-    9.236
+    9.237
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.6,
     "fade": 0,
-    "depth": 1.808
+    "depth": 1.814
    },
-   "trace": "748d21ff6e584df786f97baaf2845dcd"
+   "trace": "b05a2ad29b29c8a77f6885090edff385"
   },
   {
    "id": "R6:dome:rim:120deg:0.5",
@@ -3178,17 +3178,17 @@
    "eyeMinVisible": 0.473,
    "eyeBands": [
     0.473,
-    1.355,
-    1.914
+    1.352,
+    1.916
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 3.417,
     "fade": 0,
-    "depth": 2.188
+    "depth": 2.22
    },
-   "trace": "fa77a71d02e4b0accbe6ca7b5a69fb07"
+   "trace": "06b21cf8153afba5ac2a2eef9e8aeeaf"
   },
   {
    "id": "R6:dome:rim:125deg:1.5",
@@ -3424,21 +3424,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.502,
-   "eyeMinVisible": 1.502,
+   "eyeMin": 1.544,
+   "eyeMinVisible": 1.544,
    "eyeBands": [
-    1.502,
-    3.019,
-    2.826
+    1.544,
+    3.017,
+    2.824
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.783,
+    "t": 0.8,
     "fade": 0,
-    "depth": 1.211
+    "depth": 1.312
    },
-   "trace": "ff4240e899951cdc29124e08c7f402f1"
+   "trace": "e68e077ab2cfb7c6c854306ebca96c28"
   },
   {
    "id": "R6:dome:rim:135deg:6.2",
@@ -3724,10 +3724,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.394,
-   "eyeMinVisible": 1.394,
+   "eyeMin": 1.393,
+   "eyeMinVisible": 1.393,
    "eyeBands": [
-    1.394,
+    1.393,
     3.995,
     4.174
    ],
@@ -3736,9 +3736,9 @@
     "phase": "walk",
     "t": 0.833,
     "fade": 0,
-    "depth": 1.239
+    "depth": 1.243
    },
-   "trace": "4667de4cfac08d59dee54880e1482739"
+   "trace": "7bd3c1de19e5a597db0d18936fa27c03"
   },
   {
    "id": "R6:dome:rim:150deg:6.2",
@@ -3749,21 +3749,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.554,
-   "eyeMinVisible": 2.554,
+   "eyeMin": 2.548,
+   "eyeMinVisible": 2.548,
    "eyeBands": [
-    2.554,
-    9.644,
-    11.912
+    2.548,
+    9.62,
+    11.952
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.6,
     "fade": 0,
-    "depth": 1.235
+    "depth": 1.162
    },
-   "trace": "1789dc20181c1a6140e10184da0d992d"
+   "trace": "53b14fc94dead55fc716374a5eab72ac"
   },
   {
    "id": "R6:dome:rim:155deg:0.5",
@@ -3824,21 +3824,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.384,
-   "eyeMinVisible": 1.384,
+   "eyeMin": 1.386,
+   "eyeMinVisible": 1.386,
    "eyeBands": [
-    1.384,
-    5.147,
-    7.288
+    1.386,
+    5.146,
+    7.287
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.833,
     "fade": 0,
-    "depth": 1.15
+    "depth": 1.139
    },
-   "trace": "6788387d8b4d3ec1c3c02ab9c7274314"
+   "trace": "cece2c6caf4726650f3300db8e2031e3"
   },
   {
    "id": "R6:dome:rim:155deg:6.2",
@@ -3853,17 +3853,17 @@
    "eyeMinVisible": 2.469,
    "eyeBands": [
     2.469,
-    10.022,
-    15.042
+    10.024,
+    15.04
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.583,
     "fade": 0,
-    "depth": 1.159
+    "depth": 1.155
    },
-   "trace": "b9fe99cc50ccb2c41b1fd4928a07b952"
+   "trace": "d9555dd8f6b1d392c0e796fc1f08ad27"
   },
   {
    "id": "R6:dome:rim:160deg:0.5",
@@ -4903,8 +4903,8 @@
    "eyeMinVisible": 0.686,
    "eyeBands": [
     0.686,
-    1.243,
-    2.361
+    1.244,
+    2.372
    ],
    "breach": null,
    "worstAt": {
@@ -4913,7 +4913,7 @@
     "fade": 0,
     "depth": 1.069
    },
-   "trace": "62601ceb565f8de5753afd4ddf60d08c"
+   "trace": "909b9fc0004cc6821c099721008bdb19"
   },
   {
    "id": "R6:dome:rim:210deg:3.4",
@@ -4928,8 +4928,8 @@
    "eyeMinVisible": 1.352,
    "eyeBands": [
     1.352,
-    3.66,
-    5.499
+    3.606,
+    5.403
    ],
    "breach": null,
    "worstAt": {
@@ -4938,7 +4938,7 @@
     "fade": 0,
     "depth": 1.135
    },
-   "trace": "5230a8e422a98a1b81a1ae0375d00670"
+   "trace": "a30f80f4e9c9001098d99f7c766a925d"
   },
   {
    "id": "R6:dome:rim:210deg:6.2",
@@ -4973,9 +4973,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    -47.776,
-    -6.28,
-    -33.454
+    -47.872,
+    -5.812,
+    -33.521
    ],
    "landedBy": "cave hood",
    "eyeMin": 0.45,
@@ -4992,7 +4992,7 @@
     "fade": 0,
     "depth": 1.327
    },
-   "trace": "4f4affe686f5a77711def9358e075ecc"
+   "trace": "b10e79768399c594a2a00d333c9b6ecf"
   },
   {
    "id": "R6:dome:rim:215deg:1.5",
@@ -5002,9 +5002,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    -48.201,
-    -6.059,
-    -33.751
+    -48.386,
+    -5.979,
+    -33.88
    ],
    "landedBy": "cave hood",
    "eyeMin": 0.722,
@@ -5021,7 +5021,7 @@
     "fade": 0,
     "depth": 1.357
    },
-   "trace": "60afbe58bbb6eb9f2ddd76aa3db703de"
+   "trace": "37808dca691cd0ee573352d191fd5c81"
   },
   {
    "id": "R6:dome:rim:215deg:3.4",
@@ -5031,9 +5031,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    -49.135,
-    -5.954,
-    -34.405
+    -49.274,
+    -6.296,
+    -34.502
    ],
    "landedBy": "cave hood",
    "eyeMin": 1.356,
@@ -5050,23 +5050,27 @@
     "fade": 0,
     "depth": 1.366
    },
-   "trace": "15e0574adec54639eda5661bbad47c8f"
+   "trace": "a46e08c9f38dfef05001a7e3b691de69"
   },
   {
    "id": "R6:dome:rim:215deg:6.2",
    "group": "R6",
    "stack": "dome",
    "speed": 6.2,
-   "pass": true,
-   "reason": "fell",
-   "landedAt": null,
-   "landedBy": null,
+   "pass": false,
+   "reason": "caught by cave hood",
+   "landedAt": [
+    -51.32,
+    -6.686,
+    -35.934
+   ],
+   "landedBy": "cave hood",
    "eyeMin": 2.454,
    "eyeMinVisible": 2.454,
    "eyeBands": [
     2.454,
-    11.999,
-    19.848
+    null,
+    null
    ],
    "breach": null,
    "worstAt": {
@@ -5075,7 +5079,7 @@
     "fade": 0,
     "depth": 1.401
    },
-   "trace": "7dba700c5c1776df50cbace8a6b860cc"
+   "trace": "3b304cfdd0952ba6cedee183b093495d"
   },
   {
    "id": "R6:dome:rim:220deg:0.5",
@@ -5293,26 +5297,26 @@
    "pass": true,
    "reason": "caught by ledge",
    "landedAt": [
-    -37.23,
-    -9.794,
-    -44.362
+    -37.217,
+    -9.793,
+    -44.352
    ],
    "landedBy": "ledge",
-   "eyeMin": 0.436,
-   "eyeMinVisible": 0.436,
+   "eyeMin": 0.424,
+   "eyeMinVisible": 0.424,
    "eyeBands": [
-    0.436,
+    0.424,
     null,
     null
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.55,
+    "t": 3.9,
     "fade": 0,
-    "depth": 1.417
+    "depth": 1.289
    },
-   "trace": "d1f1d1c5dd2416e19ba9eea2ebd66951"
+   "trace": "877eee6cb7ba25bbccc3bc96a0b24898"
   },
   {
    "id": "R6:dome:rim:230deg:1.5",
@@ -5322,26 +5326,26 @@
    "pass": true,
    "reason": "caught by ledge",
    "landedAt": [
-    -37.806,
-    -9.785,
-    -45.048
+    -37.664,
+    -9.783,
+    -44.886
    ],
    "landedBy": "ledge",
-   "eyeMin": 0.833,
-   "eyeMinVisible": 0.833,
+   "eyeMin": 0.646,
+   "eyeMinVisible": 0.646,
    "eyeBands": [
-    0.833,
+    0.646,
     null,
     null
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.433,
+    "t": 1.483,
     "fade": 0,
-    "depth": 1.269
+    "depth": 1.355
    },
-   "trace": "86a208fde3ff8463b25284c4dd63328e"
+   "trace": "6509126ac037195c9e6e765c06a89d74"
   },
   {
    "id": "R6:dome:rim:230deg:3.4",
@@ -5352,21 +5356,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.504,
-   "eyeMinVisible": 1.504,
+   "eyeMin": 1.541,
+   "eyeMinVisible": 1.541,
    "eyeBands": [
-    1.504,
-    5.589,
-    2.427
+    1.541,
+    5.533,
+    2.372
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.8,
+    "t": 0.833,
     "fade": 0,
-    "depth": 0.909
+    "depth": 0.96
    },
-   "trace": "b597c05222be5ea9ad895a8d43b2624a"
+   "trace": "36924276160add2a1d324efbf3635472"
   },
   {
    "id": "R6:dome:rim:230deg:6.2",
@@ -5377,11 +5381,11 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.528,
-   "eyeMinVisible": 2.528,
+   "eyeMin": 2.53,
+   "eyeMinVisible": 2.53,
    "eyeBands": [
-    2.528,
-    10.753,
+    2.53,
+    10.752,
     14.119
    ],
    "breach": null,
@@ -5389,9 +5393,9 @@
     "phase": "walk",
     "t": 0.633,
     "fade": 0,
-    "depth": 0.896
+    "depth": 0.89
    },
-   "trace": "bc4ea57804e00da20d64866f82e60fb0"
+   "trace": "f308b111a48dbe4190e14b6ce397598b"
   },
   {
    "id": "R6:dome:rim:235deg:0.5",
@@ -5401,26 +5405,26 @@
    "pass": true,
    "reason": "caught by ledge",
    "landedAt": [
-    -33.334,
-    -9.154,
-    -47.6
+    -33.368,
+    -9.156,
+    -47.624
    ],
    "landedBy": "ledge",
-   "eyeMin": 0.415,
-   "eyeMinVisible": 0.415,
+   "eyeMin": 0.445,
+   "eyeMinVisible": 0.445,
    "eyeBands": [
-    0.415,
+    0.445,
     null,
     null
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.867,
+    "t": 3.517,
     "fade": 0,
-    "depth": 1.438
+    "depth": 1.447
    },
-   "trace": "eb7bbfc5db3057f384eec1f0f6395525"
+   "trace": "f15b043a25163ce8fbd9cf524bd9b0f0"
   },
   {
    "id": "R6:dome:rim:235deg:1.5",
@@ -5430,26 +5434,26 @@
    "pass": true,
    "reason": "caught by ledge",
    "landedAt": [
-    -33.713,
-    -9.154,
-    -48.148
+    -33.83,
+    -9.169,
+    -48.29
    ],
    "landedBy": "ledge",
-   "eyeMin": 0.66,
-   "eyeMinVisible": 0.66,
+   "eyeMin": 0.816,
+   "eyeMinVisible": 0.816,
    "eyeBands": [
-    0.66,
+    0.816,
     null,
     null
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.467,
+    "t": 1.433,
     "fade": 0,
-    "depth": 1.374
+    "depth": 1.392
    },
-   "trace": "12f13c34bdf5e1352aa976fb1ce3ce59"
+   "trace": "0f8ef830cc4fc28e5e86a6813dab6cb5"
   },
   {
    "id": "R6:dome:rim:235deg:3.4",
@@ -5485,21 +5489,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.525,
-   "eyeMinVisible": 2.525,
+   "eyeMin": 2.615,
+   "eyeMinVisible": 2.615,
    "eyeBands": [
-    2.525,
-    9.69,
-    11.76
+    2.615,
+    9.823,
+    11.968
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.633,
+    "t": 0.617,
     "fade": 0,
-    "depth": 1.068
+    "depth": 1.129
    },
-   "trace": "6e9531b57e1b0f02ff64cf92a4047326"
+   "trace": "428dd4c922d3bc481a9542989e5b1413"
   },
   {
    "id": "R6:dome:rim:240deg:0.5",
@@ -5897,7 +5901,7 @@
    "eyeBands": [
     1.333,
     3.821,
-    1.336
+    1.337
    ],
    "breach": null,
    "worstAt": {
@@ -5906,7 +5910,7 @@
     "fade": 0,
     "depth": 1.642
    },
-   "trace": "e9c6699c5b6822fb220af05324058dd8"
+   "trace": "fb1382fe7c21ad43418fc502eb3ee1ca"
   },
   {
    "id": "R6:dome:rim:255deg:6.2",
@@ -6000,21 +6004,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.251,
-   "eyeMinVisible": 1.251,
+   "eyeMin": 1.247,
+   "eyeMinVisible": 1.247,
    "eyeBands": [
     1.338,
-    3.027,
-    1.251
+    3.009,
+    1.247
    ],
    "breach": null,
    "worstAt": {
     "phase": "fall",
     "t": 2.617,
     "fade": 0,
-    "depth": 116.863
+    "depth": 116.846
    },
-   "trace": "5b4609762379da849e3dd878b49488de"
+   "trace": "8f1f66bea55c3cf6173dd5ad05ca7b7f"
   },
   {
    "id": "R6:dome:rim:260deg:6.2",
@@ -6508,21 +6512,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.81,
-   "eyeMinVisible": 0.81,
+   "eyeMin": 0.8,
+   "eyeMinVisible": 0.8,
    "eyeBands": [
-    0.81,
-    1.98,
-    1.852
+    0.8,
+    1.987,
+    1.853
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.45,
     "fade": 0,
-    "depth": 1.792
+    "depth": 1.725
    },
-   "trace": "4ac5ed59b856b07b9954eabba559799d"
+   "trace": "8626f74e31ee9e808e49747f3763eb14"
   },
   {
    "id": "R6:dome:rim:285deg:3.4",
@@ -6537,17 +6541,17 @@
    "eyeMinVisible": 1.53,
    "eyeBands": [
     1.53,
-    3.353,
-    1.835
+    3.346,
+    1.834
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.817,
     "fade": 0,
-    "depth": 1.418
+    "depth": 1.395
    },
-   "trace": "b0f3258309f07319a3e5ab5bf595c8fb"
+   "trace": "392d412758d1d53b3d1ab76f872b0b65"
   },
   {
    "id": "R6:dome:rim:285deg:6.2",
@@ -6608,21 +6612,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.797,
-   "eyeMinVisible": 0.797,
+   "eyeMin": 0.786,
+   "eyeMinVisible": 0.786,
    "eyeBands": [
-    0.797,
-    2.472,
-    1.714
+    0.786,
+    2.464,
+    1.717
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.433,
+    "t": 1.45,
     "fade": 0,
-    "depth": 1.5
+    "depth": 1.605
    },
-   "trace": "504a8a20d51b92ff135a48c404376835"
+   "trace": "35b332045c0e2fd1308caf6f44e69013"
   },
   {
    "id": "R6:dome:rim:290deg:3.4",
@@ -6633,21 +6637,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.505,
-   "eyeMinVisible": 1.505,
+   "eyeMin": 1.534,
+   "eyeMinVisible": 1.534,
    "eyeBands": [
-    1.505,
-    2.914,
-    1.708
+    1.534,
+    2.903,
+    1.711
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.8,
+    "t": 0.817,
     "fade": 0,
-    "depth": 1.119
+    "depth": 1.21
    },
-   "trace": "72c9dd011ec2b30bba004f6e61e2c280"
+   "trace": "e4f6b5720ef8511e6c2ca257157c8f19"
   },
   {
    "id": "R6:dome:rim:290deg:6.2",
@@ -6787,8 +6791,8 @@
    "eyeMinVisible": 0.358,
    "eyeBands": [
     0.358,
-    2.944,
-    1.494
+    2.941,
+    1.495
    ],
    "breach": {
     "phase": "walk",
@@ -6802,7 +6806,7 @@
     "fade": 0,
     "depth": 8.245
    },
-   "trace": "2dbcd1b0568487034dcfd2a945e5d6c3"
+   "trace": "b108fe40512cc73c06357cbf92f9c199"
   },
   {
    "id": "R6:dome:rim:300deg:1.5",
@@ -6943,11 +6947,11 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.38,
-   "eyeMinVisible": 1.38,
+   "eyeMin": 1.378,
+   "eyeMinVisible": 1.378,
    "eyeBands": [
-    1.38,
-    2.579,
+    1.378,
+    2.577,
     1.552
    ],
    "breach": null,
@@ -6955,9 +6959,9 @@
     "phase": "walk",
     "t": 0.833,
     "fade": 0,
-    "depth": 0.523
+    "depth": 0.539
    },
-   "trace": "e0e3897cd5ffe846ed7c0e3eb7d1ca49"
+   "trace": "719bc4d74fa1e63de419d06743244113"
   },
   {
    "id": "R6:dome:rim:305deg:6.2",
@@ -6968,21 +6972,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.468,
-   "eyeMinVisible": 2.468,
+   "eyeMin": 2.469,
+   "eyeMinVisible": 2.469,
    "eyeBands": [
-    2.468,
-    7.565,
-    5.544
+    2.469,
+    7.564,
+    5.545
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.583,
     "fade": 0,
-    "depth": 0.507
+    "depth": 0.476
    },
-   "trace": "62a222ecb92cab83d81b5bb1af336f56"
+   "trace": "038cabc2d563a9c27ddcc4d367f12fbd"
   },
   {
    "id": "R6:dome:rim:310deg:0.5",
@@ -7910,9 +7914,9 @@
     "phase": "walk",
     "t": 3.617,
     "fade": 0,
-    "depth": 1.664
+    "depth": 1.665
    },
-   "trace": "bfed047fc15ffe7b857cd725f21b33f9"
+   "trace": "87d0b5a9a44ec13f1ebf35f80ee6c801"
   },
   {
    "id": "R6:dome:rim:355deg:1.5",
@@ -7948,21 +7952,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.496,
-   "eyeMinVisible": 1.496,
+   "eyeMin": 1.495,
+   "eyeMinVisible": 1.495,
    "eyeBands": [
     1.51,
-    5.021,
-    1.496
+    5.015,
+    1.495
    ],
    "breach": null,
    "worstAt": {
     "phase": "fall",
     "t": 3.017,
     "fade": 0.151,
-    "depth": 151.64
+    "depth": 151.628
    },
-   "trace": "0ae1e89a4a9e1275afd6c1ad7eda4416"
+   "trace": "78b30035cf618f18b982cbc77a1b291a"
   },
   {
    "id": "R6:dome:rim:355deg:6.2",
@@ -7978,7 +7982,7 @@
    "eyeBands": [
     2.498,
     10.338,
-    10
+    10.001
    ],
    "breach": null,
    "worstAt": {
@@ -7987,7 +7991,7 @@
     "fade": 0,
     "depth": 1.194
    },
-   "trace": "76cf7713f187a8fd5dbb720976acd9b5"
+   "trace": "f982890e54aafcb297b0ea5dc42170fc"
   },
   {
    "id": "R6:rocks:rim:0deg:0.5",
@@ -22818,17 +22822,17 @@
    "eyeMinVisible": 0.842,
    "eyeBands": [
     0.842,
-    1.852,
-    1.452
+    1.86,
+    1.457
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.35,
     "fade": 0,
-    "depth": 0.532
+    "depth": 0.634
    },
-   "trace": "8805a23fc40e59c2717420fc25f8e0c1"
+   "trace": "7ddf25194f229d10f181c4642641465f"
   },
   {
    "id": "R6:tower:rim:15deg:3.4",
@@ -22885,25 +22889,30 @@
    "group": "R6",
    "stack": "tower",
    "speed": 0.5,
-   "pass": true,
-   "reason": "fell",
+   "pass": false,
+   "reason": "eye within 0.4 m of the wall from 4.99 m down (walk t=3.867s, fade 0); worst 0.39 m at 4.99 m down",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.403,
-   "eyeMinVisible": 0.403,
+   "eyeMin": 0.391,
+   "eyeMinVisible": 0.391,
    "eyeBands": [
-    0.403,
-    2.52,
-    1.455
+    0.391,
+    2.527,
+    1.462
    ],
-   "breach": null,
+   "breach": {
+    "phase": "walk",
+    "t": 3.867,
+    "fade": 0,
+    "depth": 4.99
+   },
    "worstAt": {
     "phase": "walk",
     "t": 3.867,
     "fade": 0,
-    "depth": 5.073
+    "depth": 4.99
    },
-   "trace": "68f8818830337ecdd524c1bd7b26264f"
+   "trace": "d6a8513a7a2b256c88674d7e610c1e4b"
   },
   {
    "id": "R6:tower:rim:20deg:1.5",
@@ -22914,21 +22923,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.826,
-   "eyeMinVisible": 0.826,
+   "eyeMin": 0.816,
+   "eyeMinVisible": 0.816,
    "eyeBands": [
-    0.826,
-    2.364,
-    1.458
+    0.816,
+    2.371,
+    1.465
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.433,
+    "t": 1.45,
     "fade": 0,
-    "depth": 0.934
+    "depth": 1.008
    },
-   "trace": "7b20d082e3bafb3d7189008ead1c537a"
+   "trace": "0e51011c2666e6fc9a265f5712ff6a81"
   },
   {
    "id": "R6:tower:rim:20deg:3.4",
@@ -22939,21 +22948,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.476,
-   "eyeMinVisible": 1.476,
+   "eyeMin": 1.48,
+   "eyeMinVisible": 1.48,
    "eyeBands": [
-    1.509,
-    3.775,
-    1.476
+    1.533,
+    3.758,
+    1.48
    ],
    "breach": null,
    "worstAt": {
     "phase": "fall",
     "t": 3.017,
     "fade": 0.151,
-    "depth": 151.037
+    "depth": 150.986
    },
-   "trace": "2c2f8a0e6fb0221d3318902af8a1bda2"
+   "trace": "0b1c615aec6e07fe2096d28383942438"
   },
   {
    "id": "R6:tower:rim:20deg:6.2",
@@ -22964,21 +22973,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.519,
-   "eyeMinVisible": 2.519,
+   "eyeMin": 2.511,
+   "eyeMinVisible": 2.511,
    "eyeBands": [
-    2.519,
-    8.182,
-    10.862
+    2.511,
+    8.184,
+    10.857
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.633,
     "fade": 0,
-    "depth": 0.6
+    "depth": 0.632
    },
-   "trace": "bf9f514a5fb863a012d4a3b8be00c91f"
+   "trace": "9d65fa9832eaf80fd74d839906ecf5f1"
   },
   {
    "id": "R6:tower:rim:25deg:0.5",
@@ -24488,9 +24497,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    87.325,
-    8.63,
-    -288.077
+    87.03,
+    6.959,
+    -288.129
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -24502,7 +24511,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "4ebbf6dfea44fc14442f85400e1ed6dc"
+   "trace": "0245a62f368ebb4b864386bbbae406a4"
   },
   {
    "id": "R6:tower:rim:100deg:1.5",
@@ -24512,9 +24521,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    87.228,
-    8.667,
-    -288.091
+    87.055,
+    6.925,
+    -288.12
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -24526,7 +24535,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "b2fac2885bc5edeab609a1920adedb45"
+   "trace": "fe1a654db8ef0a5daf59eb8cfba0e106"
   },
   {
    "id": "R6:tower:rim:100deg:3.4",
@@ -24536,9 +24545,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    87.238,
-    8.675,
-    -288.055
+    87.032,
+    6.969,
+    -288.112
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -24550,7 +24559,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "4e1db7f9ae4fd10f6332b63b7de121bf"
+   "trace": "d6447439311b0022aa643dbe06327ef5"
   },
   {
    "id": "R6:tower:rim:100deg:6.2",
@@ -24560,9 +24569,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    87.266,
-    8.656,
-    -288.078
+    87.02,
+    7.002,
+    -288.09
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -24574,7 +24583,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "3da599e3d263d36fff943c81527a0f43"
+   "trace": "efa3584ef0c33b44b5822352890fc38a"
   },
   {
    "id": "R6:tower:rim:105deg:0.5",
@@ -24584,9 +24593,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    82.047,
-    7.213,
-    -289.373
+    82.806,
+    7.63,
+    -289.145
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -24598,7 +24607,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "12052169c9e58937376830d69cf4b612"
+   "trace": "4fd806ff6ba7719459f05beb4ccdb09a"
   },
   {
    "id": "R6:tower:rim:105deg:1.5",
@@ -24608,9 +24617,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    82.219,
-    7.366,
-    -289.324
+    82.802,
+    7.641,
+    -289.13
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -24622,7 +24631,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "ee474ecf3c6075783dcdc7f6546bd8fa"
+   "trace": "05bbeaeb00e5e7bf6a76e8e016694ee5"
   },
   {
    "id": "R6:tower:rim:105deg:3.4",
@@ -24632,9 +24641,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    82.252,
-    7.412,
-    -289.291
+    82.796,
+    7.667,
+    -289.096
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -24646,7 +24655,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "841e789eba645f3690f69859fb18708b"
+   "trace": "8e49c67f29151a2d77a58c898414b70f"
   },
   {
    "id": "R6:tower:rim:105deg:6.2",
@@ -24656,9 +24665,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    82.254,
-    7.453,
-    -289.236
+    82.81,
+    7.643,
+    -289.124
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -24670,7 +24679,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "940c54d28025e66502dddc308161eab2"
+   "trace": "6e0e403d98e49393e5bd0e7a0ccb081c"
   },
   {
    "id": "R6:tower:rim:110deg:0.5",
@@ -25613,10 +25622,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.417,
-   "eyeMinVisible": 0.417,
+   "eyeMin": 0.416,
+   "eyeMinVisible": 0.416,
    "eyeBands": [
-    0.417,
+    0.416,
     2.328,
     1.336
    ],
@@ -25625,9 +25634,9 @@
     "phase": "walk",
     "t": 3.6,
     "fade": 0,
-    "depth": 1.571
+    "depth": 1.572
    },
-   "trace": "a72b15e4260faf75e0276868f9bfa72c"
+   "trace": "e918a841d7ae91108ee586cceb7f41f0"
   },
   {
    "id": "R6:tower:rim:155deg:1.5",
@@ -25688,21 +25697,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.491,
-   "eyeMinVisible": 2.491,
+   "eyeMin": 2.492,
+   "eyeMinVisible": 2.492,
    "eyeBands": [
-    2.491,
+    2.492,
     12.12,
-    18.758
+    18.76
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.6,
     "fade": 0,
-    "depth": 1.145
+    "depth": 1.149
    },
-   "trace": "e4ef3926ac1afd881ad489172922efa9"
+   "trace": "d200d17cdb3764045f137f2bb8f5dd1b"
   },
   {
    "id": "R6:tower:rim:160deg:0.5",
@@ -25713,21 +25722,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.418,
-   "eyeMinVisible": 0.418,
+   "eyeMin": 0.421,
+   "eyeMinVisible": 0.421,
    "eyeBands": [
-    0.418,
-    1.888,
-    1.675
+    0.421,
+    1.886,
+    1.677
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 3.533,
     "fade": 0,
-    "depth": 1.605
+    "depth": 1.583
    },
-   "trace": "4a68f91c7cd0b9223afbcdaada0f4cd3"
+   "trace": "b7da3eac00817b65be97d1f3e7608908"
   },
   {
    "id": "R6:tower:rim:160deg:1.5",
@@ -25738,21 +25747,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.824,
-   "eyeMinVisible": 0.824,
+   "eyeMin": 0.819,
+   "eyeMinVisible": 0.819,
    "eyeBands": [
-    0.824,
-    3.834,
-    2.897
+    0.819,
+    3.825,
+    2.883
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.433,
+    "t": 1.45,
     "fade": 0,
-    "depth": 1.527
+    "depth": 1.622
    },
-   "trace": "6ddde69994a5ca1a59b7fc9990d5a8a5"
+   "trace": "287936220ce6f4a824c7989dec59bf3d"
   },
   {
    "id": "R6:tower:rim:160deg:3.4",
@@ -25767,17 +25776,17 @@
    "eyeMinVisible": 1.508,
    "eyeBands": [
     1.508,
-    7.208,
-    9.197
+    7.199,
+    9.191
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.8,
     "fade": 0,
-    "depth": 1.158
+    "depth": 1.112
    },
-   "trace": "fc557b390a029da78cf9730a32cc05c6"
+   "trace": "e704ecae75e6baf02e4c94d21245340e"
   },
   {
    "id": "R6:tower:rim:160deg:6.2",
@@ -26425,9 +26434,9 @@
     "phase": "walk",
     "t": 3.55,
     "fade": 0,
-    "depth": 2.58
+    "depth": 2.581
    },
-   "trace": "8de2a173c1f61984412e6e26f5962241"
+   "trace": "f20db1ffb9ff7e867f462c644a90195c"
   },
   {
    "id": "R6:tower:rim:195deg:1.5",
@@ -27713,21 +27722,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.414,
-   "eyeMinVisible": 0.414,
+   "eyeMin": 0.449,
+   "eyeMinVisible": 0.449,
    "eyeBands": [
-    0.414,
-    1.605,
-    3.4
+    0.449,
+    1.609,
+    3.428
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.6,
+    "t": 3.75,
     "fade": 0,
-    "depth": 2.152
+    "depth": 2.173
    },
-   "trace": "05c6172cc48ae8999016c3a4bdab3e98"
+   "trace": "9be6a04b78bafffbb6f1c89aca1e6212"
   },
   {
    "id": "R6:tower:rim:260deg:1.5",
@@ -27738,21 +27747,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.753,
-   "eyeMinVisible": 0.753,
+   "eyeMin": 0.744,
+   "eyeMinVisible": 0.744,
    "eyeBands": [
-    0.753,
-    1.602,
-    3.333
+    0.744,
+    1.6,
+    3.331
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.467,
     "fade": 0,
-    "depth": 2.089
+    "depth": 2.125
    },
-   "trace": "afe79c9671bbe30a25621fe288e4d217"
+   "trace": "fb50efff0e13355ca370c987de2f241b"
   },
   {
    "id": "R6:tower:rim:260deg:3.4",
@@ -27792,17 +27801,17 @@
    "eyeMinVisible": 2.484,
    "eyeBands": [
     2.484,
-    8.56,
-    12.721
+    8.567,
+    12.737
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.6,
     "fade": 0,
-    "depth": 1.664
+    "depth": 1.706
    },
-   "trace": "a55e594a3c4de7b758f769877a0745dd"
+   "trace": "16f381244d5c4fda5a7b347a7d0ca90a"
   },
   {
    "id": "R6:tower:rim:265deg:0.5",
@@ -27813,21 +27822,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.463,
-   "eyeMinVisible": 0.463,
+   "eyeMin": 0.426,
+   "eyeMinVisible": 0.426,
    "eyeBands": [
-    0.463,
-    1.259,
-    3.012
+    0.426,
+    1.257,
+    3.024
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.833,
+    "t": 3.683,
     "fade": 0,
-    "depth": 2.136
+    "depth": 2.148
    },
-   "trace": "736d1acea78db022fbcb4f7cc29613c4"
+   "trace": "a0c4a26fb1648b40268071e69142284b"
   },
   {
    "id": "R6:tower:rim:265deg:1.5",
@@ -27838,11 +27847,11 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.735,
-   "eyeMinVisible": 0.735,
+   "eyeMin": 0.745,
+   "eyeMinVisible": 0.745,
    "eyeBands": [
-    0.735,
-    1.249,
+    0.745,
+    1.248,
     2.976
    ],
    "breach": null,
@@ -27850,9 +27859,9 @@
     "phase": "walk",
     "t": 1.483,
     "fade": 0,
-    "depth": 2.178
+    "depth": 2.194
    },
-   "trace": "2df531d3e989339e913a453c19196dec"
+   "trace": "e33a42e131573c18d186d32b0d38393a"
   },
   {
    "id": "R6:tower:rim:265deg:3.4",
@@ -27867,17 +27876,17 @@
    "eyeMinVisible": 1.456,
    "eyeBands": [
     1.456,
-    3.1,
-    4.994
+    3.105,
+    5.003
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.883,
     "fade": 0,
-    "depth": 2.123
+    "depth": 2.136
    },
-   "trace": "9430515d07e9c289d3f3122b376716da"
+   "trace": "8b9624a8cf14d0be2028fcdc0e3fd01b"
   },
   {
    "id": "R6:tower:rim:265deg:6.2",
@@ -27888,21 +27897,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.572,
-   "eyeMinVisible": 2.572,
+   "eyeMin": 2.548,
+   "eyeMinVisible": 2.548,
    "eyeBands": [
-    2.572,
-    8.51,
-    12.557
+    2.548,
+    8.52,
+    12.574
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.633,
+    "t": 0.617,
     "fade": 0,
-    "depth": 1.854
+    "depth": 1.742
    },
-   "trace": "291c7a49e5b52f5ff78bff9099749651"
+   "trace": "fe8142bc039ff1be245e03ee6a123635"
   },
   {
    "id": "R6:tower:rim:270deg:0.5",
@@ -28025,9 +28034,9 @@
     "phase": "walk",
     "t": 3.517,
     "fade": 0,
-    "depth": 2.283
+    "depth": 2.282
    },
-   "trace": "eef3590adbcc477ca9439bcaab03d0f6"
+   "trace": "3dd020cb0c41a5ee92526d442b51b807"
   },
   {
    "id": "R6:tower:rim:275deg:1.5",
@@ -28113,21 +28122,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.473,
-   "eyeMinVisible": 0.473,
+   "eyeMin": 0.476,
+   "eyeMinVisible": 0.476,
    "eyeBands": [
-    0.473,
-    2.413,
-    2.07
+    0.476,
+    2.41,
+    2.067
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 3.417,
     "fade": 0,
-    "depth": 2.233
+    "depth": 2.194
    },
-   "trace": "c0c74360ceab31d40bc4d0ca925caf21"
+   "trace": "7bfbeb8f5aa945799e54d54a4cc681f1"
   },
   {
    "id": "R6:tower:rim:280deg:1.5",
@@ -28138,21 +28147,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.855,
-   "eyeMinVisible": 0.855,
+   "eyeMin": 0.858,
+   "eyeMinVisible": 0.858,
    "eyeBands": [
-    0.855,
-    1.934,
-    2.38
+    0.858,
+    1.926,
+    2.367
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.35,
     "fade": 0,
-    "depth": 1.794
+    "depth": 1.836
    },
-   "trace": "19c64bc160c439b0a02447bfbe8527cd"
+   "trace": "ef3d905db11a6e6ae8015692312a1d52"
   },
   {
    "id": "R6:tower:rim:280deg:3.4",
@@ -28225,9 +28234,9 @@
     "phase": "walk",
     "t": 3.533,
     "fade": 0,
-    "depth": 2.176
+    "depth": 2.175
    },
-   "trace": "ece9ff448350e4f9b1bacf576a583a40"
+   "trace": "d9708b07e89ee9f0650af15a455b07ec"
   },
   {
    "id": "R6:tower:rim:285deg:1.5",
@@ -28243,16 +28252,16 @@
    "eyeBands": [
     0.835,
     1.916,
-    1.977
+    1.976
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.433,
     "fade": 0,
-    "depth": 2.107
+    "depth": 2.1
    },
-   "trace": "773fdd9341deaa5ec3c026b567f2e7c9"
+   "trace": "a380fed8a504b5a50ca7a78054646e7a"
   },
   {
    "id": "R6:tower:rim:285deg:3.4",
@@ -28267,17 +28276,17 @@
    "eyeMinVisible": 1.514,
    "eyeBands": [
     1.514,
-    3.803,
-    7.443
+    3.805,
+    7.442
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.8,
     "fade": 0,
-    "depth": 1.743
+    "depth": 1.744
    },
-   "trace": "2b6fedfcc14dc3d5a787a397dcc160da"
+   "trace": "ae4abb4876cd5e410757a867ef1fb0ff"
   },
   {
    "id": "R6:tower:rim:285deg:6.2",
@@ -29438,21 +29447,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.754,
-   "eyeMinVisible": 0.754,
+   "eyeMin": 0.705,
+   "eyeMinVisible": 0.705,
    "eyeBands": [
-    0.754,
-    1.287,
-    1.772
+    0.705,
+    1.31,
+    1.785
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.483,
+    "t": 1.45,
     "fade": 0,
-    "depth": 1.366
+    "depth": 1.37
    },
-   "trace": "34cf65f6d7c451d2bacb6831a896ebcb"
+   "trace": "d5ecf35921092f36633126d2e10d552b"
   },
   {
    "id": "R6:tower:rim:345deg:3.4",
@@ -30209,24 +30218,25 @@
    "group": "R6",
    "stack": "mountain",
    "speed": 0.5,
-   "pass": false,
-   "reason": "landed after leaving the edge at depth 1.9 m",
-   "landedAt": [
-    351.607,
-    0.148,
-    276.057
-   ],
+   "pass": true,
+   "reason": "fell",
+   "landedAt": null,
    "landedBy": null,
-   "eyeMin": null,
-   "eyeMinVisible": null,
+   "eyeMin": 0.435,
+   "eyeMinVisible": 0.435,
    "eyeBands": [
-    null,
-    null,
-    null
+    0.435,
+    2.506,
+    1.68
    ],
    "breach": null,
-   "worstAt": null,
-   "trace": "16bf8b62497984de1196e90f26106ed2"
+   "worstAt": {
+    "phase": "walk",
+    "t": 3.817,
+    "fade": 0,
+    "depth": 1.957
+   },
+   "trace": "326d222f2186a8f1e64b09f3d589d581"
   },
   {
    "id": "R6:mountain:rim:25deg:1.5",
@@ -30237,21 +30247,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.648,
-   "eyeMinVisible": 0.648,
+   "eyeMin": 0.706,
+   "eyeMinVisible": 0.706,
    "eyeBands": [
-    0.648,
-    2.461,
-    1.673
+    0.706,
+    2.444,
+    1.67
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.517,
+    "t": 1.5,
     "fade": 0,
-    "depth": 1.954
+    "depth": 1.882
    },
-   "trace": "9bdab6f5696e68235504620f55002521"
+   "trace": "668b1362ab84ea96b127febf7c45ce43"
   },
   {
    "id": "R6:mountain:rim:25deg:3.4",
@@ -30262,21 +30272,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.437,
-   "eyeMinVisible": 1.437,
+   "eyeMin": 1.457,
+   "eyeMinVisible": 1.457,
    "eyeBands": [
-    1.437,
-    4.714,
-    1.865
+    1.457,
+    4.764,
+    1.882
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.9,
+    "t": 0.883,
     "fade": 0,
-    "depth": 1.961
+    "depth": 1.914
    },
-   "trace": "35fcdc6e6380fb7e30e6a7bb62270dc2"
+   "trace": "26b76e70a4e7e461be347a3a1ab2d434"
   },
   {
    "id": "R6:mountain:rim:25deg:6.2",
@@ -30291,17 +30301,17 @@
    "eyeMinVisible": 2.563,
    "eyeBands": [
     2.563,
-    10.714,
-    11.323
+    10.7,
+    11.312
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.633,
     "fade": 0,
-    "depth": 1.565
+    "depth": 1.546
    },
-   "trace": "96b5e1a6f6297ada930d2b9823f34446"
+   "trace": "b07365365aa3fc0907f2eaa14b8a3b8a"
   },
   {
    "id": "R6:mountain:rim:30deg:0.5",
@@ -30312,21 +30322,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.44,
-   "eyeMinVisible": 0.44,
+   "eyeMin": 0.417,
+   "eyeMinVisible": 0.417,
    "eyeBands": [
-    0.44,
-    2.436,
-    1.463
+    0.417,
+    2.439,
+    1.454
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.833,
+    "t": 3.8,
     "fade": 0,
-    "depth": 4.792
+    "depth": 4.864
    },
-   "trace": "c02d9de36df364d54c00f32dfb8d4233"
+   "trace": "10891e08f26566051dceecf23eea6dfa"
   },
   {
    "id": "R6:mountain:rim:30deg:1.5",
@@ -30337,21 +30347,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.841,
-   "eyeMinVisible": 0.841,
+   "eyeMin": 0.815,
+   "eyeMinVisible": 0.815,
    "eyeBands": [
-    0.841,
-    2.207,
-    1.47
+    0.815,
+    2.216,
+    1.46
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.45,
     "fade": 0,
-    "depth": 1.917
+    "depth": 1.902
    },
-   "trace": "849984b11ec5ac01ab00275481cb21a8"
+   "trace": "c9b200ff777d93d018553642a25018ab"
   },
   {
    "id": "R6:mountain:rim:30deg:3.4",
@@ -30366,17 +30376,17 @@
    "eyeMinVisible": 1.528,
    "eyeBands": [
     1.528,
-    5.513,
-    3.995
+    5.535,
+    4.016
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.817,
     "fade": 0,
-    "depth": 1.481
+    "depth": 1.531
    },
-   "trace": "1e9c26b6a3b66fb11ca2e853023c18c7"
+   "trace": "c67028c6c4103e5d5b5c02fb1e4c1a81"
   },
   {
    "id": "R6:mountain:rim:30deg:6.2",
@@ -30387,21 +30397,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.497,
-   "eyeMinVisible": 2.497,
+   "eyeMin": 2.5,
+   "eyeMinVisible": 2.5,
    "eyeBands": [
-    2.497,
-    10.205,
-    12.845
+    2.5,
+    10.203,
+    12.846
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.633,
     "fade": 0,
-    "depth": 1.55
+    "depth": 1.54
    },
-   "trace": "68786c950822c2d837efc5b12f40d838"
+   "trace": "a80d0ab47169113eb56accf8cff5ad66"
   },
   {
    "id": "R6:mountain:rim:35deg:0.5",
@@ -30617,7 +30627,7 @@
    "eyeBands": [
     0.454,
     1.709,
-    1.743
+    1.741
    ],
    "breach": null,
    "worstAt": {
@@ -30626,7 +30636,7 @@
     "fade": 0,
     "depth": 1.479
    },
-   "trace": "0307f6bffe87f2c6d0c5411baca06034"
+   "trace": "a7048033e32f79be5b853479ff020d29"
   },
   {
    "id": "R6:mountain:rim:45deg:1.5",
@@ -31017,21 +31027,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.408,
-   "eyeMinVisible": 0.408,
+   "eyeMin": 0.402,
+   "eyeMinVisible": 0.402,
    "eyeBands": [
-    0.408,
-    1.523,
-    2.504
+    0.402,
+    1.525,
+    2.53
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 4.1,
+    "t": 4.067,
     "fade": 0,
-    "depth": 8.981
+    "depth": 9.167
    },
-   "trace": "f5a8174c2f56dbf15930794caf7bb7fd"
+   "trace": "695b5e8a2eac0c2000f161079b19efbc"
   },
   {
    "id": "R6:mountain:rim:65deg:1.5",
@@ -31042,21 +31052,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.748,
-   "eyeMinVisible": 0.748,
+   "eyeMin": 0.778,
+   "eyeMinVisible": 0.778,
    "eyeBands": [
-    0.748,
-    1.36,
-    2.51
+    0.778,
+    1.367,
+    2.541
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.467,
+    "t": 1.45,
     "fade": 0,
-    "depth": 1.723
+    "depth": 1.741
    },
-   "trace": "891688a38b216871f06a8a668f1dd28c"
+   "trace": "d841c73657d346c5ea145816696cb11d"
   },
   {
    "id": "R6:mountain:rim:65deg:3.4",
@@ -31067,21 +31077,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.522,
-   "eyeMinVisible": 1.522,
+   "eyeMin": 1.523,
+   "eyeMinVisible": 1.523,
    "eyeBands": [
-    1.522,
-    4.806,
-    6.789
+    1.523,
+    4.721,
+    6.684
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.817,
+    "t": 0.833,
     "fade": 0,
-    "depth": 1.35
+    "depth": 1.393
    },
-   "trace": "1597a3db5462b6ce43bed70abca1751f"
+   "trace": "414b853f1890808b40aeeaa8f8175bb8"
   },
   {
    "id": "R6:mountain:rim:65deg:6.2",
@@ -31096,17 +31106,17 @@
    "eyeMinVisible": 2.49,
    "eyeBands": [
     2.49,
-    9.396,
-    14.346
+    9.457,
+    14.336
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.6,
     "fade": 0,
-    "depth": 1.369
+    "depth": 1.34
    },
-   "trace": "fc06edd16cab3392b0fdd56865b1fd5d"
+   "trace": "aac9c47d7287f66bf9813b07ebd71913"
   },
   {
    "id": "R6:mountain:rim:70deg:0.5",
@@ -31142,21 +31152,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.71,
-   "eyeMinVisible": 0.71,
+   "eyeMin": 0.731,
+   "eyeMinVisible": 0.731,
    "eyeBands": [
-    0.71,
-    1.442,
-    2.521
+    0.731,
+    1.445,
+    2.506
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.483,
+    "t": 1.5,
     "fade": 0,
-    "depth": 1.32
+    "depth": 1.336
    },
-   "trace": "83bdafa35a592d5d398b5a547774215c"
+   "trace": "0d81ac4688bd7396ef6efd9a9e248cb9"
   },
   {
    "id": "R6:mountain:rim:70deg:3.4",
@@ -31192,10 +31202,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.514,
-   "eyeMinVisible": 2.514,
+   "eyeMin": 2.518,
+   "eyeMinVisible": 2.518,
    "eyeBands": [
-    2.514,
+    2.518,
     9.727,
     15.129
    ],
@@ -31204,9 +31214,9 @@
     "phase": "walk",
     "t": 0.633,
     "fade": 0,
-    "depth": 1.24
+    "depth": 1.226
    },
-   "trace": "eac1c19a381f962b8d9e20371f95c6ef"
+   "trace": "bc6ce44dff726c455deee93865a1250d"
   },
   {
    "id": "R6:mountain:rim:75deg:0.5",
@@ -31217,10 +31227,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.446,
-   "eyeMinVisible": 0.446,
+   "eyeMin": 0.447,
+   "eyeMinVisible": 0.447,
    "eyeBands": [
-    0.446,
+    0.447,
     1.474,
     1.841
    ],
@@ -31229,9 +31239,9 @@
     "phase": "walk",
     "t": 3.6,
     "fade": 0,
-    "depth": 1.403
+    "depth": 1.401
    },
-   "trace": "1b7d20474d2365453b4adb410660124b"
+   "trace": "794a703abc6000084c9206d5ac89b70c"
   },
   {
    "id": "R6:mountain:rim:75deg:1.5",
@@ -31242,21 +31252,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.759,
-   "eyeMinVisible": 0.759,
+   "eyeMin": 0.753,
+   "eyeMinVisible": 0.753,
    "eyeBands": [
-    0.759,
-    1.848,
-    1.835
+    0.753,
+    1.841,
+    1.837
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.467,
     "fade": 0,
-    "depth": 1.456
+    "depth": 1.436
    },
-   "trace": "e288e19a3af6b0c45b8348d832e92c67"
+   "trace": "1c011359004e939fdb1caad262b7406d"
   },
   {
    "id": "R6:mountain:rim:75deg:3.4",
@@ -31317,21 +31327,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.453,
-   "eyeMinVisible": 0.453,
+   "eyeMin": 0.439,
+   "eyeMinVisible": 0.439,
    "eyeBands": [
-    0.453,
-    1.741,
-    1.476
+    0.439,
+    1.776,
+    1.471
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.817,
+    "t": 3.683,
     "fade": 0,
-    "depth": 1.268
+    "depth": 1.238
    },
-   "trace": "6a950a35548ea5c80fb6d40c7130f3cf"
+   "trace": "ec37acbadb65420e15c4ca92b67ade5b"
   },
   {
    "id": "R6:mountain:rim:80deg:1.5",
@@ -31346,17 +31356,17 @@
    "eyeMinVisible": 0.735,
    "eyeBands": [
     0.735,
-    1.864,
-    1.519
+    1.845,
+    1.509
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.5,
     "fade": 0,
-    "depth": 1.273
+    "depth": 1.238
    },
-   "trace": "877b42761cd7dfaa9a087e9b179f5887"
+   "trace": "012a167b6243ff8d6f3e3cb519b24432"
   },
   {
    "id": "R6:mountain:rim:80deg:3.4",
@@ -31367,21 +31377,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.512,
-   "eyeMinVisible": 1.512,
+   "eyeMin": 1.503,
+   "eyeMinVisible": 1.503,
    "eyeBands": [
-    1.512,
-    5.049,
-    3.658
+    1.503,
+    5.039,
+    3.647
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.867,
+    "t": 0.883,
     "fade": 0,
-    "depth": 1.176
+    "depth": 1.302
    },
-   "trace": "79c4d744a745e7ead52000caa924ef3a"
+   "trace": "8efe6f9db5f8a2a6a52985c1faf0037e"
   },
   {
    "id": "R6:mountain:rim:80deg:6.2",
@@ -31396,17 +31406,17 @@
    "eyeMinVisible": 2.564,
    "eyeBands": [
     2.564,
-    9.615,
-    12.734
+    9.602,
+    12.725
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.633,
     "fade": 0,
-    "depth": 0.877
+    "depth": 0.858
    },
-   "trace": "ba371a4d16c6249f082f6efb727e6a59"
+   "trace": "87a834d7d84a64c9461e3223cf488101"
   },
   {
    "id": "R6:mountain:rim:85deg:0.5",
@@ -31414,29 +31424,29 @@
    "stack": "mountain",
    "speed": 0.5,
    "pass": false,
-   "reason": "eye within 0.4 m of the wall from 5.603 m down (walk t=4.183s, fade 0); worst 0.37 m at 5.603 m down",
+   "reason": "eye within 0.4 m of the wall from 5.444 m down (walk t=3.967s, fade 0); worst 0.37 m at 5.715 m down",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.369,
-   "eyeMinVisible": 0.369,
+   "eyeMin": 0.371,
+   "eyeMinVisible": 0.371,
    "eyeBands": [
-    0.369,
-    1.716,
-    2.179
+    0.371,
+    1.717,
+    2.225
    ],
    "breach": {
     "phase": "walk",
-    "t": 4.183,
+    "t": 3.967,
     "fade": 0,
-    "depth": 5.603
+    "depth": 5.444
    },
    "worstAt": {
     "phase": "walk",
-    "t": 4.183,
+    "t": 3.983,
     "fade": 0,
-    "depth": 5.603
+    "depth": 5.715
    },
-   "trace": "9bc1d47cf785cc71e7deb230bc6c0318"
+   "trace": "1a176a81415c009f7ddb0717a19fbf64"
   },
   {
    "id": "R6:mountain:rim:85deg:1.5",
@@ -31452,7 +31462,7 @@
    "eyeBands": [
     0.654,
     1.735,
-    2.398
+    2.431
    ],
    "breach": null,
    "worstAt": {
@@ -31461,7 +31471,7 @@
     "fade": 0,
     "depth": 1.365
    },
-   "trace": "d3e475d8c43faf244a58926cbfe1e829"
+   "trace": "2d4e43741a989919f268907aac42b412"
   },
   {
    "id": "R6:mountain:rim:85deg:3.4",
@@ -31476,8 +31486,8 @@
    "eyeMinVisible": 1.483,
    "eyeBands": [
     1.483,
-    4.75,
-    5.954
+    4.736,
+    5.96
    ],
    "breach": null,
    "worstAt": {
@@ -31486,7 +31496,7 @@
     "fade": 0,
     "depth": 1.288
    },
-   "trace": "c96e83517f54b2eb3a1a5319ab216160"
+   "trace": "a103aeabbd1d47594b871323d9baaa8a"
   },
   {
    "id": "R6:mountain:rim:85deg:6.2",
@@ -31501,8 +31511,8 @@
    "eyeMinVisible": 2.547,
    "eyeBands": [
     2.547,
-    10.364,
-    13.969
+    10.363,
+    13.959
    ],
    "breach": null,
    "worstAt": {
@@ -31511,7 +31521,7 @@
     "fade": 0,
     "depth": 0.896
    },
-   "trace": "ba7715df4713c19ecc8122c9e9678434"
+   "trace": "31faa2032d770afed4dbcd2a38993364"
   },
   {
    "id": "R6:mountain:rim:90deg:0.5",
@@ -31522,21 +31532,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.455,
-   "eyeMinVisible": 0.455,
+   "eyeMin": 0.457,
+   "eyeMinVisible": 0.457,
    "eyeBands": [
-    0.455,
-    1.423,
-    3.027
+    0.457,
+    1.418,
+    2.928
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.917,
+    "t": 3.817,
     "fade": 0,
-    "depth": 1.556
+    "depth": 1.573
    },
-   "trace": "a4b33d7b0ea60fb92a6a5efbff816af5"
+   "trace": "6d20fec7a07d32db8860875d4b270337"
   },
   {
    "id": "R6:mountain:rim:90deg:1.5",
@@ -31547,21 +31557,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.666,
-   "eyeMinVisible": 0.666,
+   "eyeMin": 0.703,
+   "eyeMinVisible": 0.703,
    "eyeBands": [
-    0.666,
-    1.436,
-    3.135
+    0.703,
+    1.435,
+    3.014
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.517,
     "fade": 0,
-    "depth": 1.532
+    "depth": 1.485
    },
-   "trace": "85de34c6bdf27b240d68e3fa3b293819"
+   "trace": "4aa587949fad08ac038a9e6bf4101629"
   },
   {
    "id": "R6:mountain:rim:90deg:3.4",
@@ -31572,21 +31582,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.452,
-   "eyeMinVisible": 1.452,
+   "eyeMin": 1.406,
+   "eyeMinVisible": 1.406,
    "eyeBands": [
-    1.452,
-    2.962,
-    4.572
+    1.406,
+    2.889,
+    4.482
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.883,
+    "t": 0.9,
     "fade": 0,
-    "depth": 1.414
+    "depth": 1.443
    },
-   "trace": "c979822631f5267dc3a64311bd010651"
+   "trace": "5bb20861a25867f5839851a37e71f347"
   },
   {
    "id": "R6:mountain:rim:90deg:6.2",
@@ -31601,17 +31611,17 @@
    "eyeMinVisible": 2.523,
    "eyeBands": [
     2.523,
-    9.558,
-    12.056
+    9.556,
+    12.05
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.6,
     "fade": 0,
-    "depth": 0.971
+    "depth": 0.962
    },
-   "trace": "fed955a25ad4c20a4ff2886b655023b7"
+   "trace": "c64a191322ea053500a3f5351cae0eea"
   },
   {
    "id": "R6:mountain:rim:95deg:0.5",
@@ -31619,29 +31629,29 @@
    "stack": "mountain",
    "speed": 0.5,
    "pass": false,
-   "reason": "eye within 0.4 m of the wall from 5.664 m down (walk t=3.983s, fade 0); worst 0.37 m at 5.664 m down",
+   "reason": "eye within 0.4 m of the wall from 5.693 m down (walk t=3.983s, fade 0); worst 0.37 m at 5.693 m down",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.37,
-   "eyeMinVisible": 0.37,
+   "eyeMin": 0.366,
+   "eyeMinVisible": 0.366,
    "eyeBands": [
-    0.37,
-    1.516,
-    2.587
+    0.366,
+    1.519,
+    2.59
    ],
    "breach": {
     "phase": "walk",
     "t": 3.983,
     "fade": 0,
-    "depth": 5.664
+    "depth": 5.693
    },
    "worstAt": {
     "phase": "walk",
     "t": 3.983,
     "fade": 0,
-    "depth": 5.664
+    "depth": 5.693
    },
-   "trace": "361b80ef9672d0fa4aed3dcf56f35a68"
+   "trace": "bed4612e58ccb2a0afc668cefac05314"
   },
   {
    "id": "R6:mountain:rim:95deg:1.5",
@@ -31652,21 +31662,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.749,
-   "eyeMinVisible": 0.749,
+   "eyeMin": 0.642,
+   "eyeMinVisible": 0.642,
    "eyeBands": [
-    0.749,
-    1.494,
-    2.599
+    0.642,
+    1.478,
+    2.691
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.483,
+    "t": 1.5,
     "fade": 0,
-    "depth": 1.592
+    "depth": 1.608
    },
-   "trace": "ef298322ee28023c206fb00122f9e39b"
+   "trace": "47b64734fc9bf50313929d175c153285"
   },
   {
    "id": "R6:mountain:rim:95deg:3.4",
@@ -31689,9 +31699,9 @@
     "phase": "walk",
     "t": 0.883,
     "fade": 0,
-    "depth": 1.522
+    "depth": 1.523
    },
-   "trace": "09adcf757d409230dcd716ca66055d0a"
+   "trace": "c02be3db476f35f4ecb1519019d2ad4f"
   },
   {
    "id": "R6:mountain:rim:95deg:6.2",
@@ -31706,17 +31716,17 @@
    "eyeMinVisible": 2.546,
    "eyeBands": [
     2.546,
-    9.98,
-    12.312
+    9.981,
+    12.313
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.617,
     "fade": 0,
-    "depth": 1.13
+    "depth": 1.132
    },
-   "trace": "306ec3ea2b84262ff540862a6134dcf4"
+   "trace": "58d8ed6a5af27b43577a86a7470adacf"
   },
   {
    "id": "R6:mountain:rim:100deg:0.5",
@@ -32527,21 +32537,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.415,
-   "eyeMinVisible": 0.415,
+   "eyeMin": 0.418,
+   "eyeMinVisible": 0.418,
    "eyeBands": [
-    0.415,
-    1.564,
-    1.488
+    0.418,
+    1.582,
+    1.495
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.717,
+    "t": 3.517,
     "fade": 0,
-    "depth": 1.739
+    "depth": 1.737
    },
-   "trace": "0f745f24ce5abbd67aeeb5114c3b6cf1"
+   "trace": "63efd76e74608b7879faee37785cc95c"
   },
   {
    "id": "R6:mountain:rim:140deg:1.5",
@@ -32552,21 +32562,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.805,
-   "eyeMinVisible": 0.805,
+   "eyeMin": 0.835,
+   "eyeMinVisible": 0.835,
    "eyeBands": [
-    0.805,
-    1.464,
-    1.335
+    0.835,
+    1.468,
+    1.322
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.433,
     "fade": 0,
-    "depth": 1.708
+    "depth": 1.726
    },
-   "trace": "66852bbc2a74e9a9e8b7f0fafabc2033"
+   "trace": "205dd170a3a2f4c138cffa99c7a338df"
   },
   {
    "id": "R6:mountain:rim:140deg:3.4",
@@ -32589,9 +32599,9 @@
     "phase": "walk",
     "t": 0.833,
     "fade": 0,
-    "depth": 1.419
+    "depth": 1.416
    },
-   "trace": "ff5f8d3d620bfe4c6ffda441b9510911"
+   "trace": "96821bbf9f84ef9427fc028a404eb2f4"
   },
   {
    "id": "R6:mountain:rim:140deg:6.2",
@@ -32602,21 +32612,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.606,
-   "eyeMinVisible": 2.606,
+   "eyeMin": 2.532,
+   "eyeMinVisible": 2.532,
    "eyeBands": [
-    2.606,
-    10.888,
-    13.036
+    2.532,
+    10.702,
+    12.893
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.617,
+    "t": 0.633,
     "fade": 0,
-    "depth": 1.428
+    "depth": 1.344
    },
-   "trace": "2d5e3715e6e69809b66cfb8ba1f1db42"
+   "trace": "fe927fe167b2a258eee59810f45cfd57"
   },
   {
    "id": "R6:mountain:rim:145deg:0.5",
@@ -34856,17 +34866,17 @@
    "eyeMinVisible": 0.842,
    "eyeBands": [
     0.842,
-    1.779,
-    1.241
+    1.783,
+    1.239
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.35,
     "fade": 0,
-    "depth": 1.255
+    "depth": 1.254
    },
-   "trace": "955f803dafe8e0c5c781ea3d1603ee34"
+   "trace": "f7b4d5c3d772a48e8608408855b19d02"
   },
   {
    "id": "R6:mountain:rim:255deg:3.4",
@@ -34956,17 +34966,17 @@
    "eyeMinVisible": 0.702,
    "eyeBands": [
     0.702,
-    1.769,
-    1.265
+    1.766,
+    1.263
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.483,
     "fade": 0,
-    "depth": 1.659
+    "depth": 1.649
    },
-   "trace": "37f397cbf949a9f43c4d27c4c716fd43"
+   "trace": "30ca36f2dd86e60d8d4291c17a2d9e92"
   },
   {
    "id": "R6:mountain:rim:260deg:3.4",
@@ -34977,21 +34987,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.255,
-   "eyeMinVisible": 1.255,
+   "eyeMin": 1.249,
+   "eyeMinVisible": 1.249,
    "eyeBands": [
-    1.499,
-    2.703,
-    1.255
+    1.484,
+    2.707,
+    1.249
    ],
    "breach": null,
    "worstAt": {
     "phase": "fall",
     "t": 1.933,
     "fade": 0,
-    "depth": 88.804
+    "depth": 88.758
    },
-   "trace": "dbb5e65c3eb4c39feaf8862f53ee7167"
+   "trace": "93768a203dccbf3350135d779e9c72b4"
   },
   {
    "id": "R6:mountain:rim:260deg:6.2",
@@ -35006,17 +35016,17 @@
    "eyeMinVisible": 2.546,
    "eyeBands": [
     2.546,
-    7.293,
-    5.573
+    7.283,
+    5.547
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.617,
     "fade": 0,
-    "depth": 1.337
+    "depth": 1.284
    },
-   "trace": "edee657d91fbc3ae938a554e090f5063"
+   "trace": "7b323f74e119c771b90c26a210b135ec"
   },
   {
    "id": "R6:mountain:rim:265deg:0.5",
@@ -35027,21 +35037,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.426,
-   "eyeMinVisible": 0.426,
+   "eyeMin": 0.446,
+   "eyeMinVisible": 0.446,
    "eyeBands": [
-    0.426,
-    1.906,
-    1.759
+    0.446,
+    1.903,
+    1.77
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.667,
+    "t": 3.817,
     "fade": 0,
-    "depth": 1.852
+    "depth": 1.772
    },
-   "trace": "c6a194956290173b68d6238b250ddce9"
+   "trace": "1724845def4ed1abd43bacc270d3327b"
   },
   {
    "id": "R6:mountain:rim:265deg:1.5",
@@ -35081,17 +35091,17 @@
    "eyeMinVisible": 1.48,
    "eyeBands": [
     1.48,
-    3.111,
-    1.743
+    3.112,
+    1.741
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.883,
     "fade": 0,
-    "depth": 1.752
+    "depth": 1.725
    },
-   "trace": "3c70b1c5ffec00474e70f5997d83c454"
+   "trace": "3e96df7aa673e09360cc9a5b2912dfe7"
   },
   {
    "id": "R6:mountain:rim:265deg:6.2",
@@ -35106,17 +35116,17 @@
    "eyeMinVisible": 2.545,
    "eyeBands": [
     2.545,
-    8.181,
-    6.539
+    8.171,
+    6.519
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.617,
     "fade": 0,
-    "depth": 1.361
+    "depth": 1.32
    },
-   "trace": "101492dde8200886dcd5ed1467de33ab"
+   "trace": "2f17f10286431a2348ef5688dfc3f5eb"
   },
   {
    "id": "R6:mountain:rim:270deg:0.5",
@@ -35127,11 +35137,11 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.461,
-   "eyeMinVisible": 0.461,
+   "eyeMin": 0.459,
+   "eyeMinVisible": 0.459,
    "eyeBands": [
-    0.461,
-    1.388,
+    0.459,
+    1.389,
     1.557
    ],
    "breach": null,
@@ -35139,9 +35149,9 @@
     "phase": "walk",
     "t": 3.483,
     "fade": 0,
-    "depth": 1.683
+    "depth": 1.707
    },
-   "trace": "97b69dde6a3f4bfdcdb2572dcbec4758"
+   "trace": "200f4ebe9228675befd2bdbad26c9d10"
   },
   {
    "id": "R6:mountain:rim:270deg:1.5",
@@ -35206,17 +35216,17 @@
    "eyeMinVisible": 2.466,
    "eyeBands": [
     2.466,
-    9.107,
-    7.954
+    9.106,
+    7.953
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.583,
     "fade": 0,
-    "depth": 1.275
+    "depth": 1.297
    },
-   "trace": "d1365bfb0e774cb2284fff3830d7d7e5"
+   "trace": "be385809e476d686a54fe085a0395ea1"
   },
   {
    "id": "R6:mountain:rim:275deg:0.5",
@@ -35224,7 +35234,7 @@
    "stack": "mountain",
    "speed": 0.5,
    "pass": false,
-   "reason": "eye within 0.4 m of the wall from 5.249 m down (walk t=3.9s, fade 0); worst 0.37 m at 5.785 m down",
+   "reason": "eye within 0.4 m of the wall from 5.249 m down (walk t=3.9s, fade 0); worst 0.37 m at 5.786 m down",
    "landedAt": null,
    "landedBy": null,
    "eyeMin": 0.367,
@@ -35244,9 +35254,9 @@
     "phase": "walk",
     "t": 3.933,
     "fade": 0,
-    "depth": 5.785
+    "depth": 5.786
    },
-   "trace": "35a6028582d758c0a572a48b84dcd045"
+   "trace": "f6074f66007896b1387a3af69ef20d64"
   },
   {
    "id": "R6:mountain:rim:275deg:1.5",
@@ -35287,7 +35297,7 @@
    "eyeBands": [
     1.521,
     3.068,
-    1.669
+    1.668
    ],
    "breach": null,
    "worstAt": {
@@ -35296,7 +35306,7 @@
     "fade": 0,
     "depth": 1.203
    },
-   "trace": "dbfbb6ea16465cc990f86d36c6ab206f"
+   "trace": "a9643e61a2e4b026dd9424a5afbd0331"
   },
   {
    "id": "R6:mountain:rim:275deg:6.2",
@@ -35311,17 +35321,17 @@
    "eyeMinVisible": 2.49,
    "eyeBands": [
     2.49,
-    9.163,
-    6.385
+    9.159,
+    6.382
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.6,
     "fade": 0,
-    "depth": 1.227
+    "depth": 1.226
    },
-   "trace": "d6667f3487ff312a4fdf7e6b3b12dcc1"
+   "trace": "b7d57b2f7b40c75358adf0d289613d7f"
   },
   {
    "id": "R6:mountain:rim:280deg:0.5",
@@ -35329,29 +35339,29 @@
    "stack": "mountain",
    "speed": 0.5,
    "pass": false,
-   "reason": "eye within 0.4 m of the wall from 3.835 m down (walk t=4s, fade 0); worst 0.37 m at 5.783 m down",
+   "reason": "eye within 0.4 m of the wall from 4.003 m down (walk t=4.033s, fade 0); worst 0.38 m at 5.666 m down",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.37,
-   "eyeMinVisible": 0.37,
+   "eyeMin": 0.376,
+   "eyeMinVisible": 0.376,
    "eyeBands": [
-    0.37,
+    0.376,
     1.591,
-    1.881
+    1.872
    ],
    "breach": {
     "phase": "walk",
-    "t": 4,
+    "t": 4.033,
     "fade": 0,
-    "depth": 3.835
+    "depth": 4.003
    },
    "worstAt": {
     "phase": "walk",
-    "t": 4.133,
+    "t": 4.15,
     "fade": 0,
-    "depth": 5.783
+    "depth": 5.666
    },
-   "trace": "79aaf57f3bcb7cc76fa5f3a3f08ee16a"
+   "trace": "102ad061a1185c2687be701c15b16232"
   },
   {
    "id": "R6:mountain:rim:280deg:1.5",
@@ -35362,21 +35372,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.65,
-   "eyeMinVisible": 0.65,
+   "eyeMin": 0.722,
+   "eyeMinVisible": 0.722,
    "eyeBands": [
-    0.65,
-    1.586,
-    1.874
+    0.722,
+    1.591,
+    1.881
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.517,
+    "t": 1.5,
     "fade": 0,
-    "depth": 1.723
+    "depth": 1.725
    },
-   "trace": "b8f9281fc39c5a28f56405d77433df63"
+   "trace": "67368202dcfdc758d282bdf8cac6527c"
   },
   {
    "id": "R6:mountain:rim:280deg:3.4",
@@ -35966,8 +35976,8 @@
    "eyeMinVisible": 0.839,
    "eyeBands": [
     0.839,
-    1.637,
-    1.431
+    1.633,
+    1.428
    ],
    "breach": null,
    "worstAt": {
@@ -35976,7 +35986,7 @@
     "fade": 0,
     "depth": 1.122
    },
-   "trace": "0fcc5e22e268d295bf9b65bcf7dfc022"
+   "trace": "06c45f2bf9276b7781b65fc418ffb9e6"
   },
   {
    "id": "R6:mountain:rim:310deg:3.4",
@@ -35987,12 +35997,12 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.422,
-   "eyeMinVisible": 1.422,
+   "eyeMin": 1.42,
+   "eyeMinVisible": 1.42,
    "eyeBands": [
     1.496,
-    1.823,
-    1.422
+    1.82,
+    1.42
    ],
    "breach": null,
    "worstAt": {
@@ -36001,7 +36011,7 @@
     "fade": 0,
     "depth": 87.81
    },
-   "trace": "d56ce3a5b2aac5edc503c364312f6d73"
+   "trace": "ae066d224e86c5b4a94dc112b1b9e6b9"
   },
   {
    "id": "R6:mountain:rim:310deg:6.2",
@@ -36037,21 +36047,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.426,
-   "eyeMinVisible": 0.426,
+   "eyeMin": 0.424,
+   "eyeMinVisible": 0.424,
    "eyeBands": [
-    0.426,
-    1.519,
-    1.277
+    0.424,
+    1.52,
+    1.271
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.7,
+    "t": 3.633,
     "fade": 0,
-    "depth": 1.184
+    "depth": 1.243
    },
-   "trace": "455e4def8a4ac8494c541da0b9e55789"
+   "trace": "4ed8489bb5bb76ffdf29d877e9b188e6"
   },
   {
    "id": "R6:mountain:rim:315deg:1.5",
@@ -36062,21 +36072,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.75,
-   "eyeMinVisible": 0.75,
+   "eyeMin": 0.716,
+   "eyeMinVisible": 0.716,
    "eyeBands": [
-    0.75,
-    1.689,
-    1.28
+    0.716,
+    1.675,
+    1.271
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.5,
+    "t": 1.483,
     "fade": 0,
-    "depth": 1.22
+    "depth": 1.243
    },
-   "trace": "335008c05e2eee752de0fbdba80a3f35"
+   "trace": "93e9cc9236c0a49275bcf674ba6a074f"
   },
   {
    "id": "R6:mountain:rim:315deg:3.4",
@@ -36087,21 +36097,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.292,
-   "eyeMinVisible": 1.292,
+   "eyeMin": 1.307,
+   "eyeMinVisible": 1.307,
    "eyeBands": [
-    1.443,
-    2.352,
-    1.292
+    1.53,
+    2.335,
+    1.307
    ],
    "breach": null,
    "worstAt": {
     "phase": "fall",
-    "t": 1.9,
+    "t": 1.917,
     "fade": 0,
-    "depth": 87.098
+    "depth": 87.397
    },
-   "trace": "19272d6b78722cd89730d0b7e68ad62c"
+   "trace": "bef6ea535d0b8eccf04691bd162c8ee9"
   },
   {
    "id": "R6:mountain:rim:315deg:6.2",
@@ -36112,21 +36122,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.546,
-   "eyeMinVisible": 2.546,
+   "eyeMin": 2.498,
+   "eyeMinVisible": 2.498,
    "eyeBands": [
-    2.546,
-    6.974,
-    5.676
+    2.498,
+    6.981,
+    5.694
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.617,
+    "t": 0.6,
     "fade": 0,
-    "depth": 0.83
+    "depth": 0.756
    },
-   "trace": "ccfe9b5ad4334df45f006be26db2d499"
+   "trace": "407cfe9ff60e3b70368e6ebf5e129691"
   },
   {
    "id": "R6:mountain:rim:320deg:0.5",
@@ -36137,21 +36147,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.455,
-   "eyeMinVisible": 0.455,
+   "eyeMin": 0.443,
+   "eyeMinVisible": 0.443,
    "eyeBands": [
-    0.455,
-    2.247,
-    1.545
+    0.443,
+    2.258,
+    1.546
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.8,
+    "t": 3.617,
     "fade": 0,
-    "depth": 1.103
+    "depth": 1.145
    },
-   "trace": "ff9cb3c0685e6f9d89349dcbe357e374"
+   "trace": "1aa58a24959d9e011968f319ac781c00"
   },
   {
    "id": "R6:mountain:rim:320deg:1.5",
@@ -36162,21 +36172,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.663,
-   "eyeMinVisible": 0.663,
+   "eyeMin": 0.638,
+   "eyeMinVisible": 0.638,
    "eyeBands": [
-    0.663,
-    2.385,
-    1.568
+    0.638,
+    2.384,
+    1.57
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.5,
     "fade": 0,
-    "depth": 0.997
+    "depth": 1.122
    },
-   "trace": "477ed635b6f4205a99e586d291351d75"
+   "trace": "81412655581871900e39ec0ac9b94f73"
   },
   {
    "id": "R6:mountain:rim:320deg:3.4",
@@ -36192,16 +36202,16 @@
    "eyeBands": [
     1.446,
     3.433,
-    1.469
+    1.47
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.883,
     "fade": 0,
-    "depth": 0.982
+    "depth": 0.988
    },
-   "trace": "38f2a0eeac06b7c1d83694edf2093e38"
+   "trace": "8384c15b8c1487b7b29f3f4a9db231e5"
   },
   {
    "id": "R6:mountain:rim:320deg:6.2",
@@ -36212,21 +36222,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.549,
-   "eyeMinVisible": 2.549,
+   "eyeMin": 2.57,
+   "eyeMinVisible": 2.57,
    "eyeBands": [
-    2.549,
-    9.406,
-    6.764
+    2.57,
+    9.397,
+    6.752
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.617,
+    "t": 0.633,
     "fade": 0,
-    "depth": 0.587
+    "depth": 0.698
    },
-   "trace": "b49654da127ba06b8e591c5182e574a1"
+   "trace": "6b2f93b821698c5eb924cb62c8b1b9b7"
   },
   {
    "id": "R6:mountain:rim:325deg:0.5",
@@ -36237,21 +36247,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.419,
-   "eyeMinVisible": 0.419,
+   "eyeMin": 0.438,
+   "eyeMinVisible": 0.438,
    "eyeBands": [
-    0.419,
-    1.497,
-    1.568
+    0.438,
+    1.499,
+    1.57
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.567,
+    "t": 3.617,
     "fade": 0,
-    "depth": 1.197
+    "depth": 1.153
    },
-   "trace": "d94375d306942d88bfcb646fbdca1f3a"
+   "trace": "0e39d2e78733e3434b6a2f42ad7c6341"
   },
   {
    "id": "R6:mountain:rim:325deg:1.5",
@@ -36262,21 +36272,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.791,
-   "eyeMinVisible": 0.791,
+   "eyeMin": 0.647,
+   "eyeMinVisible": 0.647,
    "eyeBands": [
-    0.791,
-    1.613,
-    1.644
+    0.647,
+    1.588,
+    1.628
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.45,
+    "t": 1.483,
     "fade": 0,
     "depth": 1.061
    },
-   "trace": "090c313c1a1cc9c5fa4ad1c7632b64e8"
+   "trace": "cb89d06b9967e0decc509e7eaf76be66"
   },
   {
    "id": "R6:mountain:rim:325deg:3.4",
@@ -36287,21 +36297,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.529,
-   "eyeMinVisible": 1.529,
+   "eyeMin": 1.421,
+   "eyeMinVisible": 1.421,
    "eyeBands": [
-    1.529,
-    2.667,
-    1.842
+    1.421,
+    2.573,
+    1.848
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.817,
+    "t": 0.85,
     "fade": 0,
-    "depth": 0.778
+    "depth": 0.751
    },
-   "trace": "d363ad43cd60f1de15e0c606f486515c"
+   "trace": "1a08eb78b50a8a2ca0f4c27381209f27"
   },
   {
    "id": "R6:mountain:rim:325deg:6.2",
@@ -36312,10 +36322,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.507,
-   "eyeMinVisible": 2.507,
+   "eyeMin": 2.506,
+   "eyeMinVisible": 2.506,
    "eyeBands": [
-    2.507,
+    2.506,
     9.57,
     9.349
    ],
@@ -36324,9 +36334,9 @@
     "phase": "walk",
     "t": 0.633,
     "fade": 0,
-    "depth": 0.743
+    "depth": 0.745
    },
-   "trace": "85aeb473906724d617070d63e54c73bd"
+   "trace": "a34e4c3297b9b6f6a981ca9aaff86447"
   },
   {
    "id": "R6:mountain:rim:330deg:0.5",
@@ -36391,17 +36401,17 @@
    "eyeMinVisible": 1.498,
    "eyeBands": [
     1.498,
-    3.285,
-    2.645
+    3.266,
+    2.635
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.783,
     "fade": 0,
-    "depth": 0.693
+    "depth": 0.687
    },
-   "trace": "ef3440a16f360d7344cd4dc710e8f896"
+   "trace": "9bf52c638806daf99fa98b68172046f0"
   },
   {
    "id": "R6:mountain:rim:330deg:6.2",
@@ -36549,9 +36559,9 @@
     "phase": "walk",
     "t": 3.567,
     "fade": 0,
-    "depth": 1.17
+    "depth": 1.171
    },
-   "trace": "fe8e75cf38f6f847d616b780926e0d28"
+   "trace": "c72140b1bbe86317fa7d0598fbf36245"
   },
   {
    "id": "R6:mountain:rim:340deg:1.5",
@@ -36637,21 +36647,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.46,
-   "eyeMinVisible": 0.46,
+   "eyeMin": 0.431,
+   "eyeMinVisible": 0.431,
    "eyeBands": [
-    0.46,
-    1.33,
-    2.204
+    0.431,
+    1.319,
+    2.21
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.783,
+    "t": 3.617,
     "fade": 0,
-    "depth": 1.485
+    "depth": 1.391
    },
-   "trace": "1ad5a77bb5ebc9c4e76d9ea1aac84732"
+   "trace": "76cc2a1b1ee7c10b43f2f2ccf133ba26"
   },
   {
    "id": "R6:mountain:rim:345deg:1.5",
@@ -36687,21 +36697,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 1.502,
-   "eyeMinVisible": 1.502,
+   "eyeMin": 1.487,
+   "eyeMinVisible": 1.487,
    "eyeBands": [
-    1.502,
-    4.845,
-    8.729
+    1.487,
+    4.832,
+    8.716
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.867,
+    "t": 0.883,
     "fade": 0,
-    "depth": 1.331
+    "depth": 1.441
    },
-   "trace": "64d60f33d7f47f683e210d33fafb9de1"
+   "trace": "7da40500c3c3da05773744974c4aa357"
   },
   {
    "id": "R6:mountain:rim:345deg:6.2",
@@ -36716,17 +36726,17 @@
    "eyeMinVisible": 2.544,
    "eyeBands": [
     2.544,
-    9.682,
-    17.186
+    9.669,
+    17.168
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 0.617,
     "fade": 0,
-    "depth": 1.079
+    "depth": 1.036
    },
-   "trace": "bb7b165521f7a3972fbf9e2773320d3c"
+   "trace": "e2ede44ea8bdadc8faec399f4d35f474"
   },
   {
    "id": "R6:mountain:rim:350deg:0.5",
@@ -36737,21 +36747,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.42,
-   "eyeMinVisible": 0.42,
+   "eyeMin": 0.415,
+   "eyeMinVisible": 0.415,
    "eyeBands": [
-    0.42,
-    1.788,
-    2.454
+    0.415,
+    1.787,
+    2.453
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 3.517,
     "fade": 0,
-    "depth": 1.563
+    "depth": 1.549
    },
-   "trace": "8684e32c0e6f452f8db5940500d685fb"
+   "trace": "722b4344424e778530083309badbb2fd"
   },
   {
    "id": "R6:mountain:rim:350deg:1.5",
@@ -36766,17 +36776,17 @@
    "eyeMinVisible": 0.847,
    "eyeBands": [
     0.847,
-    2.773,
-    2.928
+    2.772,
+    2.924
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.383,
     "fade": 0,
-    "depth": 1.09
+    "depth": 1.105
    },
-   "trace": "6db87109b36952b732b8709afbb663ce"
+   "trace": "d23b92e1bfba1a581004e8811aab833c"
   },
   {
    "id": "R6:mountain:rim:350deg:3.4",
@@ -36812,21 +36822,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 2.544,
-   "eyeMinVisible": 2.544,
+   "eyeMin": 2.622,
+   "eyeMinVisible": 2.622,
    "eyeBands": [
-    2.544,
-    10.747,
-    18.345
+    2.622,
+    10.743,
+    18.343
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 0.6,
+    "t": 0.617,
     "fade": 0,
-    "depth": 1.014
+    "depth": 1.147
    },
-   "trace": "072ebf09850d091cb00d532bef8539e1"
+   "trace": "5acbeae6b786f49cdbb85173555a2ddb"
   },
   {
    "id": "R6:mountain:rim:355deg:0.5",
@@ -36937,21 +36947,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.452,
-   "eyeMinVisible": 0.452,
+   "eyeMin": 0.454,
+   "eyeMinVisible": 0.454,
    "eyeBands": [
-    0.452,
-    2.613,
-    1.692
+    0.454,
+    2.586,
+    1.703
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.35,
+    "t": 3.383,
     "fade": 0,
-    "depth": 1.735
+    "depth": 1.628
    },
-   "trace": "4919a95bcece7624b8495a7c7b8c2f65"
+   "trace": "b42860d4fd17a2e926cf8f4b3fff5ab5"
   },
   {
    "id": "R6:dome:oblique:2.5deg:55",
@@ -37034,7 +37044,7 @@
    "stack": "dome",
    "speed": 1.2,
    "pass": false,
-   "reason": "eye within 0.4 m of the wall from 8.347 m down (walk t=3.433s, fade 0); worst 0.37 m at 8.674 m down",
+   "reason": "eye within 0.4 m of the wall from 8.348 m down (walk t=3.433s, fade 0); worst 0.37 m at 8.674 m down",
    "landedAt": null,
    "landedBy": null,
    "eyeMin": 0.368,
@@ -37048,7 +37058,7 @@
     "phase": "walk",
     "t": 3.433,
     "fade": 0,
-    "depth": 8.347
+    "depth": 8.348
    },
    "worstAt": {
     "phase": "walk",
@@ -37056,7 +37066,7 @@
     "fade": 0,
     "depth": 8.674
    },
-   "trace": "a3b30cfba063ba2cc157cdf90951d532"
+   "trace": "8a376f395aadf620cfde1e59a94f8366"
   },
   {
    "id": "R6:dome:oblique:12.5deg:55",
@@ -37092,21 +37102,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.609,
-   "eyeMinVisible": 0.609,
+   "eyeMin": 0.597,
+   "eyeMinVisible": 0.597,
    "eyeBands": [
-    0.609,
-    1.341,
-    1.633
+    0.597,
+    1.342,
+    1.635
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.733,
     "fade": 0,
-    "depth": 1.938
+    "depth": 1.923
    },
-   "trace": "790b188fc75bd7c86503feab3b0f974f"
+   "trace": "27d036928691b54cc99f002a1abca67d"
   },
   {
    "id": "R6:dome:strafe:12.5deg:right",
@@ -37117,21 +37127,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.609,
-   "eyeMinVisible": 0.609,
+   "eyeMin": 0.597,
+   "eyeMinVisible": 0.597,
    "eyeBands": [
-    0.609,
+    0.597,
     1.482,
-    1.581
+    1.588
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.733,
     "fade": 0,
-    "depth": 1.938
+    "depth": 1.923
    },
-   "trace": "2cde0d2a00fba28f48a72617f4d59ea5"
+   "trace": "9dca7cd3066001b487774b7eebd842d6"
   },
   {
    "id": "R6:dome:oblique:22.5deg:-55",
@@ -37342,11 +37352,11 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.595,
-   "eyeMinVisible": 0.595,
+   "eyeMin": 0.596,
+   "eyeMinVisible": 0.596,
    "eyeBands": [
-    0.595,
-    2.674,
+    0.596,
+    2.675,
     1.603
    ],
    "breach": null,
@@ -37354,9 +37364,9 @@
     "phase": "walk",
     "t": 2.367,
     "fade": 0,
-    "depth": 0.862
+    "depth": 0.876
    },
-   "trace": "7af6867243bddc26547e92af5f55644a"
+   "trace": "2588f282e8d2b196e60717f9d04e4aeb"
   },
   {
    "id": "R6:dome:oblique:42.5deg:55",
@@ -38092,21 +38102,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.705,
-   "eyeMinVisible": 0.705,
+   "eyeMin": 0.64,
+   "eyeMinVisible": 0.64,
    "eyeBands": [
-    0.705,
-    1.419,
-    1.605
+    0.64,
+    1.56,
+    1.733
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.683,
+    "t": 1.783,
     "fade": 0,
-    "depth": 2.07
+    "depth": 2.107
    },
-   "trace": "8b3ffaab29eaa7471fecc807b060b338"
+   "trace": "bef32e849f6b3b70a18904eedd2bc376"
   },
   {
    "id": "R6:dome:strafe:112.5deg:right",
@@ -38117,21 +38127,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.705,
-   "eyeMinVisible": 0.705,
+   "eyeMin": 0.64,
+   "eyeMinVisible": 0.64,
    "eyeBands": [
-    0.705,
-    1.629,
-    1.315
+    0.64,
+    1.56,
+    1.733
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.683,
+    "t": 1.783,
     "fade": 0,
-    "depth": 2.07
+    "depth": 2.107
    },
-   "trace": "af98590c4ebea05eb6e21528311fce42"
+   "trace": "bef32e849f6b3b70a18904eedd2bc376"
   },
   {
    "id": "R6:dome:oblique:122.5deg:-55",
@@ -38171,7 +38181,7 @@
    "eyeMinVisible": 0.576,
    "eyeBands": [
     0.576,
-    1.399,
+    1.397,
     1.679
    ],
    "breach": null,
@@ -38179,9 +38189,9 @@
     "phase": "walk",
     "t": 2.55,
     "fade": 0,
-    "depth": 2.205
+    "depth": 2.237
    },
-   "trace": "9d6f81c69d02105f6558641f1f15bc57"
+   "trace": "5b71a9e566deadad8961e2b65a38b7b8"
   },
   {
    "id": "R6:dome:strafe:122.5deg:left",
@@ -38196,17 +38206,17 @@
    "eyeMinVisible": 0.742,
    "eyeBands": [
     0.742,
-    1.476,
-    1.487
+    1.475,
+    1.476
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.617,
     "fade": 0,
-    "depth": 1.938
+    "depth": 1.894
    },
-   "trace": "81b4213d9357f1aa313d38daf901efd5"
+   "trace": "00e5e82b30d547583cedf6b32d785ec2"
   },
   {
    "id": "R6:dome:strafe:122.5deg:right",
@@ -38221,7 +38231,7 @@
    "eyeMinVisible": 0.742,
    "eyeBands": [
     0.742,
-    1.306,
+    1.304,
     1.955
    ],
    "breach": null,
@@ -38229,9 +38239,9 @@
     "phase": "walk",
     "t": 1.617,
     "fade": 0,
-    "depth": 1.938
+    "depth": 1.894
    },
-   "trace": "f236779028db70bd7a3bace65d50ba5c"
+   "trace": "b423ec0c91b522ee80bf81604d841a87"
   },
   {
    "id": "R6:dome:oblique:132.5deg:-55",
@@ -38242,21 +38252,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.472,
-   "eyeMinVisible": 0.472,
+   "eyeMin": 0.531,
+   "eyeMinVisible": 0.531,
    "eyeBands": [
-    0.472,
-    1.4,
-    1.8
+    0.531,
+    1.365,
+    1.721
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.4,
+    "t": 3.017,
     "fade": 0,
-    "depth": 1.961
+    "depth": 1.89
    },
-   "trace": "850eade9ed83102b262c4aa3d462866e"
+   "trace": "82356539389577f0641bb3f84244b4a0"
   },
   {
    "id": "R6:dome:oblique:132.5deg:55",
@@ -38267,21 +38277,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.623,
-   "eyeMinVisible": 0.623,
+   "eyeMin": 0.622,
+   "eyeMinVisible": 0.622,
    "eyeBands": [
-    0.623,
-    1.504,
-    1.37
+    0.622,
+    1.501,
+    1.369
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 2.183,
     "fade": 0,
-    "depth": 1.654
+    "depth": 1.623
    },
-   "trace": "a49c700668ebf58a567b54854c7aa175"
+   "trace": "a503dd4e55a3a2d01137ef08bbe27ccb"
   },
   {
    "id": "R6:dome:strafe:132.5deg:left",
@@ -38404,9 +38414,9 @@
     "phase": "walk",
     "t": 1.683,
     "fade": 0,
-    "depth": 1.424
+    "depth": 1.423
    },
-   "trace": "3757fe650e7874125cb75bcde623ed49"
+   "trace": "a2b8dd7c20e4fa136d48174d19c49ee0"
   },
   {
    "id": "R6:dome:strafe:142.5deg:right",
@@ -38429,9 +38439,9 @@
     "phase": "walk",
     "t": 1.683,
     "fade": 0,
-    "depth": 1.424
+    "depth": 1.423
    },
-   "trace": "fff00f67cd254aca58fa5694509b58c7"
+   "trace": "11d31809522ca83bc35c6ef93183668a"
   },
   {
    "id": "R6:dome:oblique:152.5deg:-55",
@@ -38467,21 +38477,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.536,
-   "eyeMinVisible": 0.536,
+   "eyeMin": 0.537,
+   "eyeMinVisible": 0.537,
    "eyeBands": [
-    0.536,
-    1.586,
-    3.097
+    0.537,
+    1.587,
+    3.115
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 3.017,
     "fade": 0,
-    "depth": 1.522
+    "depth": 1.517
    },
-   "trace": "e69c06d00d9442d0981a51b4b91b1a6e"
+   "trace": "590dc3a3df03c9a8f536575a70e1a73f"
   },
   {
    "id": "R6:dome:strafe:152.5deg:left",
@@ -38506,7 +38516,7 @@
     "fade": 0,
     "depth": 1.268
    },
-   "trace": "f1f16eee1bcc912c89365b5a829fcf80"
+   "trace": "37de2bc3b67de41a5edfcbe85054f750"
   },
   {
    "id": "R6:dome:strafe:152.5deg:right",
@@ -39066,9 +39076,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    -47.589,
-    -6.26,
-    -33.932
+    -47.588,
+    -5.833,
+    -33.912
    ],
    "landedBy": "cave hood",
    "eyeMin": 0.532,
@@ -39095,9 +39105,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    -49.529,
-    -6.563,
-    -31.553
+    -49.684,
+    -7.533,
+    -31.614
    ],
    "landedBy": "cave hood",
    "eyeMin": 0.67,
@@ -39114,7 +39124,7 @@
     "fade": 0,
     "depth": 1.329
    },
-   "trace": "bb3bbfa532603598000a3d388e17c8bc"
+   "trace": "4294e0bac3cd39f63ce2f778ee389ad1"
   },
   {
    "id": "R6:dome:strafe:212.5deg:right",
@@ -39124,9 +39134,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    -49.529,
-    -6.563,
-    -31.553
+    -49.684,
+    -7.533,
+    -31.614
    ],
    "landedBy": "cave hood",
    "eyeMin": 0.67,
@@ -39143,7 +39153,7 @@
     "fade": 0,
     "depth": 1.329
    },
-   "trace": "bb3bbfa532603598000a3d388e17c8bc"
+   "trace": "4294e0bac3cd39f63ce2f778ee389ad1"
   },
   {
    "id": "R6:dome:oblique:222.5deg:-55",
@@ -39153,9 +39163,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    -45.243,
-    -8.248,
-    -36.836
+    -45.067,
+    -5.794,
+    -36.875
    ],
    "landedBy": "cave hood",
    "eyeMin": 0.49,
@@ -39172,7 +39182,7 @@
     "fade": 0,
     "depth": 1.245
    },
-   "trace": "f8ab388fb5d6708f58786ca78faaad14"
+   "trace": "4f4cf0e9ae78ff24586c669f8fce6dee"
   },
   {
    "id": "R6:dome:oblique:222.5deg:55",
@@ -39211,9 +39221,9 @@
    "pass": true,
    "reason": "caught by ledge",
    "landedAt": [
-    -43.303,
+    -43.3,
     -10.382,
-    -39.6
+    -39.596
    ],
    "landedBy": "ledge",
    "eyeMin": 0.737,
@@ -39228,9 +39238,9 @@
     "phase": "walk",
     "t": 1.6,
     "fade": 0,
-    "depth": 1.116
+    "depth": 1.038
    },
-   "trace": "a03d298de55be92fd22a042f78869c55"
+   "trace": "3e7dd29eb861c56f3b5d1708608b7dc6"
   },
   {
    "id": "R6:dome:strafe:222.5deg:right",
@@ -39240,9 +39250,9 @@
    "pass": true,
    "reason": "caught by ledge",
    "landedAt": [
-    -43.195,
+    -43.192,
     -10.374,
-    -39.717
+    -39.714
    ],
    "landedBy": "ledge",
    "eyeMin": 0.737,
@@ -39257,9 +39267,9 @@
     "phase": "walk",
     "t": 1.6,
     "fade": 0,
-    "depth": 1.116
+    "depth": 1.038
    },
-   "trace": "a03d298de55be92fd22a042f78869c55"
+   "trace": "3e7dd29eb861c56f3b5d1708608b7dc6"
   },
   {
    "id": "R6:dome:oblique:232.5deg:-55",
@@ -39267,28 +39277,24 @@
    "stack": "dome",
    "speed": 1.2,
    "pass": true,
-   "reason": "caught by ledge",
-   "landedAt": [
-    -37.642,
-    -9.835,
-    -44.222
-   ],
-   "landedBy": "ledge",
-   "eyeMin": 0.491,
-   "eyeMinVisible": 0.491,
+   "reason": "fell",
+   "landedAt": null,
+   "landedBy": null,
+   "eyeMin": 0.46,
+   "eyeMinVisible": 0.46,
    "eyeBands": [
-    0.491,
-    null,
-    null
+    0.46,
+    1.498,
+    1.824
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.5,
+    "t": 2.7,
     "fade": 0,
-    "depth": 1.411
+    "depth": 1.341
    },
-   "trace": "13d845d91a5099a46f063c019ddd0b1a"
+   "trace": "9be3c891a6c56cea38f7f292bd989b8c"
   },
   {
    "id": "R6:dome:oblique:232.5deg:55",
@@ -39298,26 +39304,26 @@
    "pass": true,
    "reason": "caught by ledge",
    "landedAt": [
-    -32.696,
-    -9.027,
-    -48.234
+    -32.912,
+    -9.055,
+    -48.13
    ],
    "landedBy": "ledge",
-   "eyeMin": 0.452,
-   "eyeMinVisible": 0.452,
+   "eyeMin": 0.489,
+   "eyeMinVisible": 0.489,
    "eyeBands": [
-    0.452,
+    0.489,
     null,
     null
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.05,
+    "t": 2.8,
     "fade": 0,
-    "depth": 1.503
+    "depth": 1.458
    },
-   "trace": "1dd8065ac61e0214ca4668ca3eaa7f09"
+   "trace": "222ea010c20795889ea8c492c8c7f912"
   },
   {
    "id": "R6:dome:strafe:232.5deg:left",
@@ -39327,26 +39333,26 @@
    "pass": true,
    "reason": "caught by ledge",
    "landedAt": [
-    -35.653,
-    -9.492,
-    -46.455
+    -35.627,
+    -9.491,
+    -46.43
    ],
    "landedBy": "ledge",
-   "eyeMin": 0.673,
-   "eyeMinVisible": 0.673,
+   "eyeMin": 0.632,
+   "eyeMinVisible": 0.632,
    "eyeBands": [
-    0.673,
+    0.632,
     null,
     null
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.7,
+    "t": 1.833,
     "fade": 0,
-    "depth": 1.324
+    "depth": 1.346
    },
-   "trace": "d8a45283d97d163009c6e8ad52a31078"
+   "trace": "475c46f619383cf9f08a20d81d123614"
   },
   {
    "id": "R6:dome:strafe:232.5deg:right",
@@ -39356,26 +39362,26 @@
    "pass": true,
    "reason": "caught by ledge",
    "landedAt": [
-    -35.653,
-    -9.492,
-    -46.455
+    -35.627,
+    -9.491,
+    -46.43
    ],
    "landedBy": "ledge",
-   "eyeMin": 0.673,
-   "eyeMinVisible": 0.673,
+   "eyeMin": 0.632,
+   "eyeMinVisible": 0.632,
    "eyeBands": [
-    0.673,
+    0.632,
     null,
     null
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.7,
+    "t": 1.833,
     "fade": 0,
-    "depth": 1.324
+    "depth": 1.346
    },
-   "trace": "d8a45283d97d163009c6e8ad52a31078"
+   "trace": "475c46f619383cf9f08a20d81d123614"
   },
   {
    "id": "R6:dome:oblique:242.5deg:-55",
@@ -39789,24 +39795,24 @@
    "landedAt": [
     2.546,
     -6.11,
-    -58.644
+    -58.659
    ],
    "landedBy": "ledge",
-   "eyeMin": 0.737,
-   "eyeMinVisible": 0.737,
+   "eyeMin": 0.748,
+   "eyeMinVisible": 0.748,
    "eyeBands": [
-    0.737,
+    0.748,
     null,
     null
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.6,
+    "t": 1.617,
     "fade": 0,
-    "depth": 1.452
+    "depth": 1.501
    },
-   "trace": "1d1ad548fc9d5010edeaa77c4f871281"
+   "trace": "c67523a5521c0c8a799d1ead9a68050c"
   },
   {
    "id": "R6:dome:strafe:272.5deg:right",
@@ -39818,24 +39824,24 @@
    "landedAt": [
     2.546,
     -6.11,
-    -58.644
+    -58.659
    ],
    "landedBy": "ledge",
-   "eyeMin": 0.737,
-   "eyeMinVisible": 0.737,
+   "eyeMin": 0.748,
+   "eyeMinVisible": 0.748,
    "eyeBands": [
-    0.737,
+    0.748,
     null,
     null
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.6,
+    "t": 1.617,
     "fade": 0,
-    "depth": 1.452
+    "depth": 1.501
    },
-   "trace": "1d1ad548fc9d5010edeaa77c4f871281"
+   "trace": "c67523a5521c0c8a799d1ead9a68050c"
   },
   {
    "id": "R6:dome:oblique:282.5deg:-55",
@@ -40077,25 +40083,30 @@
    "group": "R6",
    "stack": "dome",
    "speed": 1.2,
-   "pass": true,
-   "reason": "fell",
+   "pass": false,
+   "reason": "eye within 0.4 m of the wall from 7.521 m down (walk t=3.15s, fade 0); worst 0.38 m at 7.521 m down",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.45,
-   "eyeMinVisible": 0.45,
+   "eyeMin": 0.379,
+   "eyeMinVisible": 0.379,
    "eyeBands": [
-    0.45,
-    1.894,
-    1.613
+    0.379,
+    1.867,
+    1.567
    ],
-   "breach": null,
+   "breach": {
+    "phase": "walk",
+    "t": 3.15,
+    "fade": 0,
+    "depth": 7.521
+   },
    "worstAt": {
     "phase": "walk",
-    "t": 2.933,
+    "t": 3.15,
     "fade": 0,
-    "depth": 7.951
+    "depth": 7.521
    },
-   "trace": "000458ab33eb74eaf289a7186257a4fa"
+   "trace": "a3cb536a09c1fd1e0ec8e0fe1298611c"
   },
   {
    "id": "R6:dome:strafe:302.5deg:left",
@@ -40111,16 +40122,16 @@
    "eyeBands": [
     0.726,
     2.266,
-    1.356
+    1.357
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.683,
     "fade": 0,
-    "depth": 1
+    "depth": 0.969
    },
-   "trace": "bff66300686995799c0e340120b28149"
+   "trace": "35e1a7c45fd843b829d3909b52d4748e"
   },
   {
    "id": "R6:dome:strafe:302.5deg:right",
@@ -40135,17 +40146,17 @@
    "eyeMinVisible": 0.726,
    "eyeBands": [
     0.726,
-    2.281,
-    1.593
+    2.283,
+    1.594
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.683,
     "fade": 0,
-    "depth": 1
+    "depth": 0.969
    },
-   "trace": "29d4e9c259d3adae0c1411356ad54047"
+   "trace": "11533911163a7e4864aec4c29c79a8a6"
   },
   {
    "id": "R6:dome:oblique:312.5deg:-55",
@@ -40595,7 +40606,7 @@
     "fade": 0,
     "depth": 1.554
    },
-   "trace": "4069397806fb2102c2982b6d5f4e22fa"
+   "trace": "ee6e2de55aaed741fe7f5eca33c0c2ae"
   },
   {
    "id": "R6:dome:strafe:352.5deg:left",
@@ -41081,10 +41092,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.477,
-   "eyeMinVisible": 0.477,
+   "eyeMin": 0.478,
+   "eyeMinVisible": 0.478,
    "eyeBands": [
-    0.477,
+    0.478,
     1.786,
     2.295
    ],
@@ -41093,9 +41104,9 @@
     "phase": "walk",
     "t": 2.35,
     "fade": 0,
-    "depth": 1.666
+    "depth": 1.667
    },
-   "trace": "c43da2730dab99b647e07d52f2e9cbeb"
+   "trace": "2cfdcebb3654c6ba9d427cfef9bdb37e"
   },
   {
    "id": "R6:dome:strafe:355deg:left",
@@ -41156,10 +41167,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.48,
-   "eyeMinVisible": 0.48,
+   "eyeMin": 0.481,
+   "eyeMinVisible": 0.481,
    "eyeBands": [
-    0.48,
+    0.481,
     1.384,
     1.631
    ],
@@ -41170,7 +41181,7 @@
     "fade": 0,
     "depth": 1.701
    },
-   "trace": "21432f99f038198e766832d21278e86e"
+   "trace": "0cf211bd3a4aaa5056fb0bd7260a4365"
   },
   {
    "id": "R6:dome:oblique:357.5deg:55",
@@ -41181,21 +41192,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.509,
-   "eyeMinVisible": 0.509,
+   "eyeMin": 0.529,
+   "eyeMinVisible": 0.529,
    "eyeBands": [
-    0.509,
-    1.964,
-    1.402
+    0.529,
+    1.935,
+    1.392
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.3,
+    "t": 2.35,
     "fade": 0,
-    "depth": 1.74
+    "depth": 1.754
    },
-   "trace": "f80b3eaaaa9e88369807255e45a85684"
+   "trace": "2cc8dcd7c7aabe6cfd2759c18894ac45"
   },
   {
    "id": "R6:dome:strafe:357.5deg:left",
@@ -41220,7 +41231,7 @@
     "fade": 0,
     "depth": 1.719
    },
-   "trace": "929e1d3641acd19ac1e4617458329e03"
+   "trace": "14cd6d56c566475ac7309c2d630044dd"
   },
   {
    "id": "R6:dome:strafe:357.5deg:right",
@@ -41245,7 +41256,7 @@
     "fade": 0,
     "depth": 1.719
    },
-   "trace": "9abbf5af4292d87dc4450c2a673cbc49"
+   "trace": "bc6483c00ca48b2a3a267fca2ffb553c"
   },
   {
    "id": "R6:rocks:oblique:2.5deg:-55",
@@ -49918,21 +49929,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.454,
-   "eyeMinVisible": 0.454,
+   "eyeMin": 0.487,
+   "eyeMinVisible": 0.487,
    "eyeBands": [
-    0.454,
-    2.372,
-    1.493
+    0.487,
+    2.353,
+    1.481
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.967,
+    "t": 3,
     "fade": 0,
-    "depth": 0.94
+    "depth": 0.974
    },
-   "trace": "6bb05029fed38385554be1f53374bb67"
+   "trace": "a360cff7015f6e4a28bb9a0ed7a2d100"
   },
   {
    "id": "R6:tower:oblique:22.5deg:55",
@@ -50714,54 +50725,48 @@
    "group": "R6",
    "stack": "tower",
    "speed": 1.2,
-   "pass": true,
-   "reason": "fell",
-   "landedAt": null,
-   "landedBy": null,
-   "eyeMin": 0.512,
-   "eyeMinVisible": 0.512,
+   "pass": false,
+   "reason": "caught by cave hood",
+   "landedAt": [
+    87.553,
+    6.517,
+    -288.035
+   ],
+   "landedBy": "cave hood",
+   "eyeMin": null,
+   "eyeMinVisible": null,
    "eyeBands": [
-    0.512,
-    2.121,
-    1.349
+    null,
+    null,
+    null
    ],
    "breach": null,
-   "worstAt": {
-    "phase": "walk",
-    "t": 5.617,
-    "fade": 0,
-    "depth": 1.289
-   },
-   "trace": "13a8b4d3963604a27e12b0e16b05b982"
+   "worstAt": null,
+   "trace": "c8e60964873c4ca3ab9f80bf8eafbba0"
   },
   {
    "id": "R6:tower:oblique:102.5deg:55",
    "group": "R6",
    "stack": "tower",
    "speed": 1.2,
-   "pass": true,
-   "reason": "caught by ledge",
+   "pass": false,
+   "reason": "caught by cave hood",
    "landedAt": [
-    80.467,
-    4.728,
-    -289.609
+    82.381,
+    7.657,
+    -289.269
    ],
-   "landedBy": "ledge",
-   "eyeMin": 0.636,
-   "eyeMinVisible": 0.636,
+   "landedBy": "cave hood",
+   "eyeMin": null,
+   "eyeMinVisible": null,
    "eyeBands": [
-    0.636,
+    null,
     null,
     null
    ],
    "breach": null,
-   "worstAt": {
-    "phase": "walk",
-    "t": 4.1,
-    "fade": 0,
-    "depth": 1.455
-   },
-   "trace": "d843e5f1175f25a626586401c6fcf7b8"
+   "worstAt": null,
+   "trace": "06d6c9dd0d4ccb6e5f14cd8b3603fb86"
   },
   {
    "id": "R6:tower:strafe:102.5deg:left",
@@ -50771,9 +50776,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    84.14,
-    8.685,
-    -288.779
+    84.723,
+    7.635,
+    -288.632
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -50785,7 +50790,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "bf729f3e95a1e2cdd48d7f4dde5872bb"
+   "trace": "41067ac77c63c2b4e2aa4045af4c8184"
   },
   {
    "id": "R6:tower:strafe:102.5deg:right",
@@ -50795,9 +50800,9 @@
    "pass": false,
    "reason": "caught by cave hood",
    "landedAt": [
-    84.14,
-    8.685,
-    -288.779
+    84.723,
+    7.635,
+    -288.632
    ],
    "landedBy": "cave hood",
    "eyeMin": null,
@@ -50809,7 +50814,7 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "bf729f3e95a1e2cdd48d7f4dde5872bb"
+   "trace": "41067ac77c63c2b4e2aa4045af4c8184"
   },
   {
    "id": "R6:tower:oblique:112.5deg:-55",
@@ -51279,7 +51284,7 @@
     "fade": 0,
     "depth": 1.6
    },
-   "trace": "5d01367ccae1b79e9b43c59cd6866af1"
+   "trace": "3090c18889c2aa5ff30c3b08ce3d9ff6"
   },
   {
    "id": "R6:tower:strafe:152.5deg:left",
@@ -51290,21 +51295,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.718,
-   "eyeMinVisible": 0.718,
+   "eyeMin": 0.715,
+   "eyeMinVisible": 0.715,
    "eyeBands": [
-    0.718,
-    2.947,
-    1.403
+    0.715,
+    2.961,
+    1.401
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.7,
     "fade": 0,
-    "depth": 1.536
+    "depth": 1.518
    },
-   "trace": "187818a01d411a90e6a44f6106fdc39f"
+   "trace": "450b217312b4204b47d5c40adf5937cd"
   },
   {
    "id": "R6:tower:strafe:152.5deg:right",
@@ -51315,11 +51320,11 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.718,
-   "eyeMinVisible": 0.718,
+   "eyeMin": 0.715,
+   "eyeMinVisible": 0.715,
    "eyeBands": [
-    0.718,
-    2.58,
+    0.715,
+    2.601,
     1.296
    ],
    "breach": null,
@@ -51327,9 +51332,9 @@
     "phase": "walk",
     "t": 1.7,
     "fade": 0,
-    "depth": 1.536
+    "depth": 1.518
    },
-   "trace": "5870f8ec95c8cf8bf98b76c71e40bbd2"
+   "trace": "5ffa63cba1caca3270a1dd53668d8a23"
   },
   {
    "id": "R6:tower:oblique:162.5deg:-55",
@@ -51565,21 +51570,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.575,
-   "eyeMinVisible": 0.575,
+   "eyeMin": 0.563,
+   "eyeMinVisible": 0.563,
    "eyeBands": [
-    0.575,
-    1.474,
-    1.412
+    0.563,
+    1.47,
+    1.374
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.567,
+    "t": 2.55,
     "fade": 0,
-    "depth": 2.082
+    "depth": 2.065
    },
-   "trace": "4a0a0a9695ffc3f43cf86d70e145f222"
+   "trace": "44376f1ddfa899771e9946bcc03e0311"
   },
   {
    "id": "R6:tower:strafe:182.5deg:left",
@@ -51640,21 +51645,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.575,
-   "eyeMinVisible": 0.575,
+   "eyeMin": 0.581,
+   "eyeMinVisible": 0.581,
    "eyeBands": [
-    0.575,
-    1.46,
-    1.396
+    0.581,
+    1.454,
+    1.39
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 2.417,
     "fade": 0,
-    "depth": 2.487
+    "depth": 2.492
    },
-   "trace": "7b35c9be37533a220d780cb7587552df"
+   "trace": "02c36b874511ac628d59cd0d0a634ba0"
   },
   {
    "id": "R6:tower:oblique:192.5deg:55",
@@ -51679,7 +51684,7 @@
     "fade": 0,
     "depth": 2.514
    },
-   "trace": "fe333924d1df871fc54fb7861222d61c"
+   "trace": "c41902d634bfc17ac047cc6aefc7c833"
   },
   {
    "id": "R6:tower:strafe:192.5deg:left",
@@ -52290,21 +52295,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.736,
-   "eyeMinVisible": 0.736,
+   "eyeMin": 0.703,
+   "eyeMinVisible": 0.703,
    "eyeBands": [
-    0.736,
-    1.263,
-    4.206
+    0.703,
+    1.212,
+    4.885
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.567,
+    "t": 1.8,
     "fade": 0,
-    "depth": 1.544
+    "depth": 1.513
    },
-   "trace": "7968ce16f9a7e30df25ec2e28108b9ca"
+   "trace": "9979701187595cc80ea2fb581668d9a0"
   },
   {
    "id": "R6:tower:strafe:252.5deg:right",
@@ -52315,58 +52320,33 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.736,
-   "eyeMinVisible": 0.736,
+   "eyeMin": 0.703,
+   "eyeMinVisible": 0.703,
    "eyeBands": [
-    0.736,
-    1.213,
-    4.493
+    0.703,
+    1.212,
+    4.885
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.567,
+    "t": 1.8,
     "fade": 0,
-    "depth": 1.544
+    "depth": 1.513
    },
-   "trace": "863790037e55dc57f5c74bf10d5fe28d"
+   "trace": "9979701187595cc80ea2fb581668d9a0"
   },
   {
    "id": "R6:tower:oblique:262.5deg:-55",
    "group": "R6",
    "stack": "tower",
    "speed": 1.2,
-   "pass": true,
-   "reason": "fell",
-   "landedAt": null,
-   "landedBy": null,
-   "eyeMin": 0.459,
-   "eyeMinVisible": 0.459,
-   "eyeBands": [
-    0.459,
-    1.716,
-    4.347
-   ],
-   "breach": null,
-   "worstAt": {
-    "phase": "walk",
-    "t": 2.633,
-    "fade": 0,
-    "depth": 2.115
-   },
-   "trace": "7beba3389295986bb5b2253b246102b5"
-  },
-  {
-   "id": "R6:tower:oblique:262.5deg:55",
-   "group": "R6",
-   "stack": "tower",
-   "speed": 1.2,
    "pass": false,
    "reason": "landed after leaving the edge at depth 2.2 m",
    "landedAt": [
-    91.226,
-    5.817,
-    -383.804
+    86.271,
+    5.754,
+    -382.98
    ],
    "landedBy": null,
    "eyeMin": null,
@@ -52378,7 +52358,32 @@
    ],
    "breach": null,
    "worstAt": null,
-   "trace": "5accb59b094d995a876a77e542ee4f72"
+   "trace": "3cec3ddd38cae1096dfb26e0af2f16d8"
+  },
+  {
+   "id": "R6:tower:oblique:262.5deg:55",
+   "group": "R6",
+   "stack": "tower",
+   "speed": 1.2,
+   "pass": true,
+   "reason": "fell",
+   "landedAt": null,
+   "landedBy": null,
+   "eyeMin": 0.444,
+   "eyeMinVisible": 0.444,
+   "eyeBands": [
+    0.444,
+    1.362,
+    2.916
+   ],
+   "breach": null,
+   "worstAt": {
+    "phase": "walk",
+    "t": 2.917,
+    "fade": 0,
+    "depth": 2.178
+   },
+   "trace": "9766dc448586a540998f2b795b3a4b00"
   },
   {
    "id": "R6:tower:strafe:262.5deg:left",
@@ -52389,21 +52394,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.557,
-   "eyeMinVisible": 0.557,
+   "eyeMin": 0.573,
+   "eyeMinVisible": 0.573,
    "eyeBands": [
-    0.557,
-    1.588,
-    2.935
+    0.573,
+    1.589,
+    2.932
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.783,
+    "t": 1.767,
     "fade": 0,
-    "depth": 2.23
+    "depth": 2.273
    },
-   "trace": "f749c990143e056c7feef3488e016ebb"
+   "trace": "9ec76f8a476465408e1c0be1e528828f"
   },
   {
    "id": "R6:tower:strafe:262.5deg:right",
@@ -52414,21 +52419,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.557,
-   "eyeMinVisible": 0.557,
+   "eyeMin": 0.573,
+   "eyeMinVisible": 0.573,
    "eyeBands": [
-    0.557,
-    1.483,
-    2.986
+    0.573,
+    1.479,
+    2.987
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.783,
+    "t": 1.767,
     "fade": 0,
-    "depth": 2.23
+    "depth": 2.273
    },
-   "trace": "85e77961b0d3ce576e4cd3a9b42d1358"
+   "trace": "2fac4a168a31b59f1abc6491b5b392b0"
   },
   {
    "id": "R6:tower:oblique:272.5deg:-55",
@@ -52464,21 +52469,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.501,
-   "eyeMinVisible": 0.501,
+   "eyeMin": 0.451,
+   "eyeMinVisible": 0.451,
    "eyeBands": [
-    0.501,
-    2.567,
-    2.363
+    0.451,
+    2.622,
+    2.337
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.783,
+    "t": 2.967,
     "fade": 0,
-    "depth": 2.253
+    "depth": 2.296
    },
-   "trace": "afa961bb39abaab09549d8729c70a671"
+   "trace": "a7dbc567227bed114c71e524aba46fa9"
   },
   {
    "id": "R6:tower:strafe:272.5deg:left",
@@ -52489,21 +52494,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.637,
-   "eyeMinVisible": 0.637,
+   "eyeMin": 0.672,
+   "eyeMinVisible": 0.672,
    "eyeBands": [
-    0.637,
-    1.881,
-    2.703
+    0.672,
+    1.867,
+    2.716
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.717,
+    "t": 1.75,
     "fade": 0,
-    "depth": 2.182
+    "depth": 2.145
    },
-   "trace": "22b4595f8acd1a4dbe5e800fe48e2834"
+   "trace": "717c2c6f91a590ea80a46a2fa91b2a6f"
   },
   {
    "id": "R6:tower:strafe:272.5deg:right",
@@ -52514,21 +52519,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.637,
-   "eyeMinVisible": 0.637,
+   "eyeMin": 0.672,
+   "eyeMinVisible": 0.672,
    "eyeBands": [
-    0.637,
-    2.119,
-    2.182
+    0.672,
+    2.14,
+    2.187
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 1.717,
+    "t": 1.75,
     "fade": 0,
-    "depth": 2.182
+    "depth": 2.145
    },
-   "trace": "a67ef7b0035a61627c176523b3f65591"
+   "trace": "7778e01b6a0b2628741b8fd536fb0cc7"
   },
   {
    "id": "R6:tower:oblique:282.5deg:-55",
@@ -52564,21 +52569,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.618,
-   "eyeMinVisible": 0.618,
+   "eyeMin": 0.615,
+   "eyeMinVisible": 0.615,
    "eyeBands": [
-    0.618,
-    1.937,
-    2.544
+    0.615,
+    1.933,
+    2.545
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2,
+    "t": 2.017,
     "fade": 0,
-    "depth": 2.068
+    "depth": 2.189
    },
-   "trace": "4093850f7c859a112d328303baf6251d"
+   "trace": "7584d2620275d40e8c1b57fe70821b58"
   },
   {
    "id": "R6:tower:strafe:282.5deg:left",
@@ -53168,17 +53173,17 @@
    "eyeMinVisible": 0.548,
    "eyeBands": [
     0.548,
-    1.393,
-    2.379
+    1.388,
+    2.38
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 2.633,
     "fade": 0,
-    "depth": 1.321
+    "depth": 1.339
    },
-   "trace": "db5c6e6daf6e274f7fc21e3ea1d5696a"
+   "trace": "46fd372f218186f95b20211a22da8d2f"
   },
   {
    "id": "R6:tower:strafe:342.5deg:left",
@@ -54139,21 +54144,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.526,
-   "eyeMinVisible": 0.526,
+   "eyeMin": 0.556,
+   "eyeMinVisible": 0.556,
    "eyeBands": [
-    0.526,
-    1.576,
-    1.463
+    0.556,
+    1.529,
+    1.465
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.75,
+    "t": 2.517,
     "fade": 0,
-    "depth": 1.473
+    "depth": 1.805
    },
-   "trace": "b55824f8c435a51dc3041e662a5f28b2"
+   "trace": "2ea772516646a47b495887ad74529915"
   },
   {
    "id": "R6:mountain:oblique:22.5deg:55",
@@ -54564,10 +54569,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.462,
-   "eyeMinVisible": 0.462,
+   "eyeMin": 0.463,
+   "eyeMinVisible": 0.463,
    "eyeBands": [
-    0.462,
+    0.463,
     1.519,
     2.5
    ],
@@ -54578,7 +54583,7 @@
     "fade": 0,
     "depth": 1.775
    },
-   "trace": "f0bf0765ba7eef591fcf8a5fe8b02ee6"
+   "trace": "68dbd785350ee1a6436a3607bc06436e"
   },
   {
    "id": "R6:mountain:strafe:62.5deg:left",
@@ -54664,21 +54669,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.453,
-   "eyeMinVisible": 0.453,
+   "eyeMin": 0.45,
+   "eyeMinVisible": 0.45,
    "eyeBands": [
-    0.453,
-    1.658,
-    1.818
+    0.45,
+    1.643,
+    1.816
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.65,
+    "t": 2.583,
     "fade": 0,
-    "depth": 1.439
+    "depth": 1.449
    },
-   "trace": "57fd7ce5249972c93c61f12fb26f863e"
+   "trace": "a3e02364d5c522d586b48709846deab5"
   },
   {
    "id": "R6:mountain:strafe:72.5deg:left",
@@ -54753,7 +54758,7 @@
     "fade": 0,
     "depth": 1.367
    },
-   "trace": "fc00a2551e3ebdbe4671d2f7d18e0162"
+   "trace": "5b80735d5479a0bf5149cc72c61b3e3d"
   },
   {
    "id": "R6:mountain:oblique:82.5deg:55",
@@ -54789,21 +54794,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.578,
-   "eyeMinVisible": 0.578,
+   "eyeMin": 0.545,
+   "eyeMinVisible": 0.545,
    "eyeBands": [
-    0.578,
-    1.5,
-    1.54
+    0.545,
+    1.499,
+    1.524
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.767,
     "fade": 0,
-    "depth": 1.334
+    "depth": 1.318
    },
-   "trace": "c33b58c59e5ed1704db5da161b570d07"
+   "trace": "45e2ddccbb4f4ae268d521c878927305"
   },
   {
    "id": "R6:mountain:strafe:82.5deg:right",
@@ -54814,21 +54819,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.578,
-   "eyeMinVisible": 0.578,
+   "eyeMin": 0.545,
+   "eyeMinVisible": 0.545,
    "eyeBands": [
-    0.578,
-    1.751,
-    1.801
+    0.545,
+    1.763,
+    1.797
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.767,
     "fade": 0,
-    "depth": 1.334
+    "depth": 1.318
    },
-   "trace": "c82ec9242a1b5d463b913f6ab71f05d0"
+   "trace": "e448587c902ef917c3ff14e878b07c8f"
   },
   {
    "id": "R6:mountain:oblique:92.5deg:-55",
@@ -54839,21 +54844,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.493,
-   "eyeMinVisible": 0.493,
+   "eyeMin": 0.496,
+   "eyeMinVisible": 0.496,
    "eyeBands": [
-    0.493,
-    1.352,
-    3.018
+    0.496,
+    1.351,
+    3.013
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 3.133,
+    "t": 3.15,
     "fade": 0,
-    "depth": 1.45
+    "depth": 1.574
    },
-   "trace": "47a0a94bbbbaf3e282b84cfde8d5eee2"
+   "trace": "1af50cb45a4f72a2cf564d7ae1a08532"
   },
   {
    "id": "R6:mountain:oblique:92.5deg:55",
@@ -54864,21 +54869,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.476,
-   "eyeMinVisible": 0.476,
+   "eyeMin": 0.503,
+   "eyeMinVisible": 0.503,
    "eyeBands": [
-    0.476,
-    1.377,
-    2.538
+    0.503,
+    1.403,
+    2.475
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.933,
+    "t": 2.917,
     "fade": 0,
-    "depth": 5.734
+    "depth": 5.644
    },
-   "trace": "4f9787d62002edd617734cc33485467f"
+   "trace": "839d87f214209860f173a3334789d722"
   },
   {
    "id": "R6:mountain:strafe:92.5deg:left",
@@ -54889,21 +54894,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.702,
-   "eyeMinVisible": 0.702,
+   "eyeMin": 0.719,
+   "eyeMinVisible": 0.719,
    "eyeBands": [
-    0.702,
-    1.297,
-    3.066
+    0.719,
+    1.281,
+    2.972
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.933,
     "fade": 0,
-    "depth": 1.536
+    "depth": 1.577
    },
-   "trace": "30dbe5376beb17620905d29eabe74b79"
+   "trace": "bc81cc21279553c62130c0065d66502e"
   },
   {
    "id": "R6:mountain:strafe:92.5deg:right",
@@ -54914,21 +54919,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.702,
-   "eyeMinVisible": 0.702,
+   "eyeMin": 0.719,
+   "eyeMinVisible": 0.719,
    "eyeBands": [
-    0.702,
-    1.701,
-    2.818
+    0.719,
+    1.705,
+    2.752
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.933,
     "fade": 0,
-    "depth": 1.536
+    "depth": 1.577
    },
-   "trace": "5a41e62e5680b4a3e22aee7bf0ab566c"
+   "trace": "8ec94ca3039f22663461e86f325c23e3"
   },
   {
    "id": "R6:mountain:oblique:102.5deg:-55",
@@ -55294,16 +55299,16 @@
    "eyeBands": [
     0.68,
     1.378,
-    1.383
+    1.382
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.717,
     "fade": 0,
-    "depth": 1.682
+    "depth": 1.671
    },
-   "trace": "104a3d09e95263a07a7bc2a90c040b0c"
+   "trace": "fdeed7979b5a7335ccf2d6b302f774bd"
   },
   {
    "id": "R6:mountain:strafe:132.5deg:right",
@@ -55318,7 +55323,7 @@
    "eyeMinVisible": 0.68,
    "eyeBands": [
     0.68,
-    1.514,
+    1.515,
     2.176
    ],
    "breach": null,
@@ -55326,9 +55331,9 @@
     "phase": "walk",
     "t": 1.717,
     "fade": 0,
-    "depth": 1.682
+    "depth": 1.671
    },
-   "trace": "64ff576e4ee075de2da9fb87eb70f978"
+   "trace": "983c584ceee888bf9be8244589929bca"
   },
   {
    "id": "R6:mountain:oblique:142.5deg:-55",
@@ -55339,21 +55344,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.575,
-   "eyeMinVisible": 0.575,
+   "eyeMin": 0.593,
+   "eyeMinVisible": 0.593,
    "eyeBands": [
-    0.575,
-    1.508,
-    1.345
+    0.593,
+    1.5,
+    1.349
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.3,
+    "t": 2.283,
     "fade": 0,
-    "depth": 1.623
+    "depth": 1.588
    },
-   "trace": "696d41a670c52d9e4321380ff42312bb"
+   "trace": "cccb1c7b6f442c39592f5f71676ecf03"
   },
   {
    "id": "R6:mountain:oblique:142.5deg:55",
@@ -55764,21 +55769,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.575,
-   "eyeMinVisible": 0.575,
+   "eyeMin": 0.528,
+   "eyeMinVisible": 0.528,
    "eyeBands": [
-    0.575,
-    2.602,
-    1.375
+    0.528,
+    2.666,
+    1.427
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.167,
+    "t": 2.383,
     "fade": 0,
-    "depth": 2.18
+    "depth": 2.232
    },
-   "trace": "5afc3d7dc2a54a94b2ad963a1081ae82"
+   "trace": "5cedd668a109ada73db61f137bae30a4"
   },
   {
    "id": "R6:mountain:strafe:182.5deg:left",
@@ -56564,71 +56569,69 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.511,
-   "eyeMinVisible": 0.511,
+   "eyeMin": 0.51,
+   "eyeMinVisible": 0.51,
    "eyeBands": [
-    0.511,
-    1.923,
-    2.234
+    0.51,
+    1.867,
+    2.242
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.5,
+    "t": 2.6,
     "fade": 0,
-    "depth": 1.837
+    "depth": 1.824
    },
-   "trace": "f0af2f4f8740717a81fc9f91d39a0545"
+   "trace": "c15c72731a6d783c36836d8ce225bb4e"
   },
   {
    "id": "R6:mountain:strafe:262.5deg:left",
    "group": "R6",
    "stack": "mountain",
    "speed": 1.2,
-   "pass": true,
-   "reason": "fell",
-   "landedAt": null,
+   "pass": false,
+   "reason": "landed after leaving the edge at depth 1.9 m",
+   "landedAt": [
+    275.641,
+    0.137,
+    173.75
+   ],
    "landedBy": null,
-   "eyeMin": 0.701,
-   "eyeMinVisible": 0.701,
+   "eyeMin": null,
+   "eyeMinVisible": null,
    "eyeBands": [
-    0.701,
-    1.806,
-    1.235
+    null,
+    null,
+    null
    ],
    "breach": null,
-   "worstAt": {
-    "phase": "walk",
-    "t": 1.933,
-    "fade": 0,
-    "depth": 1.8
-   },
-   "trace": "9bc53c6e53f4640cd5a2278a0fd0ab54"
+   "worstAt": null,
+   "trace": "a70fa533fd76d394e3a5fd20e1ed8566"
   },
   {
    "id": "R6:mountain:strafe:262.5deg:right",
    "group": "R6",
    "stack": "mountain",
    "speed": 1.2,
-   "pass": true,
-   "reason": "fell",
-   "landedAt": null,
+   "pass": false,
+   "reason": "landed after leaving the edge at depth 1.9 m",
+   "landedAt": [
+    275.641,
+    0.137,
+    173.75
+   ],
    "landedBy": null,
-   "eyeMin": 0.701,
-   "eyeMinVisible": 0.701,
+   "eyeMin": null,
+   "eyeMinVisible": null,
    "eyeBands": [
-    0.701,
-    1.835,
-    1.734
+    null,
+    null,
+    null
    ],
    "breach": null,
-   "worstAt": {
-    "phase": "walk",
-    "t": 1.933,
-    "fade": 0,
-    "depth": 1.8
-   },
-   "trace": "ebb7da210cf25d657bde0c4cb942bc56"
+   "worstAt": null,
+   "trace": "a70fa533fd76d394e3a5fd20e1ed8566"
   },
   {
    "id": "R6:mountain:oblique:272.5deg:-55",
@@ -56639,21 +56642,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.457,
-   "eyeMinVisible": 0.457,
+   "eyeMin": 0.465,
+   "eyeMinVisible": 0.465,
    "eyeBands": [
-    0.457,
-    1.383,
-    1.53
+    0.465,
+    1.411,
+    1.518
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.583,
+    "t": 2.65,
     "fade": 0,
-    "depth": 1.679
+    "depth": 1.65
    },
-   "trace": "8a1a8b40ee769b663c69e49a07245575"
+   "trace": "6d7cd090974a8a097b878ed4e9586259"
   },
   {
    "id": "R6:mountain:oblique:272.5deg:55",
@@ -56678,7 +56681,7 @@
     "fade": 0,
     "depth": 5.548
    },
-   "trace": "aad901986a76b343d6af3b4d35fc94db"
+   "trace": "fadc7924eb43f0613b27171676586209"
   },
   {
    "id": "R6:mountain:strafe:272.5deg:left",
@@ -56689,10 +56692,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.629,
-   "eyeMinVisible": 0.629,
+   "eyeMin": 0.63,
+   "eyeMinVisible": 0.63,
    "eyeBands": [
-    0.629,
+    0.63,
     1.473,
     1.586
    ],
@@ -56701,9 +56704,9 @@
     "phase": "walk",
     "t": 1.733,
     "fade": 0,
-    "depth": 1.687
+    "depth": 1.68
    },
-   "trace": "d4e130d6121f23881296262c9a5f890a"
+   "trace": "3edcdc678a15491d9e18000bedfc8c4f"
   },
   {
    "id": "R6:mountain:strafe:272.5deg:right",
@@ -56714,10 +56717,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.629,
-   "eyeMinVisible": 0.629,
+   "eyeMin": 0.63,
+   "eyeMinVisible": 0.63,
    "eyeBands": [
-    0.629,
+    0.63,
     1.403,
     1.695
    ],
@@ -56726,9 +56729,9 @@
     "phase": "walk",
     "t": 1.733,
     "fade": 0,
-    "depth": 1.687
+    "depth": 1.68
    },
-   "trace": "3a4a3910e56bdfe7d4ea2d70dc6bc55d"
+   "trace": "930a9a93b502bf230d75d4ce557a4515"
   },
   {
    "id": "R6:mountain:oblique:282.5deg:-55",
@@ -56739,10 +56742,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.507,
-   "eyeMinVisible": 0.507,
+   "eyeMin": 0.506,
+   "eyeMinVisible": 0.506,
    "eyeBands": [
-    0.507,
+    0.506,
     1.628,
     1.639
    ],
@@ -56751,9 +56754,9 @@
     "phase": "walk",
     "t": 2.367,
     "fade": 0,
-    "depth": 1.741
+    "depth": 1.742
    },
-   "trace": "161098bcde2e4bff473a317a95cb2435"
+   "trace": "93044f80de911913bd0b1a9878705912"
   },
   {
    "id": "R6:mountain:oblique:282.5deg:55",
@@ -56789,21 +56792,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.609,
-   "eyeMinVisible": 0.609,
+   "eyeMin": 0.605,
+   "eyeMinVisible": 0.605,
    "eyeBands": [
-    0.609,
-    1.381,
-    1.889
+    0.605,
+    1.383,
+    1.888
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.75,
     "fade": 0,
-    "depth": 1.731
+    "depth": 1.712
    },
-   "trace": "f1d6934f4291098275f4898fadcc99c8"
+   "trace": "4e28c297d5edc9ebf074b96d7276fd95"
   },
   {
    "id": "R6:mountain:strafe:282.5deg:right",
@@ -56814,11 +56817,11 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.609,
-   "eyeMinVisible": 0.609,
+   "eyeMin": 0.605,
+   "eyeMinVisible": 0.605,
    "eyeBands": [
-    0.609,
-    1.611,
+    0.605,
+    1.604,
     1.966
    ],
    "breach": null,
@@ -56826,9 +56829,9 @@
     "phase": "walk",
     "t": 1.75,
     "fade": 0,
-    "depth": 1.731
+    "depth": 1.712
    },
-   "trace": "3923a76dfb85b106c7fae0c84b35109a"
+   "trace": "77a2d4a6fa4d256e41850f6c9d9aeb2a"
   },
   {
    "id": "R6:mountain:oblique:292.5deg:-55",
@@ -57139,21 +57142,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.513,
-   "eyeMinVisible": 0.513,
+   "eyeMin": 0.512,
+   "eyeMinVisible": 0.512,
    "eyeBands": [
-    0.513,
-    2.29,
-    1.59
+    0.512,
+    2.291,
+    1.589
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 2.433,
     "fade": 0,
-    "depth": 1.124
+    "depth": 1.123
    },
-   "trace": "34be32e8e335cebecc10d717545c9393"
+   "trace": "a7eab98a0dd5ec1e3b70a0c7d7dde9d1"
   },
   {
    "id": "R6:mountain:oblique:322.5deg:55",
@@ -57189,10 +57192,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.545,
-   "eyeMinVisible": 0.545,
+   "eyeMin": 0.556,
+   "eyeMinVisible": 0.556,
    "eyeBands": [
-    0.545,
+    0.556,
     2.23,
     1.514
    ],
@@ -57201,9 +57204,9 @@
     "phase": "walk",
     "t": 1.767,
     "fade": 0,
-    "depth": 1.143
+    "depth": 1.166
    },
-   "trace": "2aca1efa8815585ea0e03fc7dd562da3"
+   "trace": "a5f762873ea069d14c67fafba640d5c3"
   },
   {
    "id": "R6:mountain:strafe:322.5deg:right",
@@ -57214,11 +57217,11 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.545,
-   "eyeMinVisible": 0.545,
+   "eyeMin": 0.556,
+   "eyeMinVisible": 0.556,
    "eyeBands": [
-    0.545,
-    1.836,
+    0.556,
+    1.833,
     1.662
    ],
    "breach": null,
@@ -57226,9 +57229,9 @@
     "phase": "walk",
     "t": 1.767,
     "fade": 0,
-    "depth": 1.143
+    "depth": 1.166
    },
-   "trace": "91326513db876afda80747acfe8e876b"
+   "trace": "859a89bd91b924413f3fb604b8236be3"
   },
   {
    "id": "R6:mountain:oblique:332.5deg:-55",
@@ -57239,21 +57242,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.574,
-   "eyeMinVisible": 0.574,
+   "eyeMin": 0.514,
+   "eyeMinVisible": 0.514,
    "eyeBands": [
-    0.574,
-    1.537,
-    1.475
+    0.514,
+    1.53,
+    1.355
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.517,
+    "t": 2.867,
     "fade": 0,
-    "depth": 0.722
+    "depth": 0.998
    },
-   "trace": "1f3262d849a2a049326316b2c4d0c11e"
+   "trace": "f81fb8f9ef0931bea003a0d627baa564"
   },
   {
    "id": "R6:mountain:oblique:332.5deg:55",
@@ -57293,17 +57296,17 @@
    "eyeMinVisible": 0.736,
    "eyeBands": [
     0.736,
-    1.788,
-    1.586
+    1.787,
+    1.585
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.6,
     "fade": 0,
-    "depth": 0.713
+    "depth": 0.727
    },
-   "trace": "6fe2ac9ba4192b759cc6d66afdd26c8b"
+   "trace": "85e4298ef71bc6fce751cb242ea634b6"
   },
   {
    "id": "R6:mountain:strafe:332.5deg:right",
@@ -57318,17 +57321,17 @@
    "eyeMinVisible": 0.736,
    "eyeBands": [
     0.736,
-    2.082,
-    2.006
+    2.081,
+    2.005
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.6,
     "fade": 0,
-    "depth": 0.713
+    "depth": 0.727
    },
-   "trace": "44b1dd634142a90e503fbcb8d1b301b0"
+   "trace": "496ad2ba7abd367ab67b2a06d196470a"
   },
   {
    "id": "R6:mountain:oblique:342.5deg:-55",
@@ -57339,10 +57342,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.466,
-   "eyeMinVisible": 0.466,
+   "eyeMin": 0.467,
+   "eyeMinVisible": 0.467,
    "eyeBands": [
-    0.466,
+    0.467,
     1.959,
     1.764
    ],
@@ -57353,7 +57356,7 @@
     "fade": 0,
     "depth": 1.237
    },
-   "trace": "e4bba4196cd1e1c26bb20d9384d77849"
+   "trace": "ec61f38ecb8cb79f6e6bcda55d9d1e60"
   },
   {
    "id": "R6:mountain:oblique:342.5deg:55",
@@ -57368,7 +57371,7 @@
    "eyeMinVisible": 0.476,
    "eyeBands": [
     0.476,
-    1.245,
+    1.244,
     2.48
    ],
    "breach": null,
@@ -57376,9 +57379,9 @@
     "phase": "walk",
     "t": 2.533,
     "fade": 0,
-    "depth": 1.454
+    "depth": 1.456
    },
-   "trace": "e0c3fcefba029e9a0b3f51768653b06f"
+   "trace": "d2442d5804ed1157fadcf4380433b43b"
   },
   {
    "id": "R6:mountain:strafe:342.5deg:left",
@@ -57453,7 +57456,7 @@
     "fade": 0,
     "depth": 1.46
    },
-   "trace": "ad1a79dc177825056466e6c482c9ecf9"
+   "trace": "091d9f2af16a78c7f74f001f71af0bc8"
   },
   {
    "id": "R6:mountain:oblique:352.5deg:55",
@@ -57464,10 +57467,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.518,
-   "eyeMinVisible": 0.518,
+   "eyeMin": 0.514,
+   "eyeMinVisible": 0.514,
    "eyeBands": [
-    0.518,
+    0.514,
     2.08,
     3.237
    ],
@@ -57476,9 +57479,9 @@
     "phase": "walk",
     "t": 2.417,
     "fade": 0,
-    "depth": 1.485
+    "depth": 1.47
    },
-   "trace": "2e3acdaee9efd199edfe4f25644b92b0"
+   "trace": "a42c099c522bacb95175ff2e91fd99e4"
   },
   {
    "id": "R6:mountain:strafe:352.5deg:left",
@@ -57539,21 +57542,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.521,
-   "eyeMinVisible": 0.521,
+   "eyeMin": 0.533,
+   "eyeMinVisible": 0.533,
    "eyeBands": [
-    0.521,
-    2.256,
-    1.819
+    0.533,
+    2.246,
+    1.836
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.733,
+    "t": 2.75,
     "fade": 0,
-    "depth": 1.182
+    "depth": 1.135
    },
-   "trace": "5d4f2308e2343abeab037e6d98e84d6a"
+   "trace": "c4445ca9e435e2c24fe7c9df00744758"
   },
   {
    "id": "R6:mountain:oblique:340deg:55",
@@ -57564,21 +57567,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.468,
-   "eyeMinVisible": 0.468,
+   "eyeMin": 0.467,
+   "eyeMinVisible": 0.467,
    "eyeBands": [
-    0.468,
-    1.814,
-    2.324
+    0.467,
+    1.83,
+    2.336
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
-    "t": 2.567,
+    "t": 2.517,
     "fade": 0,
-    "depth": 1.277
+    "depth": 1.238
    },
-   "trace": "a6197cabf2432a08b199277c991d25d8"
+   "trace": "297da32158db48a035b96b2d8da3610f"
   },
   {
    "id": "R6:mountain:strafe:340deg:left",
@@ -57651,9 +57654,9 @@
     "phase": "walk",
     "t": 2.933,
     "fade": 0,
-    "depth": 1.329
+    "depth": 1.331
    },
-   "trace": "c78c5b9fd59431a829c984f88e9b81f2"
+   "trace": "5d7487d158064bc1b9aaaa850952bd50"
   },
   {
    "id": "R6:mountain:oblique:345deg:55",
@@ -57664,10 +57667,10 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.469,
-   "eyeMinVisible": 0.469,
+   "eyeMin": 0.468,
+   "eyeMinVisible": 0.468,
    "eyeBands": [
-    0.469,
+    0.468,
     1.7,
     2.643
    ],
@@ -57676,9 +57679,9 @@
     "phase": "walk",
     "t": 2.517,
     "fade": 0,
-    "depth": 1.5
+    "depth": 1.498
    },
-   "trace": "ac2f80500f880f3c9fd090e8ae47ad8e"
+   "trace": "de3a892bf0edabd2a206b253ef32809f"
   },
   {
    "id": "R6:mountain:strafe:345deg:left",
@@ -57735,24 +57738,25 @@
    "group": "R6",
    "stack": "mountain",
    "speed": 1.2,
-   "pass": false,
-   "reason": "landed after leaving the edge at depth 1.6 m",
-   "landedAt": [
-    354.543,
-    0.431,
-    226.787
-   ],
+   "pass": true,
+   "reason": "fell",
+   "landedAt": null,
    "landedBy": null,
-   "eyeMin": null,
-   "eyeMinVisible": null,
+   "eyeMin": 0.449,
+   "eyeMinVisible": 0.449,
    "eyeBands": [
-    null,
-    null,
-    null
+    0.449,
+    1.599,
+    2.074
    ],
    "breach": null,
-   "worstAt": null,
-   "trace": "81b53d7ac0e539d511027dd39cbb5efb"
+   "worstAt": {
+    "phase": "walk",
+    "t": 2.983,
+    "fade": 0,
+    "depth": 1.436
+   },
+   "trace": "7a8d4ce0870b0c32b758db5f708b403f"
   },
   {
    "id": "R6:mountain:oblique:347.5deg:55",
@@ -57763,21 +57767,21 @@
    "reason": "fell",
    "landedAt": null,
    "landedBy": null,
-   "eyeMin": 0.522,
-   "eyeMinVisible": 0.522,
+   "eyeMin": 0.528,
+   "eyeMinVisible": 0.528,
    "eyeBands": [
-    0.522,
-    1.661,
-    2.45
+    0.528,
+    1.657,
+    2.448
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 2.433,
     "fade": 0,
-    "depth": 1.432
+    "depth": 1.461
    },
-   "trace": "749c5826133c9d82a12f8b77002633b4"
+   "trace": "1df5e0b18900c2cd6be8e4571e71c15e"
   },
   {
    "id": "R6:mountain:strafe:347.5deg:left",
@@ -57892,17 +57896,17 @@
    "eyeMinVisible": 0.73,
    "eyeBands": [
     0.73,
-    1.746,
-    2.255
+    1.753,
+    2.256
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.683,
     "fade": 0,
-    "depth": 1.419
+    "depth": 1.435
    },
-   "trace": "d0cb15ba1d90d837b9680345acd87a6e"
+   "trace": "9e2c84107a3c14b837068d51080b0eaf"
   },
   {
    "id": "R6:mountain:strafe:350deg:right",
@@ -57917,17 +57921,17 @@
    "eyeMinVisible": 0.73,
    "eyeBands": [
     0.73,
-    1.625,
-    2.45
+    1.628,
+    2.451
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 1.683,
     "fade": 0,
-    "depth": 1.419
+    "depth": 1.435
    },
-   "trace": "48954c199cdc4c591e394ac5a49d9b97"
+   "trace": "d1949a51b596831d65151501639a1e79"
   },
   {
    "id": "R6:mountain:oblique:355deg:-55",
@@ -57942,17 +57946,17 @@
    "eyeMinVisible": 0.522,
    "eyeBands": [
     0.522,
-    2.141,
-    2.472
+    2.14,
+    2.474
    ],
    "breach": null,
    "worstAt": {
     "phase": "walk",
     "t": 2.833,
     "fade": 0,
-    "depth": 1.45
+    "depth": 1.413
    },
-   "trace": "ab32da984ff0086dfbd30737e7310469"
+   "trace": "3d14191acc515df359594f188106f182"
   },
   {
    "id": "R6:mountain:oblique:355deg:55",
@@ -57975,9 +57979,9 @@
     "phase": "walk",
     "t": 2.583,
     "fade": 0,
-    "depth": 1.47
+    "depth": 1.471
    },
-   "trace": "83ed879aea839e45498a6513cd20abd7"
+   "trace": "282405a65566c27e0a9231791039959c"
   },
   {
    "id": "R6:mountain:strafe:355deg:left",
@@ -58077,7 +58081,7 @@
     "fade": 0,
     "depth": 1.089
    },
-   "trace": "03570a49f274c8d03e2a034e8fb54a67"
+   "trace": "7da36db52ed821894c4d40d24254ac14"
   },
   {
    "id": "R6:mountain:strafe:357.5deg:left",
@@ -59682,5 +59686,5 @@
    "trace": "ee41a4c8bcf636ead58c1eef42c200b5"
   }
  ],
- "tree": "bfa8744732963a79"
+ "tree": "319ce370e6bd82ca"
 }
