@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dreambound</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  body.free { cursor: default; }   /* the game doesn't have the mouse: show the OS cursor */
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #veil { --p: 0; position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; transition: opacity 1.5s ease; }
+  #veil > * { grid-area: 1 / 1; }
+  /* While the world loads and warms up: a faint hairline filling from the middle, breathing slowly (a compositor
+     animation, so it keeps moving even while a shader compile holds the page). */
+  #veil b { width: 160px; height: 1px; background: linear-gradient(90deg, transparent, #d8cbb0 30%, #d8cbb0 70%, transparent); transform: scaleX(var(--p)); transition: transform 0.8s ease, opacity 1.2s ease; }
+  #veil b::after { content: ''; display: block; height: 100%; background: inherit; animation: glow 4.5s ease-in-out infinite; }
+  #veil b { opacity: 0.35; }
+  @keyframes glow { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+  /* Ready: the line goes, and the breathing light (click to begin) comes. */
+  #veil i { width: 7px; height: 7px; border-radius: 50%; background: #d8cbb0; box-shadow: 0 0 18px 6px rgba(216, 203, 176, 0.35); opacity: 0; visibility: hidden; }
+  #veil.ready b { opacity: 0; }
+  #veil.ready i { visibility: visible; animation: breathe 4.5s ease-in-out 0.6s infinite backwards; }
+  @keyframes breathe { 0%, 100% { opacity: 0.08; transform: scale(0.8); } 50% { opacity: 0.55; transform: scale(1.15); } }
+</style>
+</head>
+<body>
+<div id="veil"><b></b><i></i></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
