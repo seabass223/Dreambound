@@ -1,37 +1,34 @@
 import * as THREE from 'three';
-import { materials } from '../render/materials.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { materials, patchMaterial } from '../render/materials.js';
 import { mergeParts, mat4 } from '../world/builders.js';
 
-const N = 9;
-
-// Blade i of an iris of `radius`, in its pivot's frame (the pivot sits on the rim at angle 2πi/N): a curved leaf from
-// the rim to near the centre, extruded downward. k scales its thickness and tip for a small door. Blade i is blade 0
-// turned by 2πi/N about the centre, which createIris relies on.
-// Shut, the nine blades must cover the whole opening with no chinks: each hugs the rim for two sectors (80 deg), and
-// its tip reaches past the centre, so every point is under at least two blades (the centre under all of them).
-function bladeGeometry(radius, i, k = 1) {
-  const a0 = (i / N) * Math.PI * 2, a1 = ((i + 2) / N) * Math.PI * 2, am = (a0 + a1) / 2;
-  const P = new THREE.Vector2(Math.cos(a0) * radius, Math.sin(a0) * radius);
-  const Q = new THREE.Vector2(Math.cos(a1) * radius * 1.03, Math.sin(a1) * radius * 1.03);
-  const M = new THREE.Vector2(Math.cos(am) * radius * 1.1, Math.sin(am) * radius * 1.1);   // pulls the outer edge onto the rim
-  const tip = new THREE.Vector2(Math.cos(a0 + 1.3 + Math.PI) * 0.1 * radius, Math.sin(a0 + 1.3 + Math.PI) * 0.1 * radius);
-  // Shape in pivot-local coords.
-  const s = new THREE.Shape();
-  const rel = (v) => v.clone().sub(P);
-  s.moveTo(0, 0);
-  const q = rel(Q), t = rel(tip), m = rel(M);
-  s.quadraticCurveTo(m.x, m.y, q.x, q.y);
-  s.lineTo(t.x, t.y);
-  s.quadraticCurveTo(t.x * 0.35 + q.x * 0.1, t.y * 0.35 + q.y * 0.1, 0, 0);
-  const g = new THREE.ExtrudeGeometry(s, { depth: 0.025 * k, bevelEnabled: false, curveSegments: 10 });
-  g.rotateX(Math.PI / 2); // shape (x, y) -> world (x, z), extruded downward
-  return { geo: mergeParts([{ geo: g }]), P };
+// The iris diaphragm (tools/blender/iris_design.py): one blade, the stationary ring with its pivot pins and the
+// actuator ring with its drive pins, for an opening of radius 1, and how far the ring turns as the blades swing.
+// Loaded before the world is built (main.js; the regression harness parses the same file).
+let IRIS = null;
+export function setIrisAsset(gltf) {
+  const geo = {};
+  let meta = null;
+  gltf.scene.traverse((o) => {
+    if (o.isMesh) geo[o.name] = o.geometry;
+    if (o.name === 'IRIS_META') meta = o.userData;
+  });
+  // (Through mergeParts: the shared materials read vertex colours and uvs, which the model doesn't carry.)
+  const prep = (g) => {
+    const m = mergeParts([{ geo: g, color: 0xffffff }]);
+    const p = m.attributes.position, uv = m.attributes.uv;
+    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) * 0.8, p.getZ(i) * 0.8);   // the metal's grain, from above
+    return m;
+  };
+  IRIS = { blade: prep(geo.Blade), base: prep(geo.Base), actuator: prep(geo.Actuator), meta };
+  return IRIS;
+}
+export async function loadIris() {
+  return setIrisAsset(await new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/iris.glb'));
 }
 
-// How far each blade swings about its pivot, eased: 0 shut, 1 open.
-const swing = (v) => v * v * (3 - 2 * v) * 1.45;
-
-// Recessed iris door: N overlapping blades pivoting on the rim, like a rusty camera aperture.
+// Recessed iris door: the iris diaphragm (createIris below) over a pit, with a riveted rim, like a rusty camera aperture.
 export function createAperture(ctx, { center, radius = 1.75, parent, batcher, collider }) {
   const M = materials();
   const group = new THREE.Group();
@@ -62,19 +59,9 @@ export function createAperture(ctx, { center, radius = 1.75, parent, batcher, co
   batcher.add(pit, M.darkMetal, mat4(center.x, center.y + 0.04 - (pitDepth + 0.3) / 2, center.z), 0x4a4440);
   batcher.add(new THREE.CircleGeometry(radius * 0.9, 32).rotateX(-Math.PI / 2), M.darkMetal, mat4(center.x, center.y - 0.26 - pitDepth, center.z), 0x2a2622);
 
-  // Blades
-  const blades = [];
-  const bladeMat = M.metal;
-  for (let i = 0; i < N; i++) {
-    const { geo, P } = bladeGeometry(radius, i);
-    const pivot = new THREE.Group();
-    pivot.position.set(P.x, bladeY + i * 0.005, P.y);
-    const blade = new THREE.Mesh(geo, bladeMat);
-    blade.castShadow = true; blade.receiveShadow = true;
-    pivot.add(blade);
-    group.add(pivot);
-    blades.push(pivot);
-  }
+  // The blades (their tops about 0.19 m under the rim; they swing out under the paving).
+  const iris = createIris({ radius, parent: group, frame: new THREE.Matrix4(), material: M.metal });
+  iris.mesh.castShadow = true;
 
   // Walkable while closed.
   collider.addGeometry(new THREE.CircleGeometry(radius + 0.05, 24).rotateX(-Math.PI / 2), mat4(center.x, center.y + bladeY + 0.03, center.z));
@@ -86,39 +73,89 @@ export function createAperture(ctx, { center, radius = 1.75, parent, batcher, co
     get open() { return open; },
     set(v) {
       open = v;
-      blades.forEach((b) => { b.rotation.y = swing(v); });
+      iris.set(v);
     },
   };
   api.set(0);
   return api;
 }
 
-// The same iris scaled down to `radius` (blades only: its rim and well are modelled with whatever holds it), as one
-// instanced mesh, so a small door costs one draw call. `frame` places its centre (y up) in the parent's space; the
-// blades sit a little below it, as the End door's do.
+// An iris diaphragm of opening `radius` (tools/blender/iris_design.py), as a real one works: N curved blades, each turning
+// on its own pivot pin in a stationary ring, all swung at once by an actuator ring whose pins ride in a slot in each
+// blade. Shut, the blades cover the opening with no gaps (every blade over its neighbour on one side and under the other);
+// open, every blade lies outside the opening, within `reach` radii of the centre. The blades are one instanced mesh
+// (one draw call); the rings are hidden behind whatever holds the iris (a door's face, the End stack's paving) but turn
+// with it all the same. `frame` places the centre (y up) in the parent's space; the blades sit just below it.
 export function createIris({ radius, parent, frame, material = materials().metal }) {
-  const k = radius / 1.75;
-  const mesh = new THREE.InstancedMesh(bladeGeometry(radius, 0, k).geo, material, N);
+  const I = IRIS, n = I.meta.n, beta = I.meta.beta;
+  const mesh = new THREE.InstancedMesh(I.blade, bladeMaterial(material), n);
   mesh.name = 'iris';
   mesh.receiveShadow = true;
-  const m = new THREE.Matrix4();
+  const S = new THREE.Matrix4().makeScale(radius, radius, radius);
+  const place = (geo, name) => {
+    const m = new THREE.Mesh(geo, material);
+    m.name = name;
+    m.matrixAutoUpdate = false;
+    m.matrix.copy(frame).multiply(S);
+    parent.add(m);
+    return m;
+  };
+  place(I.base, 'iris-base');
+  const ring = place(I.actuator, 'iris-actuator');
+  const m = new THREE.Matrix4(), r = new THREE.Matrix4(), t = new THREE.Matrix4(), sw = new THREE.Matrix4();
   let open = 0;
   const api = {
     mesh,
+    reach: I.meta.reach * radius,
     get open() { return open; },
     set(v) {
       open = v;
-      for (let i = 0; i < N; i++) {
-        const a0 = (i / N) * Math.PI * 2;
-        m.copy(frame).multiply(mat4(Math.cos(a0) * radius, (-0.2 + i * 0.005) * k, Math.sin(a0) * radius, swing(v) - a0));
+      const f = v * v * (3 - 2 * v);                        // eased
+      const psi = f * I.meta.psiMax;
+      sw.makeRotationY(-I.meta.dir * psi);                  // the blade about its pivot (the design's angles run x -> z)
+      for (let i = 0; i < n; i++) {
+        r.makeRotationY(-(i / n) * Math.PI * 2);
+        t.makeTranslation(I.meta.rp * radius, 0, 0);
+        m.copy(frame).multiply(r).multiply(t).multiply(sw).multiply(S);
         mesh.setMatrixAt(i, m);
       }
       mesh.instanceMatrix.needsUpdate = true;
+      // The actuator ring's turn for this swing, from the slot geometry (a table over the swing).
+      const x = f * (beta.length - 1), k = Math.min(beta.length - 2, Math.floor(x));
+      const b = beta[k] + (beta[k + 1] - beta[k]) * (x - k);
+      ring.matrix.copy(frame).multiply(r.makeRotationY(-b)).multiply(S);
     },
   };
   api.set(0);
-  // Open blades reach about 1.9 radii from the centre.
-  mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3().setFromMatrixPosition(frame), radius * 2);
+  mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3().setFromMatrixPosition(frame), radius * (I.meta.reach + 0.1));
   parent.add(mesh);
   return api;
+}
+
+// The blades are one stamped part, but each has its own wear: the metal's texture shifted per instance. (With the same
+// patch of rust on every blade, the shut iris showed a twelve-armed star where the tips meet.) One material per base
+// material, shared by every iris.
+const bladeMats = new Map();
+function bladeMaterial(base) {
+  if (!bladeMats.has(base)) {
+    const m = base.clone();
+    m.name = (base.name || 'metal') + '-iris';
+    m.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace('#include <uv_vertex>', `#include <uv_vertex>
+        #ifdef USE_INSTANCING
+        { vec2 io = vec2(float(gl_InstanceID) * 0.371, float(gl_InstanceID) * 0.613);
+          #ifdef USE_MAP
+          vMapUv += io;
+          #endif
+          #ifdef USE_ROUGHNESSMAP
+          vRoughnessMapUv += io;
+          #endif
+        }
+        #endif`);
+    };
+    patchMaterial(m);   // after: it runs the uv shift first, then adds the fog and lighting as for every material
+    m.customProgramCacheKey = () => 'db:n:iris';
+    bladeMats.set(base, m);
+  }
+  return bladeMats.get(base);
 }

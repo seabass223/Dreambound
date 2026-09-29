@@ -7,6 +7,8 @@ export class Interactions {
     this.items = [];
     this.ray = new THREE.Raycaster();
     this.held = null;
+    // An item that takes every press while it's set (something held up to look at: props/inspect.js), wherever you aim.
+    this.focus = null;
     this.center = new THREE.Vector2(0, 0);
     this.enabled = true;
   }
@@ -53,7 +55,7 @@ export class Interactions {
 
   press() {
     if (!this.enabled) return false;
-    const p = this.pick();
+    const p = this.focus ? { item: this.focus, hit: null } : this.pick();
     if (!p) return false;
     this.held = p.item;
     p.item.onPress?.(p.hit);

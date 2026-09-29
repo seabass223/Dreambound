@@ -1,14 +1,13 @@
-// Saved games (localStorage). One save (SAVE_KEY), written when the player asks (Escape panel > Save, or the
-// "you left without saving" prompt), and one pending snapshot (PENDING_KEY), written on pagehide when there is
-// progress the save doesn't have. Browsers only allow their own "Leave site?" prompt on unload, so the question
-// "save that progress?" is asked on the next load instead (main.js).
+// Saved games (localStorage). One save (SAVE_KEY), written when the player asks (Escape panel > Save). Closing the
+// page with progress the save doesn't have brings up the browser's own "Leave site?" prompt (main.js); leave anyway
+// and that progress is gone.
 //
 // A snapshot holds where the player stands (the last safe pose: never mid-ride, mid-fall, on a ladder or in a
 // cutscene), the time of day and every piece of puzzle state, and restore() puts it all back through the props' own
 // APIs so the world looks the way it was left.
 
 export const SAVE_KEY = 'dreambound.save.v1';
-export const PENDING_KEY = 'dreambound.save.pending.v1';
+const OLD_PENDING_KEY = 'dreambound.save.pending.v1';   // where earlier builds kept unsaved progress at unload
 const VERSION = 1;
 
 const R = (v, d = 4) => (Number.isFinite(v) ? Math.round(v * 10 ** d) / 10 ** d : 0);
@@ -26,14 +25,12 @@ function write(key, snap) {
 function remove(key) {
   try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
 }
-export function clearSaves() { remove(SAVE_KEY); remove(PENDING_KEY); }
-// The next load's answer to "save that progress?": the pending snapshot becomes the save, or goes.
-export function promotePending(snap) { const ok = write(SAVE_KEY, snap); remove(PENDING_KEY); return ok; }
-export function dropPending() { remove(PENDING_KEY); }
+export function clearSaves() { remove(SAVE_KEY); }
 
 // isSafe(): the player may be saved where they stand right now (main.js: walking on the ground, free to move, no
 // sequence, not riding). enabled(): saving is on at all (off for ?nosave / ?spawn, dev capture, and after the ending).
 export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
+  remove(OLD_PENDING_KEY);   // (a leftover would otherwise sit in storage for good)
   let lastSafe = null;     // the newest pose isSafe() allowed, with the elevators as they were then
   let baseline = null;     // the snapshot the current game started from (the save, or the fresh start)
   let savedAt = 0;         // ms timestamp of the save this game matches (0: never saved)
@@ -67,6 +64,8 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
       towerSwitches: s.towerSwitches ? s.towerSwitches.map((b) => [...b]) : null,
       towerLEDs: ctx.towerLEDs ? ctx.towerLEDs.map((l) => R(l.level)) : null,
       observatory: obs ? { yaw: R(obs.yaw, 5), pitch: R(obs.pitch, 5), hatch: R(obs.hatch), stationOpen: !!obs.stationOpen } : null,
+      lounge: s.lounge ? { secretOpen: !!s.lounge.secretOpen } : null,
+      bunker: s.bunker ? { open: !!s.bunker.open } : null,
       elevators: lifts,
     };
   };
@@ -76,6 +75,8 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
     switches: snap.switches, power: snap.power, towerSwitches: snap.towerSwitches, towerLEDs: snap.towerLEDs,
     rocks: snap.rocks && { positions: snap.rocks.positions.map((q) => [Math.round(q.x * 5), Math.round(q.z * 5)]), solved: snap.rocks.solved },
     observatory: snap.observatory && { yaw: Math.round(snap.observatory.yaw * 50), pitch: Math.round(snap.observatory.pitch * 50), open: snap.observatory.stationOpen },
+    lounge: snap.lounge,
+    bunker: snap.bunker,
     elevators: snap.elevators,
   });
   const dirty = () => {
@@ -107,17 +108,9 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
       if (!enabled()) return false;
       const snap = snapshot();
       if (!write(SAVE_KEY, snap)) return false;
-      remove(PENDING_KEY);
       baseline = snap;
       savedAt = snap.time;
       return true;
-    },
-
-    // pagehide: keep unsaved progress aside for the next load to offer.
-    writePending() {
-      if (!enabled()) return;
-      if (dirty()) write(PENDING_KEY, snapshot());
-      else remove(PENDING_KEY);
     },
 
     // Put a snapshot back into the world. keepClock: leave the time of day alone (?t= given).
@@ -153,6 +146,11 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
           if (ctx.observatory?.hatch?.set) ctx.observatory.hatch.set(num(o.hatch, 0));
           if (o.stationOpen && ctx.observatory?.station?.open) ctx.observatory.station.open(true);
         }
+
+        // The lounge's secret bookcase (props/loungeSecret.js): once open, it stays open.
+        if (snap.lounge?.secretOpen) ctx.tunnels?.lounge?.secret?.open(true);
+        // The Tower bunker's door (world/bunker.js), open or shut as it was left.
+        if (snap.bunker && ctx.bunker) ctx.bunker.door.set(!!snap.bunker.open);
 
         // Elevators: which stop each car waits at (doors shut, as built).
         const lifts = snap.elevators ?? {};

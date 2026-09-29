@@ -30,6 +30,9 @@ BEIGE = srgb(198, 184, 156)
 ORANGE70 = srgb(204, 108, 42)
 MUSTARD = srgb(198, 152, 52)
 OLIVE70 = srgb(112, 114, 72)
+MANILA = srgb(214, 188, 128)
+DRAWER_TRAVEL = 0.42   # how far a filing drawer slides out (m)
+PAPER_DRAWER = 2       # the drawer the telescope print lies in (cabinet 0, third from the bottom)
 BROWN70 = srgb(104, 74, 50)
 PANELBLK = srgb(34, 34, 36)
 CREAMP = srgb(236, 230, 214)
@@ -54,11 +57,11 @@ TUBE_F, TUBE_R = 4.4, 1.12    # tube length in front of / behind the axis
 DOOR_W, DOOR_H = 0.68, 2.5    # half width, top of the door opening
 WINDOWS = (70, 160, 200, 290)  # clerestory windows (deg)
 WIN_W, WIN_Y0, WIN_Y1 = 0.36, 2.45, 3.4
-# Rear hatch (a puzzle, see build_hatch): a riveted square cut low in the back of the drum. Hatch-local
+# Rear hatch (a puzzle, see build_hatch): a riveted square cut at chest height in the back of the drum. Hatch-local
 # coordinates: u to the right and v up as seen from outside, r = distance from the drum axis.
 HATCH_A = 180.0                  # deg: straight opposite the door
 HATCH_HW = 0.09                  # half width of the square cut
-HATCH_Y0 = 0.34                  # its bottom edge (the plinth top is at FL - 0.02)
+HATCH_Y0 = 1.26                  # its bottom edge: its centre 1.35 m up, chest height from the ground outside (0.05)
 HATCH_YC = HATCH_Y0 + HATCH_HW
 HATCH_PIN = (0.0, HATCH_YC + 0.24)   # the panel's pivot pin, above the cut
 HATCH_SWING = math.pi / 2        # to open, the panel hanging from the pin swings up to the right this far
@@ -1031,13 +1034,47 @@ def build_electronics():
             bw = 0.06 + 0.02 * (k % 3)
             g2.box('painted', 0.05, 0.3, 0.26, -0.5 + k * 0.075, 0.95, 0.02, rz=0.0 if k % 5 else 0.12, tint=[ORANGE70, OLIVE70, BROWN70, MUSTARD, CREAMP][k % 5])
         g2.col(1.2, 1.2, 0.4, 0, 0.6, 0)
-        for a_ in (166, 194):
+        # Two four-drawer filing cabinets: a steel case open at the front in four bays, and drawers that slide out on
+        # their runners (parts 'Drawer0'..'Drawer7', driver 'drawer<i>', slid by src/props/observatory.js), each with
+        # its row of manila folders. A print lies across the folders in one of them (PAPER; the game adds it).
+        for c_, a_ in enumerate((166, 194)):
             g = wall_g(a_, R_IN - 0.3)
-            g.box('painted', 0.46, 1.32, 0.6, 0, 0.66, 0, tint=OLIVE70, bevel=0.01)
-            for k in range(4):
-                g.box('painted', 0.42, 0.28, 0.02, 0, 0.2 + k * 0.31, 0.3, tint=mul(OLIVE70, 1.08))
-                g.box('steel', 0.12, 0.02, 0.03, 0, 0.3 + k * 0.31, 0.32, tint=STEELG)
+            inner = mul(OLIVE70, 0.55)
+            g.box('painted', 0.46, 1.32, 0.015, 0, 0.66, -0.2925, tint=OLIVE70)
+            for sx in (-1, 1):
+                g.box('painted', 0.015, 1.32, 0.6, sx * 0.2225, 0.66, 0, tint=OLIVE70, bevel=0.004)
+            g.box('painted', 0.46, 0.015, 0.6, 0, 1.3125, 0, tint=OLIVE70, bevel=0.004)
+            g.box('painted', 0.46, 0.06, 0.6, 0, 0.03, 0, tint=mul(OLIVE70, 0.8))
+            for k in range(3):
+                g.box('painted', 0.43, 0.012, 0.58, 0, 0.355 + k * 0.31, 0.0, tint=inner)
+                g.box('painted', 0.43, 0.03, 0.015, 0, 0.355 + k * 0.31, 0.2925, tint=OLIVE70)   # the rail between bays
+            g.box('painted', 0.43, 0.035, 0.015, 0, 1.2875, 0.2925, tint=OLIVE70)             # and over the top one
             g.col(0.5, 1.4, 0.62, 0, 0.7, 0)
+            out = [g.p(0, 0, 1)[i] - g.p(0, 0, 0)[i] for i in range(3)]
+            for k in range(4):
+                i_ = c_ * 4 + k
+                yc = 0.2 + k * 0.31
+                name = part('Drawer%d' % i_, g.p(0, yc, 0.3), axis=(0, 1, 0), driver='drawer%d' % i_, ratio=DRAWER_TRAVEL, slide=out, bake=False)
+                with into(name):
+                    g.box('painted', 0.42, 0.28, 0.02, 0, yc, 0.3, tint=mul(OLIVE70, 1.08), bevel=0.003)
+                    g.box('steel', 0.12, 0.02, 0.03, 0, yc + 0.1, 0.32, tint=STEELG)
+                    g.box('steel', 0.08, 0.045, 0.004, 0, yc + 0.04, 0.312, tint=mul(STEELG, 0.9))   # card holder
+                    g.box('painted', 0.07, 0.035, 0.002, 0, yc + 0.04, 0.314, tint=CREAMP)
+                    for sx in (-1, 1):
+                        g.box('painted', 0.012, 0.22, 0.54, sx * 0.2, yc - 0.02, 0.02, tint=inner)
+                    g.box('painted', 0.41, 0.01, 0.54, 0, yc - 0.13, 0.02, tint=inner)
+                    g.box('painted', 0.41, 0.22, 0.012, 0, yc - 0.02, -0.25, tint=inner)
+                    # Hanging folders, a little uneven.
+                    for f in range(7):
+                        fz = -0.2 + f * 0.065 + rng.uniform(-0.01, 0.01)
+                        g.box('painted', 0.36, 0.2 - rng.uniform(0, 0.03), 0.004, 0, yc - 0.03, fz, rx=rng.uniform(-0.12, 0.12),
+                              tint=jitter(MANILA, 0.06))
+                empty('DRAWER_%d' % i_, g.p(0, yc, 0.3), slide=out, travel=DRAWER_TRAVEL)
+            if c_ == PAPER_DRAWER // 4:
+                yc = 0.2 + (PAPER_DRAWER % 4) * 0.31
+                # Lying across the folder tops, turned a little: its centre, yaw (about world y) and roll (about its
+                # length), for the game to place it.
+                empty('PAPER', g.p(0.01, yc + 0.075, 0.0), drawer=PAPER_DRAWER, ry=g.ry + 0.32, tilt=0.05, size=0.21)
 
         # Workbench with a receiver, parts bins, a small scope screen and a stool.
         for a_ in (282, 300):
@@ -1214,7 +1251,7 @@ def bm_curved_plate(w, h, t, R, n=8):
 HATCH_YELLOW = srgb(255, 204, 0)
 
 def build_hatch():
-    """The rear hatch: a riveted square cut low in the back of the drum (HATCH_A). Behind it a curved panel
+    """The rear hatch: a riveted square cut at chest height in the back of the drum (HATCH_A). Behind it a curved panel
     hangs from a pin and covers it; when the dome and the telescope both point at the top of the Rocks tor the
     game swings the panel up out of the way (part 'Hatch', driver 'hatch'), showing a yellow plate with three
     screws. The panel is authored open, so the plate's AO bakes uncovered: the game holds hatch = 1 (shut) at
@@ -1229,21 +1266,21 @@ def build_hatch():
     # Sleeve through the stucco (from just behind the frame, so their walls don't fight), the slot the panel turns in
     # (clear of its whole swing), a short sleeve to the plate.
     hatch_quads(box_in(-hw, hw, y0, y1, HR_SLOT1, HR_FACE - 0.0145, ends=False), 'metal_black', lining)
-    hatch_quads(box_in(-0.155, 0.41, 0.285, 0.82, HR_SLOT0, HR_SLOT1, hole=(-hw, hw, y0, y1)), 'metal_black', lining)
+    hatch_quads(box_in(-0.155, 0.41, y0 - 0.055, y0 + 0.48, HR_SLOT0, HR_SLOT1, hole=(-hw, hw, y0, y1)), 'metal_black', lining)
     hatch_quads(box_in(-hw, hw, y0, y1, HR_PLATE - 0.004, HR_SLOT0, ends=False), 'metal_black', lining)
 
     with layer('near'):
         # Riveted steel frame, a raised bead round the cut.
         sq = lambda h, lo=None: [(-h, -(lo or h)), (h, -(lo or h)), (h, h), (-h, h)]
-        # Its bottom band runs down to the plinth, over the sliver of stucco left under the cut.
-        emit(bm_loop_ring(sq(hw + 0.06, yc - (FL - 0.02) - 0.002), sq(hw), 0.014), 'steel', hatch_m(0, yc, HR_FACE - 0.007), mul(GUNMETAL, 0.95), 0.3)
+        emit(bm_loop_ring(sq(hw + 0.06), sq(hw), 0.014), 'steel', hatch_m(0, yc, HR_FACE - 0.007), mul(GUNMETAL, 0.95), 0.3)
         emit(bm_loop_ring(sq(hw + 0.009), sq(hw), 0.02), 'steel', hatch_m(0, yc, HR_FACE - 0.004), GUNMETAL, 0.3)
         s = hw + 0.03
         rivets = [(k * 0.06, sy * s) for k in (-2, -1, 0, 1, 2) for sy in (-1, 1)] + [(sx * s, k * 0.06) for k in (-1, 0, 1) for sx in (-1, 1)]
         for (ru, rv) in rivets:
             emit(bm_sphere(0.0095, 8, 5), 'steel', hatch_m(ru, yc + rv, HR_FACE - 0.002), mul(STEELG, 0.85), smooth=True)
 
-        # The yellow plate (paint worn to steel at its edges) and its three screws: top left, centre, right middle.
+        # The yellow plate (paint worn to steel at its edges) and its three screws: top left, centre, right middle (seen
+        # from outside): the yellow switch box's clue (src/world/towerPuzzle.js).
         n, w = 10, 0.2
         bm = bmesh.new()
         g = [[bm.verts.new((-w / 2 + w * i / n, -w / 2 + w * j / n, 0)) for i in range(n + 1)] for j in range(n + 1)]
@@ -1525,14 +1562,13 @@ def bake_all():
     spots = [(p.x, p.y, tuple(lm.data[li].uv)) for li, p in loops(plate)
              if abs(p.z - HR_PLATE) < 1e-3 and abs(p.x) < 0.1001 and abs(p.y - HATCH_YC) < 0.1001]
     under = lambda p: min(spots, key=lambda t: (t[0] - p.x) ** 2 + (t[1] - p.y) ** 2)[2]
-    # The stucco face beside and above the hatch (it runs up to the belt course), read about the frame's height:
-    # inside its island, and near the ground, which is what darkens the frame.
-    face = min(plaster.data.polygons, key=lambda f: (local(plaster, f.center) - Vector((0.16, 1.2, R_OUT))).length)
+    # The stucco face beside the hatch, read about the frame's height (inside its island).
+    face = min(plaster.data.polygons, key=lambda f: (local(plaster, f.center) - Vector((0.2, HATCH_YC, R_OUT))).length)
     lw = plaster.data.uv_layers['lightmap']
     corners = sorted(((local(plaster, plaster.data.vertices[plaster.data.loops[li].vertex_index].co).y, lw.data[li].uv.copy()) for li in face.loop_indices), key=lambda t: t[0])
     lo, hi = corners[:2], corners[-2:]
     ylo, yhi = (lo[0][0] + lo[1][0]) / 2, (hi[0][0] + hi[1][0]) / 2
-    t = max(0.05, min(0.95, (HATCH_YC + 0.25 - ylo) / (yhi - ylo)))
+    t = max(0.05, min(0.95, (HATCH_YC - ylo) / (yhi - ylo)))
     wall = tuple(((lo[0][1] + lo[1][1]) / 2).lerp((hi[0][1] + hi[1][1]) / 2, t))
     ls = steel.data.uv_layers['lightmap']
     for li, p in loops(steel):

@@ -5,6 +5,7 @@ import { materials, patchMaterial } from '../render/materials.js';
 import { atmo } from '../render/atmosphere.js';
 import { mat4, mergeParts } from '../world/builders.js';
 import { buildLadder } from '../world/features.js';
+import { TOWER_SEQUENCE, SEQ_PULSE, SEQ_REST, towerSolved } from '../world/towerPuzzle.js';
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _cam = new THREE.Vector3();
@@ -54,8 +55,9 @@ function member(a, b, t = 0.16) {
 // modelled once in its own frame and placed three times here; they share one atlas (albedo, normal, AO/roughness/metal).
 //
 // Switch box frame: origin at the centre of its back face, +z out of the door toward the deck, +x to the viewer's
-// right. SWB.y is that centre's height above the deck; face, pitch, travel and midY are the model's switch plate.
-const SWB = { y: 1.0, w: 0.3, h: 0.34, d: 0.1, bar: 0.015, face: 0.112, midY: -0.03, pitch: 0.085, travel: 0.045 };
+// right. SWB.y is that centre's height above the deck (chest height: the model's BOX_Y, its mounting built to suit);
+// face, pitch, travel and midY are the model's switch plate.
+const SWB = { y: 1.3, w: 0.3, h: 0.34, d: 0.1, bar: 0.015, face: 0.112, midY: -0.03, pitch: 0.085, travel: 0.045 };
 export const TOWER_SWITCH_POS = ['top', 'center', 'bottom'];
 
 const KIT_FILES = { albedo: 'tower_kit_albedo.png', normal: 'tower_kit_normal.png', orm: 'tower_kit_orm.png' };
@@ -299,22 +301,42 @@ export function buildPowerTower(ctx, { base, rotY = 0, batcher, collider }) {
 
   // Breathing: all three swell from dark to a soft glow and back over BREATH seconds, in step (an ease in and out,
   // squared so it lingers dark and blooms quickly). A puzzle can dim or silence one through its `level` (0..1).
-  let breath = 0;
+  // Solved (every switch box set to TOWER_SOLUTION, world/towerPuzzle.js) with the Tower line powered, the LEDs
+  // instead flash TOWER_SEQUENCE, one pulse a second (a dark gap between pulses, so repeats of a colour read as
+  // separate flashes), then stay dark for SEQ_REST seconds, and repeat. Changing a switch or cutting the power puts
+  // them straight back to the red breathing.
+  let breath = 0, seqT = -1;
+  const seqLen = TOWER_SEQUENCE.length * SEQ_PULSE + SEQ_REST;
+  const glow = [0, 0, 0];
   ctx.updaters.push((dt) => {
     breath = (breath + dt / BREATH) % 1;
-    const b = 0.5 - 0.5 * Math.cos(breath * Math.PI * 2);
-    const k = LED_FLOOR + (1 - LED_FLOOR) * b * b;
+    const on = !!ctx.power?.tower && towerSolved(ctx.state.towerSwitches);
+    if (on) seqT = seqT < 0 ? 0 : (seqT + dt) % seqLen; else seqT = -1;
+    if (seqT >= 0) {
+      glow.fill(0);
+      const i = Math.floor(seqT / SEQ_PULSE);
+      if (i < TOWER_SEQUENCE.length) {
+        const u = seqT / SEQ_PULSE - i;
+        glow[TOWER_SEQUENCE[i]] = THREE.MathUtils.smoothstep(u, 0, 0.08) * (1 - THREE.MathUtils.smoothstep(u, 0.62, 0.78));
+      }
+    } else {
+      const b = 0.5 - 0.5 * Math.cos(breath * Math.PI * 2);
+      const k = LED_FLOOR + (1 - LED_FLOOR) * b * b;
+      for (let i = 0; i < 3; i++) glow[i] = leds[i].level * k;
+    }
     ctx.camera?.getWorldPosition(_cam);
     // The halos glow only against a darkening sky (by day they'd be pale discs).
     const dusk = THREE.MathUtils.smoothstep(-atmo.uSunDir.value.y, -0.12, 0.08);
-    for (const l of leds) {
-      l.mat.emissiveIntensity = l.peak * l.level * k;
+    leds.forEach((l, i) => {
+      l.mat.emissiveIntensity = l.peak * glow[i];
       // The halo is for seeing it from afar: close by, the lens fills the view and a halo would drown it.
       const near = ctx.camera ? THREE.MathUtils.smoothstep(_cam.distanceTo(l.halo.position), 8, 40) : 1;
-      l.halo.material.opacity = HALO * l.level * k * near * dusk;
+      l.halo.material.opacity = HALO * glow[i] * near * dusk;
       l.halo.visible = l.halo.material.opacity > 0.004;
-    }
+    });
   });
+  // For tests and the console: whether the sequence is showing, and how far into it (s).
+  ctx.towerSequence = { active: () => seqT >= 0, time: () => seqT, length: seqLen };
 
   // ---- The kits: per LED one near mesh (box, tag, panel; gone beyond ~36 m, so not from the ground), and one mesh for
   // all three capacitors, drawn at any distance. The leads are cables in the tower's batch.

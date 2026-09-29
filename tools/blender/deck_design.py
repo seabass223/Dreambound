@@ -96,6 +96,19 @@ def build_platform():
 
 
 # ============================================================================ chairs (after cabin_design.adirondack)
+def bm_half_disc(r, h, segs=16):
+    """The front half (+z) of an upright disc of radius r and height h: its flat side, at z = 0, left open (it sits
+    against the end of a board)."""
+    bm = bmesh.new()
+    bot = [bm.verts.new((math.cos(PI * i / segs) * r, -h / 2, math.sin(PI * i / segs) * r)) for i in range(segs + 1)]
+    top = [bm.verts.new((v.co.x, h / 2, v.co.z)) for v in bot]
+    for i in range(segs):
+        bm.faces.new((bot[i], top[i], top[i + 1], bot[i + 1]))
+    bm.faces.new(top[::-1])
+    bm.faces.new(bot)
+    return bm   # (wound outward: top +y, bottom -y, round side out)
+
+
 def adirondack(i, x, z, ry):
     """After cabin_design.adirondack, reworked for close viewing: the side stringers slope from the front legs to the
     deck (they are the back legs), the seat slats sit on them, the back slats fan up from the seat's rear, and the broad
@@ -114,7 +127,9 @@ def adirondack(i, x, z, ry):
         g.box('wood', 0.05, 0.6, 0.05, s * 0.33, 0.3, 0.31, tint=tint, bevel=0.006)                    # front legs
         az0, az1 = bz(0.6) - 0.02, 0.35
         g.box('wood', 0.14, 0.024, az1 - az0, s * 0.37, 0.612, (az0 + az1) / 2, tint=tint, bevel=0.007)  # arms
-        g.put(bm_cyl(0.07, 0.07, 0.024, 16), 'wood', s * 0.37, 0.612, az1, tint=tint, smooth=lambda n: abs(n.y) < 0.5)
+        # The round front: a half disc ahead of the board's end (a whole one overlapped the board, and their tops,
+        # at the same height, z-fought).
+        g.put(bm_half_disc(0.07, 0.024, 16), 'wood', s * 0.37, 0.612, az1, tint=tint, smooth=lambda n: abs(n.y) < 0.5)
         g.box('wood', 0.03, 0.09, 0.07, s * 0.345, 0.555, 0.3, tint=tint, bevel=0.004)                   # corbels
     # Seat slats on the stringers, following their slope.
     for k in range(6):
@@ -155,6 +170,9 @@ def end_table(x, z):
         g.box('wood', s - 0.1, 0.018, 0.1, 0, 0.159, -0.12 + k * 0.12, tint=jitter(tint, 0.04), bevel=0.003)
     g.col(s, TABLE_TOP, s, 0, TABLE_TOP / 2, 0)
     lantern(g, 0.03, TABLE_TOP, -0.03)
+    # A postcard lying face up on the near side, beside the lantern, turned a little (the game lays it there:
+    # src/props/deck.js).
+    empty('POSTCARD', g.p(-0.11, TABLE_TOP + 0.0006, -0.125), ry=0.42, size=[0.14, 0.09])
 
 
 def lantern(g, lx, ly, lz):

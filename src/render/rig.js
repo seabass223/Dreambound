@@ -2,18 +2,20 @@ import * as THREE from 'three';
 
 // GPU rigging for models built with tools/blender/dbkit.py: a whole building is merged into one mesh per material,
 // each vertex tagged with its movable part (aPart), and the vertex shader turns it about the part's pivot and then
-// its parent's (up to three levels). Uniform arrays hold every part's pivot, angle, axis and parent.
+// its parent's (up to three levels), and moves it by the part's offset (a sliding part: a drawer). Uniform arrays hold
+// every part's pivot, angle, axis, parent and offset.
 
-export const RIG_N = 24;
+export const RIG_N = 32;
 
 export const RIG_VERT = /* glsl */ `
 attribute float aPart;
 uniform vec4 uRigP[${RIG_N}];   // pivot xyz, angle
 uniform vec4 uRigA[${RIG_N}];   // axis xyz, parent index
+uniform vec4 uRigT[${RIG_N}];   // offset xyz (in the parent's frame at rest)
 vec3 rigRot(vec3 v, vec3 k, float a) { float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }
 vec3 rigPoint(vec3 p) {
   int id = int(aPart + 0.5);
-  for (int i = 0; i < 3; i++) { if (id <= 0) break; vec4 P = uRigP[id], A = uRigA[id]; p = rigRot(p - P.xyz, A.xyz, P.w) + P.xyz; id = int(A.w + 0.5); }
+  for (int i = 0; i < 3; i++) { if (id <= 0) break; vec4 P = uRigP[id], A = uRigA[id]; p = rigRot(p - P.xyz, A.xyz, P.w) + P.xyz + uRigT[id].xyz; id = int(A.w + 0.5); }
   return p;
 }
 vec3 rigDir(vec3 n) {
@@ -30,6 +32,7 @@ export function rigged(mat, rig, extra = null) {
     if (prev) prev(sh, r);
     sh.uniforms.uRigP = rig.uRigP;
     sh.uniforms.uRigA = rig.uRigA;
+    sh.uniforms.uRigT = rig.uRigT;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\n' + RIG_VERT)
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = rigDir(objectNormal);')
@@ -60,11 +63,13 @@ export function createRig() {
   return {
     uRigP: { value: Array.from({ length: RIG_N }, () => new THREE.Vector4()) },
     uRigA: { value: Array.from({ length: RIG_N }, () => new THREE.Vector4()) },
+    uRigT: { value: Array.from({ length: RIG_N }, () => new THREE.Vector4()) },
   };
 }
 
-// Find the parts in a loaded glTF scene (nodes with a `driver` extra) and fill the rig. Returns
-// { parts: [null, {name, driver, ratio, pivot, axis, parent}], partOf: Map(node -> index), nodes: {name: node} }.
+// Find the parts in a loaded glTF scene (nodes with a `driver` extra) and fill the rig. A part with a `slide` extra
+// (a direction, game coords) slides along it instead of turning: its driver's value times ratio is the distance.
+// Returns { parts: [null, {name, driver, ratio, pivot, axis, parent, slide}], partOf: Map(node -> index), nodes }.
 export function collectParts(src, rig, label = 'model') {
   const parts = [null];
   const partOf = new Map();
@@ -77,8 +82,9 @@ export function collectParts(src, rig, label = 'model') {
     while (p) { if (partOf.has(p)) { parent = partOf.get(p); break; } p = p.parent; }
     const i = parts.length;
     const pivot = o.getWorldPosition(new THREE.Vector3());
-    const axis = new THREE.Vector3(...ud.axis).normalize();
-    parts.push({ name: o.name, driver: ud.driver, ratio: ud.ratio, pivot, axis, parent });
+    const axis = new THREE.Vector3(...(ud.axis ?? [0, 1, 0])).normalize();
+    const slide = ud.slide ? new THREE.Vector3(...ud.slide).normalize() : null;
+    parts.push({ name: o.name, driver: ud.driver, ratio: ud.ratio, pivot, axis, parent, slide });
     partOf.set(o, i);
     rig.uRigP.value[i].set(pivot.x, pivot.y, pivot.z, 0);
     rig.uRigA.value[i].set(axis.x, axis.y, axis.z, parent);

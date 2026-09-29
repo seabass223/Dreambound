@@ -6,7 +6,10 @@ import { materials } from '../../render/materials.js';
 import { Stack, capRelief, RELIEF_SEED } from '../terrain.js';
 import { Batcher, ColliderBuilder, mat4 } from '../builders.js';
 import { Path } from '../paths.js';
-import { buildLedge, buildLadder, buildTrail, scatter, buildCave } from '../features.js';
+import { buildLadder, buildTrail, scatter } from '../features.js';
+import { buildWalkway } from '../walkway.js';
+import { buildCliffPath } from '../cliffPath.js';
+import { buildCliffCave, caveWindow } from '../cliffCave.js';
 import { createElevator } from '../../props/elevator.js';
 import { placeCabin, PROBE_LAYER } from '../../props/cabin.js';
 import { placeDeck } from '../../props/deck.js';
@@ -16,7 +19,7 @@ const TAU = Math.PI * 2;
 const LADDER_THETA = -Math.PI / 2;     // south
 // The ledge runs west from the ladder foot to the cave: about 55 m of walking (it once went half way round, ~180 m).
 const LEDGE_ARC = 0.9;
-const CAVE_THETA = LADDER_THETA - LEDGE_ARC;
+const CAVE_THETA = LADDER_THETA - LEDGE_ARC;   // the cave's mouth, in the cliff at the path's end (world/cliffCave.js)
 const LEDGE_START_DEPTH = 6.1;         // 20 ft below the lip
 const LEDGE_END_DEPTH = 10.5;          // a 4.4 m drop keeps the short ledge's ramp gentle (8 degrees at most)
 // The wall relief (WALLS.geo) keeps off the ladder, the ledge, the cave hood and the elevator (south round to
@@ -54,6 +57,8 @@ export function buildDome(ctx) {
     // shelves under the rim that slow walk-offs land on (tools/regress R6).
     cliffCalm: (th, depth) => (Math.cos(th) < 0.2 && depth < 28 ? 0.25 : 1),
     protect: WALL_PROTECT,
+    // The cave's mouth: a window cut out of the cliff, filled by buildCliffCave below.
+    openings: [caveWindow(Math.round(cfg.r * 2.6), CAVE_THETA)],
   });
   const cx = cfg.x, cz = cfg.z;
 
@@ -62,6 +67,27 @@ export function buildDome(ctx) {
   const trail = Path.smooth([
     [cx, cz - DOME_R - 1.0], [cx + 1.4, cz - 19.5], [cx - 2.8, cz - 28], [cx + 1.8, cz - 39], [cx + 0.4, cz - ladderEdge + 1.2],
   ], 1.5, 1.4);
+  // A faint worn track, no strip, only the ground's colour and thinner grass, from the dirt round the dome's foot (on
+  // the side facing the view deck) out to the deck, winding between the trees that were already there (so the forest
+  // and every other placement stay put).
+  const deckTrack = Path.smooth([
+    [cx - 4.13, cz + 14.63], [cx - 5.4, cz + 18.5], [cx - 7.7, cz + 23.2], [cx - 9.2, cz + 30.8], [cx - 10.1, cz + 36.0],
+    [cx - 10.3, cz + 40.6], [cx - 12.0, cz + 45.5], [cx - 14.04, cz + 49.79],
+  ], 1.5, 1.4);
+  // A limestone walkway out front: off the trail just outside the dome door, left (west) round the dome in the clear
+  // ring the trees leave it (16 m out), turning into stepping stones where it meets the start of the deck track.
+  const walk = Path.smooth([
+    [cx - 0.75, cz - 15.55], [cx - 2.6, cz - 16.05], [cx - 6.85, cz - 14.68], [cx - 12.41, cz - 10.41], [cx - 15.65, cz - 4.19],
+    [cx - 16.2, cz], [cx - 15.65, cz + 4.19], [cx - 13.27, cz + 9.29], [cx - 9.29, cz + 13.27], [cx - 6.07, cz + 15.02], [cx - 4.75, cz + 16.53],
+  ], 0.5, 1.1);
+  const qt = {};
+  // How worn the ground is at (x, z): 0 off the track, up to 1 on its centre line, easing in over its first and last
+  // metres (it begins in the dirt ring and ends at the deck's back step).
+  const worn = (x, z) => {
+    deckTrack.closest(x, z, qt);
+    if (!(qt.d < 1.8)) return 0;
+    return (1 - smoothstep(0.3, 1.8, qt.d)) * smoothstep(0, 2.5, qt.t) * smoothstep(0, 1.5, deckTrack.total - qt.t);
+  };
   const q = {};
   // Rolling ground (WALLS.relief), pushed first so the pad, trail and ladder-lip fns below still have the last word.
   // 0 over the pad, its blend ring and the garden (to DOME_R + 8), within 8 m of the ladder lip; the trail keeps 30 %.
@@ -99,6 +125,8 @@ export function buildDome(ctx) {
     if (q.d < 2.2) col.lerp(new THREE.Color(0.17, 0.13, 0.09), (1 - smoothstep(0.6, 2.2, q.d)) * 0.8);
     const d = Math.hypot(x - cx, z - cz);
     if (Math.abs(d - DOME_R) < 1.3) col.lerp(new THREE.Color(0.14, 0.12, 0.09), 0.5);
+    const w = worn(x, z);
+    if (w > 0) col.lerp(new THREE.Color(0.23, 0.18, 0.12), w * 0.55);
   });
 
   const collider = new ColliderBuilder('dome');
@@ -106,13 +134,15 @@ export function buildDome(ctx) {
   stack.build(collider);
 
   buildTrail(stack, trail, batcher, { width: 1.25 });
+  const walkway = buildWalkway(stack, walk, batcher, { seed: 17 });
+  ctx.walkway = walkway;
 
   // ---- Geodesic glass dome with the cabin inside (modeled in Blender: tools/blender/build_cabin.py) ----
   ctx.house = placeCabin(ctx, ctx.cabinAsset, { origin: new THREE.Vector3(cx, cfg.top + 0.15, cz), collider });
   // Garden keep-outs, in dome-local coordinates: the cabin + porch, the flagstone path, planters, fire pit, curb.
   const inHouse = (x, z) => {
     const lx = x - cx, lz = z - cz;
-    if (lx > -7.3 && lx < 7.2 && lz > -8.2 && lz < 5.6) return true;
+    if (lx > -6.1 && lx < 8.4 && lz > -8.2 && lz < 5.6) return true;   // (the house sits 1.2 m along +x: HX in cabin_design.py)
     if (Math.abs(lx) > 1.5 && Math.abs(lx) < 3.95 && lz > -10.15 && lz < -8.45) return true; // lavender planters
     if (Math.hypot(lx, lz - 9.3) < 2.9) return true; // fire pit + chairs
     if (Math.hypot(Math.abs(lx) - 3.8, lz - 12.3) < 0.5) return true; // festoon posts
@@ -123,17 +153,20 @@ export function buildDome(ctx) {
   // ---- Ladder + ledge path running west to the cave ----
   const ledgeY = cfg.top - LEDGE_START_DEPTH;
   const samples = [];
-  const th0 = LADDER_THETA + 0.09, th1 = CAVE_THETA, span = th0 - th1;
-  // Shaped in radians from the start (u), not in fractions of the ledge, so the landing at the ladder, the sample
-  // spacing (~2.6 m) and the width wobble look as they did on the long ledge; the apron widens over the last 16 m.
+  // The path runs on 3 m past the cave's mouth (it turns in off the path) and is level for the last 4 m before it.
+  const Rm = stack.edgeR(CAVE_THETA);
+  const toMouth = LADDER_THETA + 0.09 - CAVE_THETA;
+  const th0 = LADDER_THETA + 0.09, th1 = CAVE_THETA - 3.1 / Rm, span = th0 - th1;
+  // Shaped in radians from the start (u): a landing at the ladder, samples ~2.6 m apart with a width wobble, and a
+  // little more room where the path turns into the cave.
   const N = Math.round(span / 0.046);
   for (let i = 0; i <= N; i++) {
     const u = span * i / N;
-    const depth = LEDGE_START_DEPTH + (LEDGE_END_DEPTH - LEDGE_START_DEPTH) * smoothstep(0.2, span, u);
-    const width = 2.4 + (1 - smoothstep(0, 0.226, u)) * 1.6 + smoothstep(span - 0.28, span, u) * 1.8 + noise2(u * 2.785, 0, 4) * 0.35;
+    const depth = LEDGE_START_DEPTH + (LEDGE_END_DEPTH - LEDGE_START_DEPTH) * smoothstep(0.2, toMouth - 4 / Rm, u);
+    const width = 3.1 + (1 - smoothstep(0, 0.226, u)) * 1.3 + smoothstep(toMouth - 0.2, toMouth - 0.04, u) * 0.7 + noise2(u * 2.785, 0, 4) * 0.25;
     samples.push({ theta: th0 - u, depth, width });
   }
-  buildLedge(stack, samples, batcher, collider, 7);
+  buildCliffPath(stack, samples, batcher, collider, { seed: 7 });
 
   const wallR = stack.cliffRadius(LADDER_THETA, 3, stack.edgeR(LADDER_THETA));
   const n = new THREE.Vector3(Math.cos(LADDER_THETA), 0, Math.sin(LADDER_THETA));
@@ -141,12 +174,11 @@ export function buildDome(ctx) {
   const base = new THREE.Vector3(cx + n.x * (wallR + 0.05), ledgeY, cz + n.z * (wallR + 0.05));
   buildLadder(ctx, { base, n, height: lipY - ledgeY, batcher });
 
-  // ---- Cave at the end of the ledge, heading on around the stack (west-southwest) ----
-  const endTh = th1;
-  const endR = stack.cliffRadius(endTh, LEDGE_END_DEPTH, stack.edgeR(endTh)) + 2.1;
-  const mouth = new THREE.Vector3(cx + Math.cos(endTh) * endR, cfg.top - LEDGE_END_DEPTH, cz + Math.sin(endTh) * endR);
-  const tangent = new THREE.Vector3(Math.sin(endTh), 0, -Math.cos(endTh)); // direction of decreasing theta
-  const cave = buildCave(ctx, { mouth, dir: tangent, length: 4.8, batcher, collider, seed: 12, toward: new THREE.Vector3(cx, cfg.top, cz) });
+  // ---- The cave: a mouth in the cliff at the path's end, the tunnel bending in from the path to the elevator ----
+  // (Its floor 2 cm under the path's paving, which runs a little way into the mouth.)
+  const cave = buildCliffCave(ctx, stack, {
+    theta: CAVE_THETA, floorY: cfg.top - LEDGE_END_DEPTH - 0.02, window: stack.openings[0], travel: -1, batcher, collider, seed: 12,
+  });
   // A small caged bulb above the elevator.
   addCaveBulb(ctx, cave.platePos, cave.plateRot, batcher);
 
@@ -206,7 +238,10 @@ export function buildDome(ctx) {
     return q.d > 1.1 && (d > DOME_R + 0.6 || inGarden);
   }, { margin: 1.2, tries: 3 })) {
     const s = rng.float(0.7, 1.25);
-    if (deckOutside(p.x - cx, p.z - cz) > 0.2) ctx.meadow.add(p.x, p.y, p.z, s);
+    // (Thinned along the deck track after the draws, so no other tuft moves: none on its centre, fewer beside it.)
+    const tw = worn(p.x, p.z), keep = tw < 0.25 || (tw < 0.7 && ((Math.sin(p.x * 12.9898 + p.z * 78.233) * 43758.5) % 1 + 1) % 1 > tw);
+    // (and off the walkway's slabs, likewise after the draws)
+    if (deckOutside(p.x - cx, p.z - cz) > 0.2 && keep && !walkway.on(p.x, p.z, 0.35)) ctx.meadow.add(p.x, p.y, p.z, s);   // (a tuft's blades spread 0.3 m)
   }
   // A lush lawn, two small trees and a few shrubs in the dome garden.
   const garden = (x, z) => Math.hypot(x - cx, z - cz) < DOME_R - 0.75 && !inHouse(x, z) && !onGardenPath(x, z);
@@ -227,7 +262,7 @@ export function buildDome(ctx) {
   for (const p of scatter(stack, 22, rng, (x, z) => { const d = Math.hypot(x - cx, z - cz); return d < DOME_R - 1.6 && !inHouse(x, z) && !onGardenPath(x, z); }, { margin: 2, tries: 60 })) ctx.forest.add('shrub', p.x, p.y, p.z, rng.float(0.8, 1.3));
 
   // Scattered stones
-  ctx.pebbles.scatter(stack, 60, rng, clear, (x, z) => deckOutside(x - cx, z - cz) > 1);
+  ctx.pebbles.scatter(stack, 60, rng, clear, (x, z) => deckOutside(x - cx, z - cz) > 1 && !walkway.on(x, z, 0.2));
 
   const props = batcher.build(stack.group, { name: 'dome-props' });
   // From other stacks the props are one merged stand-in (see render/lod.js).

@@ -18,8 +18,7 @@ import { createFall } from './sequences/fall.js';
 import { createEnding, prepareEnding } from './sequences/ending.js';
 import { createResume } from './sequences/resume.js';
 import { createSettings } from './ui/settings.js';
-import { openDialog } from './ui/kit/index.js';
-import { createSaveSystem, readSnapshot, clearSaves, promotePending, dropPending, SAVE_KEY, PENDING_KEY } from './core/save.js';
+import { createSaveSystem, readSnapshot, clearSaves, SAVE_KEY } from './core/save.js';
 import { createReticle } from './ui/reticle.js';
 import { createDebugReport } from './ui/debugReport.js';
 import { loadCabin, PROBE_LAYER } from './props/cabin.js';
@@ -29,7 +28,10 @@ import { loadLounge } from './props/lounge.js';
 import { loadElevator } from './props/elevator.js';
 import { loadTowerKit } from './props/powertower.js';
 import { loadDeck } from './props/deck.js';
+import { loadShed } from './props/shed.js';
+import { loadIris } from './props/aperture.js';
 import { preload } from './render/preload.js';
+import { TRAIL } from './world/mountainPath.js';
 import { createLoadingVeil } from './ui/loadingVeil.js';
 
 const params = new URLSearchParams(location.search);
@@ -85,32 +87,8 @@ input.on('firstClick', () => {
 });
 
 // ---------- Saved game ----------
-// Which saved game to wake into, settled while the world loads. A pending snapshot (progress left unsaved when the
-// page closed, see the Loop's unload handlers) newer than the save is offered first; the dialog is up before the
-// first click, so it is answered before the game takes the mouse.
-const ago = (ms) => {
-  const m = Math.round((Date.now() - ms) / 60000);
-  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 60 * 24 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
-};
-const resumeChoice = (async () => {
-  if (!savesOn) return null;
-  const saved = readSnapshot(SAVE_KEY), pending = readSnapshot(PENDING_KEY);
-  if (!pending) return saved;
-  if (saved && pending.time <= saved.time) { dropPending(); return saved; }
-  const keep = await openDialog({
-    title: 'You left without saving',
-    description: `Your last visit (${ago(pending.time)}) ended with progress that was never saved. Save that progress? `
-      + (saved ? 'Discard goes back to your last save.' : 'Discard starts the dream from the beginning.'),
-    dismissible: false,
-    actions: [
-      { label: 'Discard', variant: 'outline', value: false },
-      { label: 'Save', variant: 'default', value: true, autofocus: true },
-    ],
-  });
-  if (keep) { promotePending(pending); return pending; }
-  dropPending();
-  return saved;
-})();
+// The game to wake into: the save, if there is one.
+const resumeSnap = savesOn ? readSnapshot(SAVE_KEY) : null;
 let restored = false;
 
 // ---------- Timers ----------
@@ -129,12 +107,12 @@ const setProgress = (f) => loader.progress(f);
 
 // ---------- World ----------
 let loaded = 0;
-const counted = (p) => p.then((a) => { setProgress((++loaded / 7) * 0.1); return a; });
-const [cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset] = await Promise.all([loadCabin(), loadObservatory(), loadCave(), loadLounge(), loadElevator(), loadTowerKit(), loadDeck()].map(counted));
+const counted = (p) => p.then((a) => { setProgress((++loaded / 9) * 0.1); return a; });
+const [cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset] = await Promise.all([loadCabin(), loadObservatory(), loadCave(), loadLounge(), loadElevator(), loadTowerKit(), loadDeck(), loadShed(), loadIris()].map(counted));
 const loadedT = performance.now();
 loader.glide(0.55);                             // the build blocks the page: the fill glides on meanwhile
 await new Promise((r) => setTimeout(r, 20));   // let the line show it before the (synchronous) build
-const ctx = buildWorld({ renderer, scene, camera, physics, interact, audio, input, fx, later, updaters: [], cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset });
+const ctx = buildWorld({ renderer, scene, camera, physics, interact, audio, input, fx, later, updaters: [], cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset });
 prepareEnding(ctx);   // the ending's clock and steam, hidden until then, so the preload warms them too
 setProgress(0.55);
 const player = new Player(camera, input, physics);
@@ -151,7 +129,12 @@ const saves = createSaveSystem({
   isSafe: () => started && !ended && !(sequence && !sequence.done) && (player.mode === 'walk' || player.mode === 'sit') && player.onGround && player.canMove
     && !ctx.riding && player.cameraControlled && !player.lookHandler,
 });
-// Start over: no save, no pending snapshot, and no "Leave site?" on the way out.
+// How long ago a save was made, for the Escape panel's status line.
+const ago = (ms) => {
+  const m = Math.round((Date.now() - ms) / 60000);
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 60 * 24 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+};
+// Start over: no save, and no "Leave site?" on the way out.
 function restart() {
   savesOn = false;
   clearSaves();
@@ -172,14 +155,41 @@ function travel(key) {
   } else if (key === 'observatory' && ctx.observatory) {
     // Outside its door, facing it.
     const R = ctx.observatory.root, p = R.localToWorld(new THREE.Vector3(0, 0, -9)), door = R.localToWorld(new THREE.Vector3(0, 0, -5));
-    const st = ctx.stacks.mountain;
-    player.place(p.x, (st.heightAt(p.x, p.z) ?? p.y) + 0.1, p.z, face(p, door));
+    const at = freeSpot(ctx.stacks.mountain, p.x, p.z);
+    player.place(at.x, at.y, at.z, face(at, door));
   } else if (ctx.stacks[key]) {
     const st = ctx.stacks[key];
-    const x = st.cx + 6, z = st.cz + 6;
-    player.place(x, (st.heightAt(x, z) ?? st.top) + 0.1, z, face({ x, z }, { x: st.cx, z: st.cz }));
+    const at = freeSpot(st, st.cx + 6, st.cz + 6);
+    player.place(at.x, at.y, at.z, face(at, { x: st.cx, z: st.cz }));
   }
   player.pitch = 0;
+}
+// The nearest spot to (x, z) on a stack's open ground where you can stand: nothing over it (a ray down from 6 m up
+// meets the ground itself first, not a rock, a tree, a roof or the pylon), nothing pushing a player-sized capsule
+// aside there, and well in from the edge. Rings of candidates 1.2 m apart, out to 30 m.
+const _ray = new THREE.Raycaster(), _down = new THREE.Vector3(0, -1, 0), _probe = new THREE.Vector3();
+function freeSpot(st, x0, z0) {
+  const surface = physics.colliders.filter((c) => c.enabled && c.zone === 'surface');
+  const ok = (x, z) => {
+    const h = st.heightAt(x, z);
+    if (h === null || st.edgeDist(x, z) < 4) return null;
+    _ray.set(_probe.set(x, h + 6, z), _down); _ray.far = 7;
+    let first = Infinity;
+    for (const c of surface) { const hit = c.bvh.raycastFirst(_ray.ray, THREE.DoubleSide); if (hit) first = Math.min(first, hit.distance); }
+    if (Math.abs(first - 6) > 0.15) return null;                              // something over the ground here
+    const feet = _probe.set(x, h + 0.02, z);
+    physics.resolveCapsule(feet, PLAYER.radius + 0.1, PLAYER.height, 'surface');
+    if (Math.hypot(feet.x - x, feet.z - z) > 0.01 || feet.y > h + 0.3) return null;   // pushed aside, or lifted onto something
+    return { x, y: h + 0.05, z };
+  };
+  for (let r = 0; r <= 30; r += 1.2) {
+    const n = r === 0 ? 1 : Math.ceil((Math.PI * 2 * r) / 1.2);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, spot = ok(x0 + Math.cos(a) * r, z0 + Math.sin(a) * r);
+      if (spot) return spot;
+    }
+  }
+  return { x: x0, y: (st.heightAt(x0, z0) ?? st.top) + 0.1, z: z0 };
 }
 const settings = createSettings({
   player, clock, fx, input, canvas: renderer.domElement, baseSpeed: clock.speed,
@@ -247,7 +257,12 @@ const q = {};
 function surfaceAt(feet) {
   if (player.zone === 'tunnel') return ctx.riding ? 'metal' : ctx.tunnels.lounge?.inside(feet) ? 'wood' : 'cave';
   if (ctx.house.inside(feet)) return 'wood';
+  if (ctx.bunker?.inside(feet)) return 'rock';   // its concrete
   if (ctx.deck?.on(feet)) return 'wood';
+  if (ctx.walkway?.on(feet.x, feet.z)) return 'rock';   // the Home stack's limestone walkway
+  if (ctx.shed?.on(feet)) return 'rock';   // the Mountain shed's flagstones
+  const tr = ctx.mountainTrail;              // the Mountain's switchbacks: pebbles, and timber on the steps' ties
+  if (tr && tr.near(feet.x, feet.z, q).d < TRAIL.width / 2 + 0.12 && Math.abs(feet.y - q.y) < 0.8) return tr.tieAt(q.s) ? 'wood' : 'gravel';
   const b = ctx.bridgeSpan;
   if (b) {
     const rx = feet.x - b.a.x, rz = feet.z - b.a.z;
@@ -326,13 +341,13 @@ const debugReport = createDebugReport({
 
 // ---------- Leaving ----------
 // Browsers allow no custom UI on unload, only their own "Leave site?" prompt: it is asked for while there is progress
-// the save doesn't have. What is left unsaved anyway is kept aside on pagehide and offered on the next load.
+// the save doesn't have. Leave anyway and that progress is gone: the next load resumes from the save.
 function onBeforeUnload(e) {
   if (!saves.dirty()) return;
   e.preventDefault();
   e.returnValue = '';
 }
-// (Not in ?dev sessions: the dev server's reloads would ask every time. The pagehide snapshot still covers them.)
+// (Not in ?dev sessions: the dev server's reloads would ask every time.)
 let unloadGuard = false;
 setInterval(() => {
   const want = started && !DEV && saves.dirty();
@@ -340,7 +355,6 @@ setInterval(() => {
   unloadGuard = want;
   if (want) addEventListener('beforeunload', onBeforeUnload); else removeEventListener('beforeunload', onBeforeUnload);
 }, 1000);
-addEventListener('pagehide', () => { if (started) saves.writePending(); });
 
 // ---------- Resize & adaptive resolution ----------
 let captureSize = null;   // fixed output size while recording (dev capture)
@@ -527,9 +541,8 @@ requestAnimationFrame(frame);
     renderer, scene, camera, target: fx.composer.readBuffer, lod: ctx.lod, hooks, states,
     onProgress: (f) => setProgress(0.55 + f * 0.45),
   });
-  // The saved game to wake into (asked about while loading, if it had to be): put it back, and draw one real frame
-  // of where it stands.
-  const snap = await resumeChoice;
+  // The saved game to wake into: put it back, and draw one real frame of where it stands.
+  const snap = resumeSnap;
   if (snap) {
     saves.restore(snap, { keepClock: params.has('t') });
     saves.setBaseline(snap, snap.time);
@@ -586,7 +599,7 @@ if (DEV) {
     player.yaw = Math.atan2(-dx, -dz);
     player.pitch = Math.atan2(dy, Math.hypot(dx, dz));
   };
-  window.pressAt = () => { const p = interact.pick(); return p ? (p.item.onPress?.(p.hit), 'pressed') : 'none'; };
+  window.pressAt = () => { const p = interact.focus ? { item: interact.focus, hit: null } : interact.pick(); return p ? (p.item.onPress?.(p.hit), 'pressed') : 'none'; };
   // Performance sweep over every area: `await bench()` (see dev/bench.js).
   import('./dev/bench.js').then((m) => m.installBench({ THREE, ctx, player, camera, renderer, clock, capture: window.capture, hitch }));
   window.hitchReport = () => {

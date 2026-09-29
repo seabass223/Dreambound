@@ -44,11 +44,20 @@ DX, DZ = 0.25, 0.35                        # desk centre
 DW, DD, DH = 1.76, 1.06, 0.78              # desk top size and the height of its surface
 MAP_W, MAP_H = 0.92, 0.64
 MAPC = Vector((DX - 0.03, DH, DZ - 0.06))  # map centre
-LAMP = Vector((DX + 0.22, DH, DZ + 0.36))  # desk lamp base
+# Desk lamp base: in the desk's roomiest corner (east of the map, toward the elevator), the red card in its pool.
+LAMP = Vector((DX + DW / 2 - 0.2, DH, DZ - DD / 2 + 0.2))
 BULB_Y = 0.47                              # bulb above the desk
 CARD = 0.09
 SHELF_F = 2.62                             # bookcase: shelf fronts, cabinet door fronts
 CAB_F = 2.55
+# The secret door: the bookcase's two east bays (5 and 6) swing back on a pivot at their west back corner, into a passage
+# behind the south wall (the game's props/loungeSecret.js; the globe's island opens it). It spans SEC_A..SEC_B, from the
+# face of the fixed upright between bays 4 and 5 to the fixed end jamb, the full height of the bookcase (floor to the top
+# board), from the ledge's front back to its own plank back.
+SEC_A, SEC_B = 1.522, 3.43
+SEC_TOP = 2.62
+SEC_BACK = Z1 + 0.018                      # the door's plank back (the passage starts behind it)
+SEC_PIVOT = (1.53, Z1 + 0.022)             # its hinge line (x, z), vertical
 SLOT = 100.0
 DEC = {'map': 0, 'card': 1, 'rug': 2, 'prints': 3, 'floor': 4, 'plain': 9}
 WT = (1.0, 0.35)                           # walnut tile: metres along the grain x across
@@ -336,7 +345,8 @@ def ceiling():
                 put(quad_facing([(xa, H, za), (xb, H, za), (xb, H, zb), (xa, H, zb)], (0, -1, 0)), 'plain', None, PLASTER)
                 sec = [(0.0, 0.0), (0.0, -0.035), (0.012, -0.045), (0.03, -0.03), (0.05, -0.012), (0.056, 0.0)]
                 bm = rect_sweep(((xa + xb) / 2, H, (za + zb) / 2), (1, 0, 0), (0, 0, 1), (0, -1, 0), (xb - xa) / 2, (zb - za) / 2, sec)
-                put(bm, 'wood', None, RICH)
+                # (The sweep's closing face lies flat on the plaster at H, over the panel's edge: they z-fought.)
+                put(cull(bm, lambda f: abs(f.normal.y) > 0.99 and abs(f.calc_center_median().y - H) < 1e-4), 'wood', None, RICH)
         dep = H - BEAM_Y
         for j, z in enumerate(zs):                          # along x
             hw = edge(j, 4)
@@ -448,48 +458,99 @@ def shelf_row(rs, x0, x1, y, hgap, objects=None):
         right = nxt[2]['h'] if nxt and nxt[0] == 'book' and abs(bx + b['t'] - nxt[1]) < 0.006 else 0.0
         book(bx, y, zf0 + rs.uniform(0.0, 0.012), b['t'], b['h'], b['d'], b['col'], b['bands'], left, right)
 
+def _split(x0, x1, fn):
+    """Call fn(xa, xb) for each piece of the span x0..x1: the fixed ones, and (in layer 'secret') the door's."""
+    cuts = sorted({x0, x1, *(c for c in (SEC_A, SEC_B) if x0 < c < x1)})
+    for xa, xb in zip(cuts[:-1], cuts[1:]):
+        if xb - xa < 1e-4:
+            continue
+        if SEC_A - 1e-6 <= xa and xb <= SEC_B + 1e-6:
+            with layer('secret'):
+                fn(xa, xb)
+        else:
+            fn(xa, xb)
+
+def _door(on):
+    """A context: layer 'secret' when on (a piece of the swinging door), else nothing."""
+    import contextlib
+    return layer('secret') if on else contextlib.nullcontext()
+
 def bookcase():
     rs = random.Random(404)
     nb = 7
     bw = (X1 - X0) / nb
     yl = [0.86, 1.24, 1.6, 1.95, 2.3, 2.62]         # cabinet top, four shelves, top board
+    door_bay = lambda i: i >= 5                     # bays 5 and 6 are the secret door
+    door_line = lambda i: i == 6                    # the upright between them swings with it
     # Cabinets: plinth, doors, ledge.
-    BX('wood', X1 - X0, 0.09, Z1 - CAB_F - 0.03, 0, 0.045, (Z1 + CAB_F + 0.03) / 2, tint=mul(WHITE, 0.6), hide=(0, 0, 1))
-    BX('wood', X1 - X0, 0.06, Z1 - CAB_F + 0.03, 0, 0.83, (Z1 + CAB_F - 0.03) / 2, tint=RICH, bevel=0.012, seg=2, hide=(0, 0, 1))
+    _split(X0, X1, lambda a, b: BX('wood', b - a, 0.09, Z1 - CAB_F - 0.03, (a + b) / 2, 0.045, (Z1 + CAB_F + 0.03) / 2, tint=mul(WHITE, 0.6), hide=(0, 0, 1)))
+    _split(X0, X1, lambda a, b: BX('wood', b - a, 0.06, Z1 - CAB_F + 0.03, (a + b) / 2, 0.83, (Z1 + CAB_F - 0.03) / 2, tint=RICH, bevel=0.012, seg=2, hide=(0, 0, 1)))
     for i in range(nb + 1):
         x = X0 + i * bw
-        BX('wood', 0.07, 0.71, 0.02, min(X1 - 0.035, max(X0 + 0.035, x)), 0.445, CAB_F + 0.01, hide=(0, 0, 1))
+        with _door(door_line(i)):
+            BX('wood', 0.07, 0.71, 0.02, min(X1 - 0.035, max(X0 + 0.035, x)), 0.445, CAB_F + 0.01, hide=(0, 0, 1))
     for i in range(nb):
         xa = X0 + i * bw + 0.035
         dw = (bw - 0.07) / 2
-        for k in range(2):
-            cx = xa + dw * (k + 0.5)
-            BX('wood', dw - 0.006, 0.66, 0.02, cx, 0.445, CAB_F + 0.01, tint=WHITE, bevel=0.004, hide=(0, 0, 1))
-            BX('wood', dw - 0.1, 0.52, 0.012, cx, 0.445, CAB_F - 0.004, tint=RICH, bevel=0.01, hide=(0, 0, 1))
-            kx = cx + (dw / 2 - 0.05) * (1 if k == 0 else -1)
-            lathe('brass', [(0.0, 0.0), (0.012, 0.0), (0.008, 0.012), (0.011, 0.02), (0.014, 0.028), (0.01, 0.035), (0.0, 0.036)],
-                  xf(kx, 0.47, CAB_F - 0.01, rx=-PI / 2), 12, BRASS)
+        with _door(door_bay(i)):
+            for k in range(2):
+                cx = xa + dw * (k + 0.5)
+                BX('wood', dw - 0.006, 0.66, 0.02, cx, 0.445, CAB_F + 0.01, tint=WHITE, bevel=0.004, hide=(0, 0, 1))
+                BX('wood', dw - 0.1, 0.52, 0.012, cx, 0.445, CAB_F - 0.004, tint=RICH, bevel=0.01, hide=(0, 0, 1))
+                kx = cx + (dw / 2 - 0.05) * (1 if k == 0 else -1)
+                lathe('brass', [(0.0, 0.0), (0.012, 0.0), (0.008, 0.012), (0.011, 0.02), (0.014, 0.028), (0.01, 0.035), (0.0, 0.036)],
+                      xf(kx, 0.47, CAB_F - 0.01, rx=-PI / 2), 12, BRASS)
     # Open shelves: back, uprights with a pilaster face, shelves with a lip, and the books.
-    put(quad_facing([(X0, yl[0], Z1 - 0.004), (X1, yl[0], Z1 - 0.004), (X1, yl[-1], Z1 - 0.004), (X0, yl[-1], Z1 - 0.004)], (0, 0, -1)), 'wood', None, mul(WHITE, 0.55))
+    _split(X0, X1, lambda a, b: put(quad_facing([(a, yl[0], Z1 - 0.004), (b, yl[0], Z1 - 0.004), (b, yl[-1], Z1 - 0.004), (a, yl[-1], Z1 - 0.004)], (0, 0, -1)), 'wood', None, mul(WHITE, 0.55)))
     for i in range(nb + 1):
         x = min(X1 - 0.022, max(X0 + 0.022, X0 + i * bw))
-        BX('wood', 0.044, yl[-1] - yl[0], Z1 - SHELF_F, x, (yl[0] + yl[-1]) / 2, (Z1 + SHELF_F) / 2, hide=(0, 0, 1))
-        BX('wood', 0.07, yl[-1] - yl[0], 0.014, min(X1 - 0.035, max(X0 + 0.035, x)), (yl[0] + yl[-1]) / 2, SHELF_F - 0.007, tint=RICH, bevel=0.005, hide=(0, 0, 1))
+        with _door(door_line(i)):
+            BX('wood', 0.044, yl[-1] - yl[0], Z1 - SHELF_F, x, (yl[0] + yl[-1]) / 2, (Z1 + SHELF_F) / 2, hide=(0, 0, 1))
+            BX('wood', 0.07, yl[-1] - yl[0], 0.014, min(X1 - 0.035, max(X0 + 0.035, x)), (yl[0] + yl[-1]) / 2, SHELF_F - 0.007, tint=RICH, bevel=0.005, hide=(0, 0, 1))
     for y in yl[1:]:
-        BX('wood', X1 - X0, 0.024, Z1 - SHELF_F, 0, y - 0.012, (Z1 + SHELF_F) / 2, hide=(0, 0, 1))
-        BX('wood', X1 - X0, 0.036, 0.016, 0, y - 0.018, SHELF_F - 0.006, tint=RICH, bevel=0.005, hide=(0, 0, 1))
+        _split(X0, X1, lambda a, b: BX('wood', b - a, 0.024, Z1 - SHELF_F, (a + b) / 2, y - 0.012, (Z1 + SHELF_F) / 2, hide=(0, 0, 1)))
+        _split(X0, X1, lambda a, b: BX('wood', b - a, 0.036, 0.016, (a + b) / 2, y - 0.018, SHELF_F - 0.006, tint=RICH, bevel=0.005, hide=(0, 0, 1)))
     specials = {(1, 2): 'charts', (5, 1): 'charts', (3, 4): 'hourglass', (6, 3): 'telescope', (0, 0): 'box', (4, 0): 'clock'}
     for i in range(nb):
         xa, xb = X0 + i * bw + 0.057, X0 + (i + 1) * bw - 0.057
-        for r in range(5):
-            y0 = yl[r] + (0.0 if r == 0 else 0.0)
-            gap = yl[r + 1] - yl[r] - 0.024
-            sp = specials.get((i, r))
-            if sp:
-                xm = shelf_object(sp, xa, xb, y0, gap, rs)
-                shelf_row(rs, xm, xb, y0, gap)
-            else:
-                shelf_row(rs, xa, xb, y0, gap)
+        with _door(door_bay(i)):
+            for r in range(5):
+                y0 = yl[r] + (0.0 if r == 0 else 0.0)
+                gap = yl[r + 1] - yl[r] - 0.024
+                sp = specials.get((i, r))
+                if sp:
+                    xm = shelf_object(sp, xa, xb, y0, gap, rs)
+                    shelf_row(rs, xm, xb, y0, gap)
+                else:
+                    shelf_row(rs, xa, xb, y0, gap)
+    secret_door()
+
+def secret_door():
+    """What the door needs to swing: a plank back and end boards (in layer 'secret', turning with it), iron strap hinges
+    on its back, and the fixed frame it leaves: a jamb board each side (so the open doorway shows no bay's insides) and a
+    lintel over it up to the ceiling beam."""
+    zb = (Z1 - 0.004 + SEC_BACK) / 2
+    with layer('secret'):
+        # Plank back (facing the passage): boards with dark joints.
+        n = 7
+        w = (SEC_B - SEC_A) / n
+        for k in range(n):
+            BX('wood', w - 0.004, SEC_TOP, SEC_BACK - (Z1 - 0.004), SEC_A + w * (k + 0.5), SEC_TOP / 2, zb, tint=mul(WHITE, 0.62 + 0.08 * ((k * 37) % 5) / 4), hide=(0, 0, -1))
+        # End boards, the full depth of the door.
+        for x in (SEC_A + 0.01, SEC_B - 0.01):
+            BX('wood', 0.02, SEC_TOP, SEC_BACK - CAB_F + 0.03, x, SEC_TOP / 2, (SEC_BACK + CAB_F - 0.03) / 2, tint=mul(WHITE, 0.7))
+        # Strap hinges on the back, from the hinge side (blackened iron, as brass darkened).
+        for y in (0.3, 1.3, 2.3):
+            BX('brass', 0.42, 0.05, 0.008, SEC_A + 0.23, y, SEC_BACK + 0.004, tint=mul(WHITE, 0.12), bevel=0.003)
+            for k in range(3):
+                lathe('brass', [(0.0, 0.0), (0.009, 0.0), (0.009, 0.004), (0.0, 0.006)], xf(SEC_A + 0.08 + k * 0.14, y, SEC_BACK + 0.008, rx=PI / 2), 8, mul(WHITE, 0.1))
+    # The fixed frame round the opening: a board under the upright west of it (the cabinets have no side boards), the
+    # end jamb east of it, and the lintel over it.
+    # (Each 2 mm proud of the pieces it covers, whose end faces would otherwise share its planes.)
+    BX('wood', 0.048, 0.86, SEC_BACK - CAB_F, SEC_A - 0.022, 0.43, (SEC_BACK + CAB_F) / 2, tint=mul(WHITE, 0.7))
+    xj0, zj0 = SEC_B - 0.002, CAB_F - 0.032
+    BX('wood', X1 - xj0, SEC_TOP, SEC_BACK + 0.004 - zj0, (xj0 + X1) / 2, SEC_TOP / 2, (SEC_BACK + 0.004 + zj0) / 2, tint=mul(WHITE, 0.7))
+    BX('wood', X1 - SEC_A + 0.044, BEAM_Y + 0.03 - SEC_TOP, SEC_BACK + 0.004 - SHELF_F, (SEC_A - 0.044 + X1) / 2, (SEC_TOP + BEAM_Y + 0.03) / 2, (SEC_BACK + 0.004 + SHELF_F) / 2, tint=mul(WHITE, 0.7))
 
 def shelf_object(kind, xa, xb, y, gap, rs):
     """Something other than books at the left of a shelf; returns where the books start."""
@@ -724,8 +785,9 @@ def desk_lamp():
             pts = [(x + s * 0.016, y + 0.4, z), (x + s * 0.06, y + 0.43, z), (x + s * 0.05, y + 0.52, z), (x + s * 0.02, y + 0.585, z), (x, y + 0.6, z)]
             put(bm_tube(rounded_pts(pts), 0.003, 6), 'brass', None, BRASS, True)
         lathe('brass', [(0.0, 0.595), (0.012, 0.598), (0.014, 0.608), (0.009, 0.616), (0.012, 0.626), (0.0, 0.634)], M, 16, BRASS)
-        # Cord off the back of the desk.
-        cpts = [(x, y + 0.01, z + 0.09), (x - 0.02, y + 0.004, z + 0.14), (x - 0.03, y + 0.003, DZ + DD / 2 - 0.01), (x - 0.035, y - 0.03, DZ + DD / 2 + 0.03), (x - 0.04, 0.3, DZ + DD / 2 + 0.06), (x - 0.06, 0.005, DZ + DD / 2 + 0.12)]
+        # Cord off the desk's nearest (east) edge.
+        xe = DX + DW / 2
+        cpts = [(x + 0.09, y + 0.01, z), (x + 0.14, y + 0.004, z + 0.02), (xe - 0.01, y + 0.003, z + 0.03), (xe + 0.03, y - 0.03, z + 0.035), (xe + 0.06, 0.3, z + 0.04), (xe + 0.12, 0.005, z + 0.06)]
         put(bm_tube(rounded_pts(cpts), 0.0035, 6), 'plain', None, srgb(70, 30, 24), True)
     bulb = Vector((x, y + BULB_Y, z))
     glow(bm_sphere(0.028, 16, 10), xf(bulb.x, bulb.y, bulb.z, s=(1, 1.15, 1)), BULB, 'bulb')
@@ -861,12 +923,19 @@ def globe(x, z, face):
     bm = bm_ring(0.29, 0.34, cy + 0.0101, cy + 0.0102, 64)
     cull(bm, lambda f: f.normal.y < 0.9)
     put(bm, 'plain', xf(x, 0, z), PAGE)
-    # Meridian ring and globe, tilted together.
-    T = xf(x, cy, z, face + 0.6) @ Matrix.Rotation(D(23.4), 4, 'Z')
-    put(bm_ring(R + 0.018, R + 0.034, -0.005, 0.005, 72), 'brass', T @ Matrix.Rotation(PI / 2, 4, 'X'), BRASS, True)
-    lathe('brass', [(0.0, R + 0.03), (0.01, R + 0.03), (0.008, R + 0.05), (0.0, R + 0.055)], T, 10, BRASS)
-    globe_sphere(T, R)
-    lathe('brass', [(0.0, -R - 0.05), (0.02, -R - 0.045), (0.018, -R - 0.03), (0.0, -R - 0.025)], T, 10, BRASS)
+    # Meridian ring and globe, tilted together. The game turns them (src/props/lounge.js): the meridian and its pivot
+    # caps (layer globe_tilt) tilt about the axis square to the ring, sliding through the horizon ring; the ball (layer
+    # globe_spin) turns on its polar axis inside it. Both are built here in their rest pose (so the bake sees them
+    # there), and GLOBE holds that pose: the stand's frame (x, cy, z, turned ry) and the axis's tilt about its z.
+    tilt = D(23.4)
+    T = xf(x, cy, z, face + 0.6) @ Matrix.Rotation(tilt, 4, 'Z')
+    with layer('globe_tilt'):
+        put(bm_ring(R + 0.018, R + 0.034, -0.005, 0.005, 72), 'brass', T @ Matrix.Rotation(PI / 2, 4, 'X'), BRASS, True)
+        lathe('brass', [(0.0, R + 0.03), (0.01, R + 0.03), (0.008, R + 0.05), (0.0, R + 0.055)], T, 10, BRASS)
+        lathe('brass', [(0.0, -R - 0.05), (0.02, -R - 0.045), (0.018, -R - 0.03), (0.0, -R - 0.025)], T, 10, BRASS)
+    with layer('globe_spin'):
+        globe_sphere(T, R)
+    empty('GLOBE', (x, cy, z), ry=face + 0.6, tilt=tilt, radius=R)
 
 def globe_sphere(T, R, nu=48, nv=24):
     bm = bmesh.new()
@@ -983,7 +1052,9 @@ def colliders():
     zc, dz = (BACK_Z + Z0 + 0.02) / 2, Z0 + 0.02 - BACK_Z                 # north wall, either side of the doorway
     OBB((X0 - 0.3 - HOLE_HW) / 2, zc, -HOLE_HW - (X0 - 0.3), dz, 0.0, 3.2)
     OBB((HOLE_HW + X1 + 0.3) / 2, zc, X1 + 0.3 - HOLE_HW, dz, 0.0, 3.2)
-    OBB(0, (CAB_F + Z1 + 0.3) / 2, X1 - X0 + 0.6, Z1 + 0.3 - CAB_F, 0.0, 3.2)
+    # The bookcase, either side of its secret door (the game adds the door's own box, shut or open: props/loungeSecret.js).
+    OBB((X0 - 0.3 + SEC_A) / 2, (CAB_F + Z1 + 0.3) / 2, SEC_A - (X0 - 0.3), Z1 + 0.3 - CAB_F, 0.0, 3.2)
+    OBB((SEC_B + X1 + 0.3) / 2, (CAB_F + Z1 + 0.3) / 2, X1 + 0.3 - SEC_B, Z1 + 0.3 - CAB_F, 0.0, 3.2)
     OBB(X0 - 0.13, 0, 0.34, Z1 - Z0 + 0.6, 0.0, 3.2)
     OBB(X1 + 0.13, 0, 0.34, Z1 - Z0 + 0.6, 0.0, 3.2)
     OBB(DX, DZ, DW, DD, 0.0, DH)
@@ -1008,7 +1079,13 @@ def OBB(cx, cz, w, d, y0, y1, ry=0.0):
 def build_meta():
     empty('STATION', (EL_X, 0, PLATE_Z), rotY=0.0, callPos=[CALL[0], CALL[1], Z0 - PLATE_Z + 0.02])
     empty('LAMP', tuple(LIGHTS[0][0]))
+    # Every bulb (the desk lamp and the sconces), for what the game lights itself (the globe as it turns).
+    for i, (p, power, col, _r, name) in enumerate(LIGHTS):
+        empty('LIGHT_%d' % i, tuple(p), power=power, color=list(col), kind=name)
     empty('SOUND', (0.0, 1.4, 0.3))
+    # The secret door: its hinge line (the pivot's x, z), its span and depth, for props/loungeSecret.js.
+    empty('SECRET', (SEC_PIVOT[0], 0.0, SEC_PIVOT[1]), x0=SEC_A, x1=SEC_B, z0=CAB_F - 0.03, z1=SEC_BACK, top=SEC_TOP,
+          lintel=BEAM_Y + 0.03)
     empty('META', (0, 0, 0), bounds=[X0, -0.2, BACK_Z - 0.05, X1, H + 0.2, Z1], lamp=list(LAMP_RGB))
 
 def add_lights():
@@ -1865,27 +1942,31 @@ def paint_profile():
     base = render_shader(W, H, 1024, 512, paper((0.66, 0.52, 0.34), 9.3, W, H, stain=0.8))
     return base * render_sketch(sk, 1024, 512)
 
+def globe_colour(nt, pos, uv, sharp=1.0, detail=5.0):
+    """The globe's map as a shader (a render_shader make): uv (0..1 over the whole map, equirectangular, u along the map from
+    its west edge, v up from the south pole) -> colour. Also paints the island on the deck's postcard (paint_postcard.py),
+    seen far closer: `sharp` narrows the coast's edge and ink line to match, `detail` adds finer octaves to the coast."""
+    sep = node(nt, 'ShaderNodeSeparateXYZ', Vector=uv)
+    lon = math_node(nt, 'MULTIPLY', sep.outputs['X'], -2 * PI)
+    lat = math_node(nt, 'MULTIPLY', math_node(nt, 'SUBTRACT', sep.outputs['Y'], 0.5), PI)
+    cl = math_node(nt, 'COSINE', lat)
+    d = node(nt, 'ShaderNodeCombineXYZ', X=math_node(nt, 'MULTIPLY', cl, math_node(nt, 'COSINE', lon)),
+             Y=math_node(nt, 'SINE', lat), Z=math_node(nt, 'MULTIPLY', cl, math_node(nt, 'SINE', lon))).outputs[0]
+    d2 = node(nt, 'ShaderNodeVectorMath', props={'operation': 'ADD'}, i0=d, i1=(3.1, 1.7, 0.4)).outputs[0]
+    land = _noise3(nt, d2, 1.3, detail, 0.55, 0.3)
+    mask = _mapr(nt, land, 0.5325 - 0.0025 / sharp, 0.5325 + 0.0025 / sharp)
+    coastl = _mapr(nt, math_node(nt, 'ABSOLUTE', math_node(nt, 'SUBTRACT', land, 0.5325)), 0.0, 0.004 / sharp, 1.0, 0.0)
+    region = _noise3(nt, node(nt, 'ShaderNodeVectorMath', props={'operation': 'ADD'}, i0=d, i1=(9.0, 2.0, 5.0)).outputs[0], 2.0, 2.0, 0.5)
+    lc = _ramp(nt, region, [(0.3, (0.62, 0.36, 0.26)), (0.5, (0.7, 0.54, 0.3)), (0.7, (0.74, 0.64, 0.46))])
+    sea = node(nt, 'ShaderNodeCombineColor', Red=0.6, Green=0.5, Blue=0.34).outputs[0]
+    fine = _noise3(nt, d, 18.0, 3.0, 0.5)
+    col = _mix(nt, mask, sea, lc)
+    col = _mix(nt, math_node(nt, 'MULTIPLY', coastl, 0.8), col, (0.12, 0.07, 0.04))
+    return _scale(nt, col, math_node(nt, 'ADD', 0.9, math_node(nt, 'MULTIPLY', fine, 0.16)))
+
 def paint_globe():
     """An antique globe (equirectangular): pale seas, lands in soft rose, ochre and cream, a graticule and the ecliptic."""
-    def make(nt, pos, uv):
-        sep = node(nt, 'ShaderNodeSeparateXYZ', Vector=uv)
-        lon = math_node(nt, 'MULTIPLY', sep.outputs['X'], -2 * PI)
-        lat = math_node(nt, 'MULTIPLY', math_node(nt, 'SUBTRACT', sep.outputs['Y'], 0.5), PI)
-        cl = math_node(nt, 'COSINE', lat)
-        d = node(nt, 'ShaderNodeCombineXYZ', X=math_node(nt, 'MULTIPLY', cl, math_node(nt, 'COSINE', lon)),
-                 Y=math_node(nt, 'SINE', lat), Z=math_node(nt, 'MULTIPLY', cl, math_node(nt, 'SINE', lon))).outputs[0]
-        d2 = node(nt, 'ShaderNodeVectorMath', props={'operation': 'ADD'}, i0=d, i1=(3.1, 1.7, 0.4)).outputs[0]
-        land = _noise3(nt, d2, 1.3, 5.0, 0.55, 0.3)
-        mask = _mapr(nt, land, 0.53, 0.535)
-        coastl = _mapr(nt, math_node(nt, 'ABSOLUTE', math_node(nt, 'SUBTRACT', land, 0.5325)), 0.0, 0.004, 1.0, 0.0)
-        region = _noise3(nt, node(nt, 'ShaderNodeVectorMath', props={'operation': 'ADD'}, i0=d, i1=(9.0, 2.0, 5.0)).outputs[0], 2.0, 2.0, 0.5)
-        lc = _ramp(nt, region, [(0.3, (0.62, 0.36, 0.26)), (0.5, (0.7, 0.54, 0.3)), (0.7, (0.74, 0.64, 0.46))])
-        sea = node(nt, 'ShaderNodeCombineColor', Red=0.6, Green=0.5, Blue=0.34).outputs[0]
-        fine = _noise3(nt, d, 18.0, 3.0, 0.5)
-        col = _mix(nt, mask, sea, lc)
-        col = _mix(nt, math_node(nt, 'MULTIPLY', coastl, 0.8), col, (0.12, 0.07, 0.04))
-        return _scale(nt, col, math_node(nt, 'ADD', 0.9, math_node(nt, 'MULTIPLY', fine, 0.16)))
-    base = render_shader(2.0, 1.0, 1024, 512, make)
+    base = render_shader(2.0, 1.0, 1024, 512, globe_colour)
     sk = Sketch(2.0, 1.0, 51)
     for k in range(25):
         x = 2.0 * k / 24

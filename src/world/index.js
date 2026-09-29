@@ -20,8 +20,9 @@ class Pebbles {
     this.items = this.geometries.map(() => []);
     this.rng = new Rng(9);
   }
-  addAt(x, y, z, s, geo = this.geometries[0]) {
-    this.items[this.geometries.indexOf(geo)].push({ x, y, z, s, ry: this.rng.float(0, 6.28) });
+  // ry: the stone's turn; given, it draws nothing from the shared stream (so the stones added after it keep theirs).
+  addAt(x, y, z, s, geo = this.geometries[0], ry = this.rng.float(0, 6.28)) {
+    this.items[this.geometries.indexOf(geo)].push({ x, y, z, s, ry });
   }
   // keep(x, z): false drops a stone after its random draws, so the others stay where they were.
   scatter(stack, n, rng, accept, keep = null) {

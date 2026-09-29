@@ -234,6 +234,13 @@ export class Stack {
     this.cliffCalm = opts.cliffCalm ? (WALLS.calmSmooth ? smoothCalm(opts.cliffCalm, cfg.r) : opts.cliffCalm) : (() => 1);
     // Arcs the wall relief (WALLS.geo) keeps off: [{ from, to, depth, feather, inward }] (see protectAt).
     this.protect = opts.protect || [];
+    // Windows cut out of the cliff mesh (and its collider), in the wall grid's cells: [{ j0, j1, r0, r1 }], columns
+    // j0 <= j < j1 (mod segs) between wall rows r0 and r1 (indices into DEPTHS). Whatever fills them is built by the
+    // stack's own code from wallGrid (e.g. the Dome's cave mouth, world/cliffCave.js).
+    this.openings = opts.openings || [];
+    // Rectangles cut out of the cap mesh and its collider (not out of heightAt): [{ x, z, ry, x0, x1, z0, z1 }], a frame
+    // at world (x, z) turned ry (its +z along (sin ry, cos ry)) and the rectangle's extent in it. Set before build().
+    this.capHoles = opts.capHoles || [];
     this.group = new THREE.Group();
     this.group.name = 'stack:' + cfg.name;
   }
@@ -402,6 +409,9 @@ export class Stack {
     }
     this.capGeo = capGeo;
     this.capBVH = new MeshBVH(capGeo.clone());
+    // Holes cut in the drawn ground and its collision (the Tower bunker's stairwell): after the BVH, so heightAt (and
+    // everything placed with it) sees the ground as it was, and nothing moves.
+    if (this.capHoles?.length) cutCapHoles(capGeo, this.capHoles);
     const cap = new THREE.Mesh(capGeo, M.cap);
     cap.receiveShadow = true;
     cap.castShadow = true;
@@ -437,10 +447,9 @@ export class Stack {
       }
     }
     const W = segs + 1;
-    for (let ri = 0; ri < rows.length - 1; ri++) for (let j = 0; j < segs; j++) {
-      const a = ri * W + j, b = ri * W + j + 1, cc = (ri + 1) * W + j, d = (ri + 1) * W + j + 1;
-      cliffIdx.push(a, b, cc, b, d, cc);
-    }
+    const cut = (ri, j) => this.openings.some((o) => ri >= o.r0 && ri < o.r1 && ((j - o.j0) % segs + segs) % segs < ((o.j1 - o.j0) % segs + segs) % segs);
+    const quad = (ri, j) => { const a = ri * W + j, b = a + 1, cc = a + W, d = cc + 1; return [a, b, cc, b, d, cc]; };
+    for (let ri = 0; ri < rows.length - 1; ri++) for (let j = 0; j < segs; j++) if (!cut(ri, j)) cliffIdx.push(...quad(ri, j));
     const cliffGeo = new THREE.BufferGeometry();
     cliffGeo.setAttribute('position', new THREE.Float32BufferAttribute(cliffPos, 3));
     cliffGeo.setAttribute('color', new THREE.Float32BufferAttribute(WALLS.bake ? bakeCliffColors(this, cliffPos, cliffCol, rows, edgeRow) : cliffCol, 3));
@@ -456,7 +465,11 @@ export class Stack {
     for (let i = 0; i < P.length; i += 3) {
       this.wallP[i] = P[i] - this.cx; this.wallP[i + 1] = P[i + 1]; this.wallP[i + 2] = P[i + 2] - this.cz;
     }
-    const cliff = new THREE.Mesh(cliffGeo, WALLS.shader ? stackWallMaterial(this) : M.cliff);
+    // The wall grid, for whatever fills the openings: vertex (ri, j) is ri * W + j (j = segs repeats j = 0).
+    this.wallGrid = { W, segs, rows, pos: cliffGeo.attributes.position.array, col: cliffGeo.attributes.color.array,
+      uv: cliffGeo.attributes.uv.array, nrm: cliffGeo.attributes.normal.array };
+    this.wallMaterial = WALLS.shader ? stackWallMaterial(this) : M.cliff;
+    const cliff = new THREE.Mesh(cliffGeo, this.wallMaterial);
     cliff.receiveShadow = true;
     cliff.castShadow = false;
     cliff.name = 'cliff';
@@ -468,7 +481,9 @@ export class Stack {
       const nCollRows = rows.filter((d) => d <= 45).length;
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(cliffPos.slice(0, nCollRows * W * 3), 3));
-      g.setIndex(cliffIdx.slice(0, (nCollRows - 1) * segs * 6));
+      const collIdx = [];
+      for (let ri = 0; ri < nCollRows - 1; ri++) for (let j = 0; j < segs; j++) if (!cut(ri, j)) collIdx.push(...quad(ri, j));
+      g.setIndex(collIdx);
       collider.addGeometry(g);
     }
     return this.group;
@@ -516,4 +531,70 @@ export class Stack {
     const rad = this.cliffRadius(theta, depth, er);
     return out.set(this.cx + Math.cos(theta) * rad, this.top - depth, this.cz + Math.sin(theta) * rad);
   }
+}
+
+// Cut rectangles out of the cap: every triangle that reaches into one is replaced by its parts outside it (clipped
+// against the rectangle's four sides, in four convex pieces: beyond each end, and beyond each side between the ends),
+// their colours, UVs and normals interpolated, so the hole's edges are straight and the rest of the ground is exactly
+// as it was. The original vertices keep their indices (appended ones come after them).
+function cutCapHoles(geo, holes) {
+  const A = ['position', 'color', 'uv', 'normal'].filter((k) => geo.attributes[k]);
+  const sizes = A.map((k) => geo.attributes[k].itemSize);
+  const W = sizes.reduce((a, b) => a + b, 0);
+  const src = A.map((k) => geo.attributes[k].array);
+  const vert = (i) => { const v = new Float64Array(W); let o = 0; A.forEach((k, j) => { for (let c = 0; c < sizes[j]; c++) v[o++] = src[j][i * sizes[j] + c]; }); return v; };
+  const lerp = (a, b, t) => { const v = new Float64Array(W); for (let c = 0; c < W; c++) v[c] = a[c] + (b[c] - a[c]) * t; return v; };
+  // Triangles as vertex records (original ones carry their index, so untouched triangles keep it).
+  const idx = geo.index.array;
+  let tris = [];
+  for (let t = 0; t < idx.length; t += 3) tris.push([idx[t], idx[t + 1], idx[t + 2]].map((i) => ({ i, v: vert(i) })));
+  for (const h of holes) {
+    const ax = Math.cos(h.ry), az = -Math.sin(h.ry), bx = Math.sin(h.ry), bz = Math.cos(h.ry);   // local +x, +z in world
+    const L = (v) => { const dx = v[0] - h.x, dz = v[2] - h.z; return [dx * ax + dz * az, dx * bx + dz * bz]; };
+    const planes = [
+      [(p) => h.x0 - p[0]],
+      [(p) => p[0] - h.x1],
+      [(p) => p[0] - h.x0, (p) => h.x1 - p[0], (p) => h.z0 - p[1]],
+      [(p) => p[0] - h.x0, (p) => h.x1 - p[0], (p) => p[1] - h.z1],
+    ];
+    const out = [];
+    for (const tri of tris) {
+      const ls = tri.map((r) => L(r.v));
+      const mnx = Math.min(...ls.map((q) => q[0])), mxx = Math.max(...ls.map((q) => q[0]));
+      const mnz = Math.min(...ls.map((q) => q[1])), mxz = Math.max(...ls.map((q) => q[1]));
+      if (mxx <= h.x0 || mnx >= h.x1 || mxz <= h.z0 || mnz >= h.z1) { out.push(tri); continue; }
+      for (const region of planes) {
+        let poly = tri.map((r) => ({ v: r.v, i: r.i }));
+        for (const f of region) {
+          const next = [];
+          for (let k = 0; k < poly.length; k++) {
+            const a = poly[k], b = poly[(k + 1) % poly.length];
+            const fa = f(L(a.v)), fb = f(L(b.v));
+            if (fa >= 0) next.push(a);
+            if ((fa >= 0) !== (fb >= 0)) next.push({ v: lerp(a.v, b.v, fa / (fa - fb)), i: -1 });
+          }
+          poly = next;
+          if (poly.length < 3) break;
+        }
+        for (let k = 1; k + 1 < poly.length; k++) out.push([poly[0], poly[k], poly[k + 1]]);
+      }
+    }
+    tris = out;
+  }
+  // Rebuild: original vertices first, then the new ones.
+  const n0 = geo.attributes.position.count;
+  const extra = [];
+  const index = [];
+  for (const tri of tris) for (const r of tri) {
+    if (r.i < 0) { r.i = n0 + extra.length; extra.push(r.v); }
+    index.push(r.i);
+  }
+  A.forEach((k, j) => {
+    const size = sizes[j], arr = new Float32Array((n0 + extra.length) * size);
+    arr.set(src[j].subarray(0, n0 * size));
+    let o = sizes.slice(0, j).reduce((a, b) => a + b, 0);
+    extra.forEach((v, e) => { for (let c = 0; c < size; c++) arr[(n0 + e) * size + c] = v[o + c]; });
+    geo.setAttribute(k, new THREE.BufferAttribute(arr, size));
+  });
+  geo.setIndex(index);
 }

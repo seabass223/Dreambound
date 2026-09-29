@@ -157,10 +157,10 @@ until a stage fixes them or the lead rules on them.
   wall is today's. Rebuilding the Dome collider's BVH from 5 shuffled triangle orders, it lands at the same 2.0 m
   with every flag off in 1 of them, and passes with `relief` in all 5 (it lands only in the as-built order); order
   alone moves the Dome's R6 failures between 19 and 21.
-- Not covered by R6 (known gaps): the controller's 9 m fall trigger can fire while the player is still over a cap
-  (steep Mountain cap faces, feet 0.1-0.9 m above the ground). `createFall` leaves out the stack it starts over, so
-  such a fall drops through the cap as before the drift (eye up to 130 m under it for about 3 s while visible);
-  the fix belongs in the controller. The eye is measured against the cliff meshes only: falls off the Dome rim
+- Not covered by R6 (known gaps): the controller's 9 m fall trigger used to fire while the player was still over a
+  steep Mountain cap face (feet 0.1-0.9 m above the ground), and `createFall` leaves out the stack it starts over,
+  so such a fall dropped through the cap. The Mountain's slope limit (README "Walking and slopes") closed it for
+  faces up to 50°: a slide down them counts as on the ground. Steeper cap faces are cliffs and still fall. The eye is measured against the cliff meshes only: falls off the Dome rim
   over its cave hood pass through the `dome-props` mesh early in the fall, with or without the drift (measured at
   85-125° when the hood was on the north side; since the ledge was shortened it is at about 215°).
 - Dome pad flatness is 0.011 m on the built mesh (triangles straddle d = 15 m), just over the plan's 0.01.

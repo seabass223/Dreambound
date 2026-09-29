@@ -174,14 +174,14 @@ export async function recordAnchors(W) {
   };
   // Ledge: the samples, the ledge's inner radius and the built wall behind each sample.
   const ledgeInfo = (n) => {
-    const L = calls('buildLedge', n)[0];
+    const L = calls('buildLedge', n)[0] ?? calls('buildCliffPath', n)[0];
     if (!L) return null;
     const st = S[n];
     const R = L.samples.map((s) => st.cliffRadius(s.theta, s.depth, st.edgeR(s.theta)) - 0.1);
     const off = L.samples.map((s, i) => (samplers[n].radiusAt(s.theta, st.top - s.depth) ?? NaN) - R[i]);
     return { count: L.samples.length, samples: L.samples, innerR: R, meshMinusLedge: off, worst: Math.max(...off.map(Math.abs)), geometry: sha(L.geometry.attributes.position.array) };
   };
-  const caveInfo = (n) => calls('buildCave', n)[0] ?? null;
+  const caveInfo = (n) => calls('buildCave', n)[0] ?? calls('buildCliffCave', n)[0] ?? null;
   const elevator = (id) => calls('createElevator').find((e) => e.id === id) ?? null;
   // Trees near the rim: trunk base (y - 0.5) against the wall at that angle and height.
   const treeMargins = (n) => {

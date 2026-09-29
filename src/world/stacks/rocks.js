@@ -16,6 +16,7 @@ import { buildBridge } from '../bridge.js';
 import { createElevator } from '../../props/elevator.js';
 import { createMovableRocks } from '../../props/movableRocks.js';
 import { buildSequoia } from '../../props/sequoia.js';
+import { carvePetroglyph } from '../../props/petroglyph.js';
 import { ROCK_TARGETS } from '../rockPuzzle.js';
 
 // Layout (offsets from the stack centre). The tor stands west of the sequoia, in view of its door; its spring
@@ -28,6 +29,12 @@ const PILES = [
 ];
 const POOL_R = 3.4;
 const SEQ_SINK_R = 4.3;   // ground sunk under the sequoia out to here: its car and sill reach 3.5 m, plus a cap triangle
+// The petroglyph (a clue, props/petroglyph.js): on the big stone of the 205° pile, on the face looking out to the rim,
+// about 0.8 m up. at: a point on that face (x, z from the stack's centre, y absolute); normal: roughly out of it.
+const GLYPH = { pile: 1, at: [-41.409, 5.974, -16.657], normal: [-0.831, 0.01, 0.556], lift: 0.04 };
+// A sparse line of flat stones across the meadow, round the north side of that pile to the ground in front of the
+// carving (the last one about 2.2 m from it): there to be noticed, not a path. Offsets from the stack's centre.
+const CLUE_STONES = [[-27.5, -6.8], [-30.2, -8.1], [-33.1, -9.7], [-35.8, -11.1], [-38.2, -12.5], [-40.3, -13.6], [-42.0, -14.5]];
 
 export function buildRocks(ctx) {
   const cfg = STACKS.rocks;
@@ -181,6 +188,12 @@ export function buildRocks(ctx) {
   const rockWalls = [tor, ...piles].flatMap((m) => m.walls);
   for (const w of rockWalls) ctx.physics.addCircle({ ...w, zone: 'surface' });
   const onRock = (x, z) => tor.footprint(x, z) || piles.some((p) => p.footprint(x, z));
+  // The Tower stack and its elevator's two stops below, pecked into a pile's stone (a fixed one: the boulders are
+  // kept off the piles).
+  carvePetroglyph(ctx, {
+    geos: piles[GLYPH.pile].geos, at: new THREE.Vector3(cx + GLYPH.at[0], GLYPH.at[1], cz + GLYPH.at[2]),
+    normal: new THREE.Vector3(...GLYPH.normal), lift: GLYPH.lift,
+  });
 
   // ---- Water ----
   // Creek surface just above the bed; wide across the pool.
@@ -305,7 +318,32 @@ export function buildRocks(ctx) {
     const p = stream.pointAt(t);
     const g = ctx.pebbles.geometries[rng.int(0, ctx.pebbles.geometries.length - 1)];
     const s = rng.float(0.25, 0.45);
-    ctx.pebbles.addAt(p.x + rng.float(-0.4, 0.4), bedAt(t) + 0.18, p.z + rng.float(-0.4, 0.4), s, g);
+    // Off to one side or the other, 45-95 % of the way to where that bank leaves the water, sitting on the bed there:
+    // a line of them down the middle read as a trail to follow. (The same draws as before: side and spread from one,
+    // a little drift along the stream from the other, so nothing after them moves.)
+    const u = rng.float(-0.4, 0.4), drift = rng.float(-0.4, 0.4);
+    const len = Math.hypot(p.dx, p.dz) || 1, nx = -p.dz / len, nz = p.dx / len;
+    const sgn = u < 0 ? -1 : 1, wy = bedAt(t) + 0.34;
+    let reach = 0.3;
+    for (let o = 0.1; o < 4; o += 0.1) {
+      const gy = stack.heightAt(p.x + nx * o * sgn, p.z + nz * o * sgn);
+      if (gy === null || gy >= wy - 0.06) break;
+      reach = o;
+    }
+    const off = sgn * reach * (0.45 + 0.5 * Math.abs(u) / 0.4);
+    const x = p.x + nx * off + (p.dx / len) * drift, z = p.z + nz * off + (p.dz / len) * drift;
+    if (!onRock(x, z)) ctx.pebbles.addAt(x, (stack.heightAt(x, z) ?? bedAt(t)) + 0.18, z, s, g);
+  }
+
+  // The stones leading to the carving (CLUE_STONES), from their own stream, so nothing else moves.
+  {
+    const r2 = new Rng(cfg.seed * 31);
+    for (const [lx, lz] of CLUE_STONES) {
+      const x = cx + lx + r2.float(-0.3, 0.3), z = cz + lz + r2.float(-0.3, 0.3);
+      const s = r2.float(0.28, 0.4), geo = ctx.pebbles.geometries[r2.int(0, 1)], ry = r2.float(0, 6.28);
+      const y = stack.heightAt(x, z);
+      if (y !== null && !onRock(x, z)) ctx.pebbles.addAt(x, y + 0.05, z, s, geo, ry);
+    }
   }
 
   // ---- The sequoia the elevator comes out of ----

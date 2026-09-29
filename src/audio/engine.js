@@ -730,6 +730,43 @@ export class AudioEngine {
     this.env(g4, t2, 0.02, 0.12, 0.35); bz.start(t2); bz.stop(t2 + 0.5);
   }
 
+  // A steel filing drawer on its runners: a rolling rumble with the ball bearings' rattle in it, rising a little as it
+  // comes out (falling going in), and a metal knock at the stop (heavier shutting). dur: the slide's length (s).
+  sfx_drawer({ pos, open = true, dur = 0.55 }, t) {
+    const o = this.out(pos, 2);
+    const s = this.src(this.white, false, 0.9 + Math.random() * 0.2);
+    const bp = this.filter('bandpass', open ? 700 : 900, 1.1);
+    bp.frequency.setValueAtTime(open ? 650 : 950, t); bp.frequency.linearRampToValueAtTime(open ? 1000 : 620, t + dur);
+    const g = this.gain(0);
+    // The rattle: the rumble's level shaken at about 40 Hz.
+    const rat = this.ctx.createOscillator(); rat.type = 'square'; rat.frequency.value = 34 + Math.random() * 12;
+    const ra = this.gain(0.35); const trem = this.gain(0.65);
+    rat.connect(ra).connect(trem.gain);
+    s.connect(bp).connect(trem).connect(g).connect(o);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.06);
+    g.gain.setValueAtTime(0.2, t + dur * 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.04);
+    s.start(t); s.stop(t + dur + 0.1); rat.start(t); rat.stop(t + dur + 0.1);
+    // The stop: a short steel knock (a ringing ping over a dull thump).
+    const te = t + dur;
+    for (const [f, a] of [[1450, 0.07], [2320, 0.04], [3710, 0.02]]) {
+      const osc = this.ctx.createOscillator(); osc.frequency.value = f * (0.97 + Math.random() * 0.06);
+      const g2 = this.gain(0); osc.connect(g2).connect(o); this.env(g2, te, 0.001, a * (open ? 0.8 : 1.3), 0.12); osc.start(te); osc.stop(te + 0.2);
+    }
+    this.thud(o, te, open ? 110 : 80, open ? 0.25 : 0.45);
+  }
+
+  // A sheet of paper picked up or laid down: a few quick crisp rustles.
+  sfx_page({ pos }, t) {
+    const o = this.out(pos, 1.5);
+    for (let k = 0; k < 3; k++) {
+      const tk = t + k * (0.05 + Math.random() * 0.05);
+      const s = this.src(this.white, false, 0.8 + Math.random() * 0.4); const hp = this.filter('bandpass', 3500 + Math.random() * 2500, 0.8); const g = this.gain(0);
+      s.connect(hp).connect(g).connect(o); this.env(g, tk, 0.004, 0.09 - k * 0.02, 0.07 + Math.random() * 0.05); s.start(tk); s.stop(tk + 0.2);
+    }
+  }
+
   sfx_gearTick({ pos }, t) {
     const o = this.out(pos, 2);
     const osc = this.ctx.createOscillator(); osc.frequency.value = 2800 + Math.random() * 400;
@@ -757,6 +794,29 @@ export class AudioEngine {
     const g = this.gain(0); osc.connect(g).connect(o); this.env(g, t, 0.003, amt, 0.25); osc.start(t); osc.stop(t + 0.4);
     const s = this.src(this.brown, false); const g2 = this.gain(0); const lp = this.filter('lowpass', 500);
     s.connect(lp).connect(g2).connect(o); this.env(g2, t, 0.003, amt * 0.8, 0.2); s.start(t); s.stop(t + 0.35);
+  }
+
+  // The lounge's secret bookcase (props/loungeSecret.js): a latch let go (a clunk), then a heavy, slow swing on an old
+  // pivot, a low grinding rumble under long wooden creaks with the books and ornaments rattling on their shelves, and a
+  // soft thud as it comes to rest. `swing`: seconds from the clunk to the thud.
+  sfx_bookcase({ pos, swing = 4.4 }, t) {
+    const o = this.out(pos, 5);
+    this.thud(o, t, 55, 0.75);
+    this.thud(o, t + 0.06, 120, 0.25);
+    const s0 = t + 0.6, d = swing - 0.6;
+    const r = this.src(this.brown, false); const lp = this.filter('lowpass', 110); const g = this.gain(0);
+    r.connect(lp).connect(g).connect(o);
+    g.gain.setValueAtTime(0.0001, s0); g.gain.exponentialRampToValueAtTime(0.6, s0 + 0.9);
+    g.gain.setValueAtTime(0.55, s0 + d - 0.7); g.gain.exponentialRampToValueAtTime(0.0001, s0 + d + 0.2);
+    r.start(s0); r.stop(s0 + d + 0.3);
+    this.creak(o, s0, d * 0.75, 58, 0.2);
+    this.creak(o, s0 + d * 0.3, d * 0.6, 92, 0.12);
+    for (let k = 0.15; k < d - 0.2; k += 0.08 + Math.random() * 0.22) {
+      const n = this.src(this.white, false); const bp = this.filter('bandpass', 1400 + Math.random() * 2600, 3); const gg = this.gain(0);
+      n.connect(bp).connect(gg).connect(o); this.env(gg, s0 + k, 0.002, 0.025 + Math.random() * 0.04, 0.05);
+      n.start(s0 + k); n.stop(s0 + k + 0.12);
+    }
+    this.thud(o, s0 + d, 46, 0.55);
   }
 
   sfx_doorOpen({ pos }, t) {
@@ -814,12 +874,17 @@ export class AudioEngine {
   sfx_step({ pos, surface = 'grass', run = false }, t) {
     const o = this.near;   // your own feet: never faded
     const v = run ? 1.25 : 1;
-    const noise = (freq, q, peak, dur, buf = this.white) => {
+    const noise = (freq, q, peak, dur, buf = this.white, at = t) => {
       const s = this.src(buf, false, 0.8 + Math.random() * 0.4); const bp = this.filter('bandpass', freq * (0.85 + Math.random() * 0.3), q); const g = this.gain(0);
-      s.connect(bp).connect(g).connect(o); this.env(g, t, 0.006, peak * v, dur); s.start(t); s.stop(t + dur + 0.1);
+      s.connect(bp).connect(g).connect(o); this.env(g, at, 0.006, peak * v, dur); s.start(at); s.stop(at + dur + 0.1);
     };
     if (surface === 'grass') { noise(3200, 0.6, 0.05, 0.12); noise(900, 1, 0.03, 0.08); }
     else if (surface === 'dirt') { noise(1200, 0.8, 0.07, 0.1); noise(2800, 1.2, 0.04, 0.06); }
+    else if (surface === 'gravel') {
+      // Loose pebbles: a soft crunch under a quick scatter of sharp little grains as the stones shift.
+      noise(1000, 0.9, 0.05, 0.09);
+      for (let k = 0; k < 5; k++) noise(2600 + Math.random() * 2800, 2.5, 0.03, 0.025, this.white, t + 0.006 + k * 0.014 + Math.random() * 0.01);
+    }
     else if (surface === 'rock') { noise(2200, 1.5, 0.08, 0.05); noise(600, 1, 0.05, 0.07, this.brown); }
     else if (surface === 'wood' || surface === 'ladder') {
       const osc = this.ctx.createOscillator(); osc.frequency.setValueAtTime(surface === 'ladder' ? 240 : 170, t); osc.frequency.exponentialRampToValueAtTime(110, t + 0.08);

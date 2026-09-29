@@ -9,6 +9,7 @@ import { rigged, UV_VERT, createRig, collectParts, partIndex } from '../render/r
 import { FAR_BAND, mergeable } from '../render/lod.js';
 import { createScopeExit } from '../ui/scopeExit.js';
 import { createStation } from './observatoryStation.js';
+import { makeInspectable } from './inspect.js';
 import { VIEW_DROP } from '../world/skyTarget.js';
 
 // The Mountain observatory, modeled in Blender (tools/blender/observatory_design.py): a stucco drum and a
@@ -22,18 +23,35 @@ import { VIEW_DROP } from '../world/skyTarget.js';
 export async function loadObservatory() {
   const loader = new GLTFLoader();
   const base = import.meta.env.BASE_URL + 'models/';
-  const [gltf, ao] = await Promise.all([
+  const [gltf, ao, print] = await Promise.all([
     loader.loadAsync(base + 'observatory.glb'),
     new THREE.TextureLoader().loadAsync(base + 'observatory_ao.png'),
+    // The print lying in a filing drawer (see the filing cabinets in placeObservatory).
+    new THREE.TextureLoader().loadAsync(base + 'telescope_capture.jpg').catch(() => null),
   ]);
+  if (print) { print.colorSpace = THREE.SRGBColorSpace; print.anisotropy = 8; }
   ao.flipY = false;
   ao.channel = 1;
   ao.colorSpace = THREE.NoColorSpace;
   // An atlas of many small charts: mipmapping would bleed neighbouring charts together at a distance.
   ao.generateMipmaps = false;
   ao.minFilter = THREE.LinearFilter;
-  return { gltf, ao };
+  // A white patch in the atlas's empty top-left corner, for the parts left out of the bake (the filing drawers, which
+  // slide out of their dark case): their second UVs all point at it (WHITE_UV), so they get no occlusion.
+  if (typeof document !== 'undefined' && ao.image) {
+    const c = document.createElement('canvas');
+    c.width = ao.image.width; c.height = ao.image.height;
+    const g = c.getContext('2d');
+    g.drawImage(ao.image, 0, 0);
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, 8, 8);
+    ao.image = c;
+    ao.needsUpdate = true;
+  }
+  return { gltf, ao, print };
 }
+const WHITE_UV = [3 / 2048, 3 / 2048];
+const DRAWER_TIME = 0.55;   // s for a filing drawer to slide all the way out or in
 
 // Blender materials merged into one game material: [game material, value packed into vertex alpha
 // (metalness for 'metal', roughness for 'plain'), color multiplied into the vertex colors].
@@ -46,8 +64,8 @@ const NO_SHADOW = new Set(['glass', 'emissive', 'lamps', 'screen', 'reels', 'pos
 // mast and shelter further out. The drum and dome are always drawn.
 const LAYER_OUT = { in: [45, 65], near: [110, 140] };
 // Rear hatch: how far off the tor top may sit in each axis of the eyepiece for the panel to open (the reticle's
-// centring circle has a radius of 0.18 deg, its dashed ring 0.64 deg; one mouse count on a handwheel turns the
-// dome 0.09 deg and the tube 0.07 deg), and how long the panel takes to swing.
+// centring circle has a radius of 0.18 deg, its dashed ring 0.64 deg; see gearing() for how far the mouse turns
+// the dome and the tube), and how long the panel takes to swing.
 const HATCH_TOL = THREE.MathUtils.degToRad(0.35);
 const HATCH_TIME = 1.5;
 
@@ -147,7 +165,7 @@ float reelAlpha(vec2 u, out float shade) {
 `;
 
 export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
-  const { gltf, ao } = asset;
+  const { gltf, ao, print } = asset;
   const src = gltf.scene;
   src.updateMatrixWorld(true);
 
@@ -242,6 +260,15 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     const [key, layer] = group.split('@');
     const mat = M[key];
     if (!mat) { console.warn('observatory: no material for', key); continue; }
+    // Meshes left out of the AO bake (no second UVs) in a group with baked ones: point them at the atlas's white patch.
+    if (geos.some((g) => g.attributes.uv1)) {
+      for (const g of geos) {
+        if (g.attributes.uv1) continue;
+        const n = g.attributes.position.count, uv = new Float32Array(n * 2);
+        for (let i = 0; i < n; i++) { uv[i * 2] = WHITE_UV[0]; uv[i * 2 + 1] = WHITE_UV[1]; }
+        g.setAttribute('uv1', new THREE.BufferAttribute(uv, 2));
+      }
+    }
     const geo = mergeGeometries(geos, false);
     if (!geo) { console.warn('observatory: could not merge', key); continue; }
     // One sphere around the whole building: the tube and dome move far from their rest pose.
@@ -292,9 +319,14 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
   const yaw0 = st.yaw, psi0 = slitAngle(st.yaw);
   const domeAngle = (yaw) => psi0 - (yaw - yaw0);
   let wind = 0, shut = 1, doorS = 0;   // doorS: the front door, 0 shut (as built) .. 1 swung open against the wall   // shut: the rear hatch's panel (built open in Blender, so 1 swings it shut)
+  const drawerOpen = {};   // 'drawer<i>': 0 shut .. 1 out (see the filing cabinets below)
   const apply = () => {
     const val = { yaw: domeAngle(st.yaw), pitch: st.pitch, wind, hatch: shut, door: doorS };
-    for (let i = 1; i < parts.length; i++) rig.uRigP.value[i].w = (val[parts[i].driver] ?? 0) * parts[i].ratio;
+    for (let i = 1; i < parts.length; i++) {
+      const P = parts[i], v = (val[P.driver] ?? drawerOpen[P.driver] ?? 0) * P.ratio;
+      if (P.slide) rig.uRigT.value[i].set(P.slide.x * v, P.slide.y * v, P.slide.z * v, 0);
+      else rig.uRigP.value[i].w = v;
+    }
   };
   apply();
 
@@ -330,14 +362,18 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
   const viewerProxy = proxy(new THREE.BoxGeometry(0.42, 0.42, 0.5), nodes.Viewer.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1.6, 0)));
   const player = () => ctx.player;
   const controls = {};
+  // Mouse counts (one frame's worth) to gear travel: slow movements turn the wheels finely, a quick sweep turns
+  // them at full rate. At the handwheels a count turns the dome 0.023 deg slowly, up to 0.09 deg in a sweep (the tube
+  // 0.017 to 0.07 deg); at the eyepiece, whose view is only 3.2 deg wide, a tenth of that.
+  const gearing = (m, full) => m * full * (0.25 + 0.75 * Math.min(1, Math.abs(m) / 16));
   controls.az = ctx.interact.add({
     name: 'observatory:az-wheel', meshes: [azProxy], range: 2.4,
-    onPress: () => { player().lookHandler = (mx) => turn(-mx * 0.0016, 0); },
+    onPress: () => { player().lookHandler = (mx) => turn(-gearing(mx, 0.0016), 0); },
     onRelease: () => { player().lookHandler = null; },
   });
   controls.alt = ctx.interact.add({
     name: 'observatory:alt-wheel', meshes: [altProxy], range: 2.4,
-    onPress: () => { player().lookHandler = (mx, my) => turn(0, -my * 0.0012); },
+    onPress: () => { player().lookHandler = (mx, my) => turn(0, -gearing(my, 0.0012)); },
     onRelease: () => { player().lookHandler = null; },
   });
 
@@ -381,13 +417,15 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
       cam.fov = 3.2; cam.updateProjectionMatrix();
       player().cameraControlled = false;
       player().canMove = false;
-      player().lookHandler = () => {};   // the mouse does nothing at the eyepiece
+      // At the eyepiece the handwheels are within reach: the mouse turns them, finely, and the view goes the way
+      // the mouse does (right turns the dome right, up raises the tube).
+      player().lookHandler = (mx, my) => { if (mx || my) turn(gearing(mx, 0.00016), -gearing(my, 0.00012)); };
       ctx.audio?.play('click', {});
     },
   });
   ctx.exitScope = exitView;
 
-  // ---- the rear hatch (a puzzle): a riveted square cut low in the back of the drum. When the dome and the
+  // ---- the rear hatch (a puzzle): a riveted square cut at chest height in the back of the drum. When the dome and the
   // telescope both point at the top of the Rocks tor, the curved panel behind it swings aside and shows a yellow
   // plate with three screws; aim elsewhere and it swings back. ----
   const hatchPart = parts.find((q) => q && q.driver === 'hatch');
@@ -476,6 +514,72 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
   // can be stood on, only while the telescope points at the Dome stack. ----
   const station = createStation(ctx, { root, nodes, st, doorAngle, domeAngle, center });
 
+  // ---- the filing cabinets: press a drawer to slide it out on its runners, again to push it shut (parts
+  // 'Drawer<i>', driven by drawerOpen). One holds a print (PAPER): press it to hold it up to the light, again to put
+  // it back. ----
+  const drawerHit = new THREE.BoxGeometry(0.44, 0.3, 0.06), drawers = [];
+  for (let i = 0; nodes['DRAWER_' + i]; i++) {
+    const n = nodes['DRAWER_' + i], u = n.userData;
+    const at = n.position.clone(), out = new THREE.Vector3(...(u.slide ?? [0, 0, 1])).normalize();
+    const hit = proxy(drawerHit, at);
+    hit.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), out);
+    const d = { i, at, out, travel: u.travel ?? 0.42, hit, x: 0, target: 0 };
+    drawers.push(d);
+    ctx.interact.add({
+      name: 'observatory:drawer:' + i, meshes: [hit], range: 2.2, exact: true,
+      onPress: () => {
+        if (paper && paper.drawer === i && paper.mode !== 'rest') return;   // (the print is out: put it back first)
+        d.target = d.target > 0.5 ? 0 : 1;
+        ctx.audio?.play('drawer', { pos: root.localToWorld(d.at.clone()), open: d.target > 0.5, dur: DRAWER_TIME * Math.abs(d.target - d.x) });
+      },
+    });
+  }
+  // The print: the photo on its face, plain paper behind, lying across the folders at PAPER. Press it (with its drawer
+  // out) to hold it up close, lit a little, and again to put it back (props/inspect.js); it rides in and out with its
+  // drawer.
+  let paper = null;
+  if (nodes.PAPER && print) {
+    const u = nodes.PAPER.userData, size = u.size ?? 0.21;
+    const group = new THREE.Group();
+    group.name = 'observatory-print';
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(size, size), patchMaterial(new THREE.MeshStandardMaterial({
+      map: print, roughness: 0.82, emissive: 0xffffff, emissiveMap: print, emissiveIntensity: 0, name: 'observatory-print',
+    })));
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(size, size), patchMaterial(new THREE.MeshStandardMaterial({ color: 0xe8e2d4, roughness: 0.9, name: 'observatory-print-back' })));
+    back.rotation.y = Math.PI;
+    back.position.z = -0.0006;
+    group.add(front, back);
+    // Lying on its back: the face up, turned ry, tipped a little along its length.
+    const restQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2 + (u.tilt ?? 0), u.ry ?? 0, 0, 'YXZ'));
+    const restP = nodes.PAPER.position.clone();
+    group.position.copy(restP);
+    group.quaternion.copy(restQ);
+    front.castShadow = back.castShadow = false;
+    root.add(group);
+    const drawer = u.drawer ?? 0;
+    const inspect = makeInspectable(ctx, {
+      object: group, parent: root, meshes: [front, back], name: 'observatory:print', glow: { material: front.material, amount: 0.22 },
+      canLift: () => !drawers[drawer] || drawers[drawer].x >= 0.9,   // only when its drawer is out
+      rest: (outP, outQ) => {
+        const d = drawers[drawer];
+        outP.copy(restP);
+        if (d) outP.addScaledVector(d.out, (drawerOpen['drawer' + d.i] ?? 0) * d.travel);   // riding in its drawer
+        outQ.copy(restQ);
+      },
+    });
+    paper = { group, front, drawer, restP, restQ, inspect, get mode() { return inspect.mode(); } };
+  }
+  ctx.updaters.push((dt) => {
+    for (const d of drawers) {
+      if (d.x !== d.target) d.x = d.target > d.x ? Math.min(d.target, d.x + dt / DRAWER_TIME) : Math.max(d.target, d.x - dt / DRAWER_TIME);
+      const e = d.x * d.x * (3 - 2 * d.x);                   // eased: a pull, a glide, a soft stop
+      drawerOpen['drawer' + d.i] = e;
+      d.hit.position.copy(d.at).addScaledVector(d.out, e * d.travel);
+      d.hit.updateMatrixWorld(true);
+    }
+    paper?.inspect.update(dt);
+  });
+
   ctx.updaters.push((dt) => {
     timeU.value = atmo.uTime.value;
     k = (1 + atmo.uNight.value * 0.3) / Math.max(0.5, atmoState.exposure);
@@ -497,5 +601,5 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     yawVel = 0; pitchVel = 0;
   });
 
-  return { root, st, parts, controls, viewing: () => viewing, hatch, ladder: station?.ladder, station: station?.station, finish: () => station?.finish() };
+  return { root, st, parts, controls, viewing: () => viewing, hatch, drawers, print: paper, ladder: station?.ladder, station: station?.station, finish: () => station?.finish() };
 }

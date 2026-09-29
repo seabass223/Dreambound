@@ -51,10 +51,12 @@ const FILL = new THREE.Color(0.030, 0.026, 0.021);
 
 // Brushed stainless is anisotropic: its highlights smear across the grain. Every brushed island in the atlas has its grain
 // along v, so the anisotropy runs along u; it applies to the metal only (metalness), not the paint, rubber or scale.
-function outsideMaterial(T, U) {
+// minRough: a floor under the roughness (the call buttons: domed and polished, they caught a lamp as a pinpoint bright
+// enough to bloom into a halo; the plates and leaves keep the brushed finish).
+function outsideMaterial(T, U, { minRough = 0 } = {}) {
   const mat = new THREE.MeshPhysicalMaterial({
     name: 'elevator_outside', map: T.extAlbedo, normalMap: T.extNormal, normalScale: new THREE.Vector2(1, -1),   // green flipped for glTF UVs
-    roughnessMap: T.extOrm, metalnessMap: T.extOrm, aoMap: T.extOrm, roughness: 1, metalness: 1, anisotropy: 0.45,
+    roughnessMap: T.extOrm, metalnessMap: T.extOrm, aoMap: T.extOrm, roughness: 1, metalness: 1, anisotropy: minRough ? 0 : 0.45,
     // The leaves' track is flush with each landing's floor (rock, boards, the lounge's planks): win those depth ties.
     polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: -24,
   });
@@ -62,6 +64,8 @@ function outsideMaterial(T, U) {
     sh.uniforms.uElevFill = U.uElevFill;
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform vec3 uElevFill;')
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>${minRough ? `
+        roughnessFactor = max(roughnessFactor, ${minRough.toFixed(2)});` : ''}`)
       .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
         #ifdef USE_ANISOTROPY
           material.anisotropy *= metalnessFactor;
@@ -71,7 +75,7 @@ function outsideMaterial(T, U) {
   };
   patchMaterial(mat);
   const key = mat.customProgramCacheKey;
-  mat.customProgramCacheKey = () => key() + '|elevator';
+  mat.customProgramCacheKey = () => key() + '|elevator' + (minRough ? '|r' + minRough : '');
   return mat;
 }
 
@@ -164,6 +168,7 @@ function sharedAssets(asset) {
     ringGeo: new THREE.TorusGeometry(0.0215, 0.0016, 6, 28),
     tex: asset, intU, extU,
     extMat: outsideMaterial(asset, extU),
+    buttonMat: outsideMaterial(asset, extU, { minRough: 0.62 }),
     hitGeo: new THREE.BoxGeometry(1, 1, 1),
     hitMat: new THREE.MeshBasicMaterial({ visible: false }),
   };
@@ -228,7 +233,7 @@ export function createElevator(ctx, { id, ends }) {
     // Small, inconspicuous call button outside.
     // (The lounge's sits on its panelling, in front of the pocket the doors slide into.)
     const cp = def.callPos ?? CALL_POS;
-    const call = new THREE.Mesh(key === 'top' ? S.callDown : S.callUp, S.extMat);
+    const call = new THREE.Mesh(key === 'top' ? S.callDown : S.callUp, S.buttonMat);
     call.position.set(cp[0], cp[1], cp[2]);
     call.castShadow = true; call.receiveShadow = true;
     root.add(call);

@@ -32,8 +32,8 @@ export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6'], stacks = n
   const S = ctx.stacks;
   const names = Object.keys(S);
   const samplers = Object.fromEntries(names.map((n) => [n, new CliffSampler(THREE, MeshBVH, S[n])]));
-  const ledges = Object.fromEntries(rec.calls.filter((c) => c.name === 'buildLedge').map((c) => [c.stack, c.info.samples]));
-  const caves = Object.fromEntries(rec.calls.filter((c) => c.name === 'buildCave').map((c) => [c.stack, c.info]));
+  const ledges = Object.fromEntries(rec.calls.filter((c) => c.name === 'buildLedge' || c.name === 'buildCliffPath').map((c) => [c.stack, c.info.samples]));
+  const caves = Object.fromEntries(rec.calls.filter((c) => c.name === 'buildCave' || c.name === 'buildCliffCave').map((c) => [c.stack, c.info]));
   const nearest = (x, z) => names.reduce((b, m) => (Math.hypot(x - S[m].cx, z - S[m].cz) < Math.hypot(x - S[b].cx, z - S[b].cz) ? m : b));
   const ladderOf = (n) => physics.ladders.find((L) => nearest(L.base.x, L.base.z) === n);
   const cases = [];

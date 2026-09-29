@@ -111,8 +111,16 @@ export class Forest {
     this.rng = new Rng(404);
   }
 
-  add(species, x, y, z, scale = 1, rotY = this.rng.float(0, Math.PI * 2)) {
-    this.items[species].push({ x, y, z, scale, rotY });
+  // rotY and tint (the instance colour, [r, g, b]) default to draws from the forest's own stream (the tint's at build).
+  // A placement that brings both draws nothing from it, so it moves no other tree's rotation or colour.
+  add(species, x, y, z, scale = 1, rotY = this.rng.float(0, Math.PI * 2), tint = null) {
+    this.items[species].push({ x, y, z, scale, rotY, tint });
+  }
+
+  // A tint drawn as build() draws its own, from another stream.
+  static tint(rng) {
+    const h = rng.float(0.8, 1.15);
+    return [h * rng.float(0.92, 1.05), h, h * rng.float(0.85, 1.0)];
   }
 
   radiusOf(species) { return species === 'pine' ? 0.3 : species === 'broadleaf' ? 0.26 : 0; }
@@ -140,6 +148,15 @@ export class Forest {
       const map = Textures[g.map]();
       const folMat = foliageMaterial(map, sp.sway, sp.flutter, sp.tint);
       folMat.alphaToCoverage = true;
+      // No leaves inside the Tower bunker: the stand grows close round its hood, and crowns reach in (materials.js
+      // bunkerMask; outside, over its roof, they're left alone).
+      const fol0 = folMat.onBeforeCompile, key0 = folMat.customProgramCacheKey;
+      folMat.onBeforeCompile = (sh, r) => {
+        fol0(sh, r);
+        sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+          if (bunkerMask(vFogWorld) > 0.5) discard;`);
+      };
+      folMat.customProgramCacheKey = () => key0() + '|bunker';
       const depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map, alphaTest: 0.45 });
       const matrices = new Float32Array(list.length * 16), colors = new Float32Array(list.length * 3);
       list.forEach((t, i) => {
@@ -148,14 +165,13 @@ export class Forest {
         dummy.scale.setScalar(t.scale);
         dummy.updateMatrix();
         dummy.matrix.toArray(matrices, i * 16);
-        const h = this.rng.float(0.8, 1.15);
-        colors.set([h * this.rng.float(0.92, 1.05), h, h * this.rng.float(0.85, 1.0)], i * 3);
+        colors.set(t.tint ?? Forest.tint(this.rng), i * 3);
       });
       const parts = (t) => [{ geometry: t.trunk, material: M.bark }, { geometry: t.foliage, material: folMat, colored: true }];
       const levels = sp.makeLo
         ? [{ parts: parts(g), out: FAR, castShadow: true }, { parts: parts(sp.makeLo()), in: FAR, castShadow: false, receiveShadow: false }]
         : [{ parts: parts(g), out: SHRUB, castShadow: true }];
-      const il = lod.addInstanced(new InstancedLod(parent, { name: 'trees:' + name, matrices, colors, levels, step: 6, cell: 48 }));
+      const il = lod.addInstanced(new InstancedLod(parent, { name: 'trees:' + name, matrices, colors, levels, step: 6, cell: 48, sort: true }));
       il.levels[0].meshes[1].customDepthMaterial = depthMat;
     }
   }
@@ -206,11 +222,14 @@ const TALL_FAR = 55;
 export class TallGrass {
   constructor() { this.items = []; this.rng = new Rng(91); }
 
-  // h: height in metres; gold: 0 green to 1 ripe straw.
-  add(x, y, z, h = 0.9, gold = 0.5) { this.items.push(x, y, z, h, gold); }
+  // h: height in metres; gold: 0 green to 1 ripe straw. keep: false drops the clump after its random draws (here and
+  // in build), so every other clump keeps its rotation, width and tint.
+  add(x, y, z, h = 0.9, gold = 0.5, keep = true) { this.items.push(x, y, z, h, gold, keep ? 1 : 0); }
 
   build(parent, lod) {
-    const n = this.items.length / 5;
+    const N = this.items.length / 6;
+    let n = 0;
+    for (let i = 0; i < N; i++) n += this.items[i * 6 + 5];
     if (!n) return;
     const tex = Textures.tallGrass();
     // A unit-tall clump; two rows of quads up each card so the bend curves.
@@ -237,16 +256,17 @@ export class TallGrass {
     const dummy = new THREE.Object3D();
     const matrices = new Float32Array(n * 16), colors = new Float32Array(n * 3);
     const green = [0.84, 0.96, 0.7], straw = [1.08, 0.96, 0.7];
-    for (let i = 0; i < n; i++) {
-      const [x, y, z, h, gold] = this.items.slice(i * 5, i * 5 + 5);
+    for (let j = 0, i = 0; j < N; j++) {
+      const [x, y, z, h, gold, keep] = this.items.slice(j * 6, j * 6 + 6);
+      const ry = this.rng.float(0, 6.28), w = h * this.rng.float(0.85, 1.25), k = this.rng.float(0.8, 1.1);
+      if (!keep) continue;
       dummy.position.set(x, y - 0.04, z);
-      dummy.rotation.set(0, this.rng.float(0, 6.28), 0);
-      const w = h * this.rng.float(0.85, 1.25);
+      dummy.rotation.set(0, ry, 0);
       dummy.scale.set(w, h, w);
       dummy.updateMatrix();
       dummy.matrix.toArray(matrices, i * 16);
-      const k = this.rng.float(0.8, 1.1);
       for (let c = 0; c < 3; c++) colors[i * 3 + c] = k * (green[c] + (straw[c] - green[c]) * gold);
+      i++;
     }
     return lod.addInstanced(new InstancedLod(parent, {
       name: 'tallgrass', matrices, colors, step: 4, cell: 16,

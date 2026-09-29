@@ -16,6 +16,9 @@ export const PLAYER = {
   run: 6.2,
   gravity: -22,
   terminal: -58,
+  // The steepest ground you can walk up, in degrees, on the colliders that have a walkable slope (the Mountain's:
+  // its hillsides are steeper, so the switchbacks are the way up). See Physics.resolveCapsule.
+  maxSlope: 35,
 };
 
 export const STACKS = {

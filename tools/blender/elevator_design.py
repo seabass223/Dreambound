@@ -930,7 +930,8 @@ def paint_ext(G, px_per_m):
 
     # ---- limescale: a chalky film along the bottom (splash and standing water) with a dried tide line above it, up
     # the leaves' meeting edge, crusted in the lowest few centimetres; rust-tinted where it's thickest
-    edgey = 0.20 + 0.10 * (bA - 0.5) + 0.04 * (mA - 0.5)
+    # (Kept low and dark: a tall pale band read as a grey stripe along the foot of every plate.)
+    edgey = 0.09 + 0.05 * (bA - 0.5) + 0.02 * (mA - 0.5)
     film = 1.0 - _ss(edgey - 0.10, edgey, y)
     tide = _ss(0.014, 0.0, np.abs(y - (edgey + 0.06 + 0.02 * (gB - 0.5)))) * 0.08 * _ss(0.35, 0.65, bA)
     meet = leafs * _ss(0.04, 0.006, np.abs(x)) * (1.0 - _ss(0.1, 1.3, y + 0.3 * (bA - 0.5))) * 0.9
@@ -939,11 +940,11 @@ def paint_ext(G, px_per_m):
     scale_m = np.clip(np.maximum(np.maximum(film * tex * 0.9, tide), meet * tex * 0.85) + crust * 0.4, 0, 1)
     scale_m *= (steel | paint | rubber | tread).astype(np.float32)
     scale_m *= np.where(tread, _ss(0.0012, 0.0, th) * (1 - walk * 0.7) * _ss(0.06, 0.16, z) * 0.8, 1.0)   # on the sill only in the valleys, out front
-    lime = np.array([0.68, 0.66, 0.59], np.float32)
+    lime = np.array([0.46, 0.45, 0.41], np.float32)
     iron = np.array([0.36, 0.28, 0.18], np.float32)
     lc = lime[None, None, :] + (iron - lime)[None, None, :] * (crust * 0.6 + (1 - _ss(0.0, 0.05, y)) * 0.3)[..., None]
-    alb = alb + (lc - alb) * (scale_m * 0.8)[..., None]
-    rough = rough + (0.88 - rough) * scale_m
+    alb = alb + (lc - alb) * (scale_m * 0.45)[..., None]
+    rough = rough + (0.88 - rough) * scale_m * 0.6
     metal = metal * (1 - scale_m)
     hgt = hgt + scale_m * 1.2e-4 * tex + crust * 3e-4 * (0.5 + mA)
 

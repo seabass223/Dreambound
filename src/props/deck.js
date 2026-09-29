@@ -3,6 +3,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { patchMaterial } from '../render/materials.js';
 import { atmo } from '../render/atmosphere.js';
 import { addKeepOut } from '../render/lod.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { makeInspectable } from './inspect.js';
 
 // The view deck on the Dome stack (tools/blender/deck_design.py): a low weathered-cedar platform with two Adirondack
 // chairs facing out over the cloud sea toward the Rocks and the sunset, an end table between them and a small lantern.
@@ -11,6 +13,10 @@ import { addKeepOut } from '../render/lod.js';
 //
 // Sitting: aim at a chair and press (Space / E / click) to sit in it (Player.sit, player/controller.js); press again or
 // walk (W A S D) to stand up in front of it.
+//
+// The postcard on the end table (POSTCARD; its picture is tools/blender/paint_postcard.py: a close map of one island on
+// the lounge's globe, and a written back): press it to hold it up close, move the mouse across to turn it over, press
+// again to put it down (props/inspect.js).
 
 const LOD_OUT = [70, 90];
 // Seated look limits around the view straight ahead (radians).
@@ -20,10 +26,12 @@ const SKIRT = 0.4;   // the collider's sloped skirt: from the deck's edge down t
 export async function loadDeck() {
   const base = import.meta.env.BASE_URL + 'models/';
   const tl = new THREE.TextureLoader();
-  const [gltf, ao, wood, normal] = await Promise.all([
+  const [gltf, ao, wood, normal, postcard] = await Promise.all([
     new GLTFLoader().loadAsync(base + 'deck.glb'),
     tl.loadAsync(base + 'deck_ao.png'), tl.loadAsync(base + 'deck_wood.png'), tl.loadAsync(base + 'deck_wood_normal.png'),
+    tl.loadAsync(base + 'postcard.jpg').catch(() => null),
   ]);
+  if (postcard) { postcard.colorSpace = THREE.SRGBColorSpace; postcard.anisotropy = 8; }
   ao.flipY = false; ao.channel = 1; ao.colorSpace = THREE.NoColorSpace;
   ao.generateMipmaps = false; ao.minFilter = THREE.LinearFilter;   // an atlas of small charts (see cabin.js)
   for (const t of [wood, normal]) {
@@ -33,7 +41,7 @@ export async function loadDeck() {
   }
   wood.colorSpace = THREE.SRGBColorSpace;
   normal.colorSpace = THREE.NoColorSpace;
-  return { gltf, ao, wood, normal };
+  return { gltf, ao, wood, normal, postcard };
 }
 
 // A soft round falloff for the lantern's glow (a DataTexture, so the headless harness can build it too).
@@ -167,6 +175,8 @@ export function placeDeck(ctx, asset, { pos, rotY, parent }) {
     });
   }
 
+  const postcard = placePostcard(ctx, asset, root, empties.POSTCARD);
+
   ctx.lod.add(root, { out: LOD_OUT, name: 'deck' });
 
   const inv = root.matrixWorld.clone().invert();
@@ -177,5 +187,40 @@ export function placeDeck(ctx, asset, { pos, rotY, parent }) {
     return Math.abs(_p.x) < W / 2 + margin && _p.z < D / 2 + margin && _p.z > -D / 2 - stepD - margin;
   };
   const on = (feet) => inside(feet.x, feet.z, 0.05) && feet.y > pos.y + 0.06 && feet.y < pos.y + TOP + 0.3;
-  return { root, seats, inside, on, local: (x, z) => _p.set(x, pos.y, z).applyMatrix4(inv).clone() };
+  return { root, seats, inside, on, postcard, local: (x, z) => _p.set(x, pos.y, z).applyMatrix4(inv).clone() };
+}
+
+const POSTCARD_HOLD = 0.2;   // m in front of the eye: its edges stay outside the near plane (0.12) as it turns over
+
+// The postcard: one mesh, its face (the top half of postcard.jpg) and its back (the bottom half) back to back, lying face
+// up at POSTCARD with the top of its picture toward the view, so it reads the right way up from behind the chairs.
+function placePostcard(ctx, asset, root, node) {
+  if (!node || !asset.postcard) return null;
+  const [w, h] = node.userData.size ?? [0.14, 0.09];
+  const side = (v0, flip) => {
+    const g = new THREE.PlaneGeometry(w, h);
+    const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setY(i, v0 + uv.getY(i) * 0.5);
+    if (flip) { g.rotateY(Math.PI); g.translate(0, 0, -0.0004); }
+    return g;
+  };
+  const mat = patchMaterial(new THREE.MeshStandardMaterial({
+    map: asset.postcard, roughness: 0.86, envMapIntensity: 0.5, emissive: 0xffffff, emissiveMap: asset.postcard, emissiveIntensity: 0, name: 'deck-postcard',
+  }));
+  const card = new THREE.Mesh(mergeGeometries([side(0.5, false), side(0, true)]), mat);
+  card.name = 'deck:postcard';
+  card.receiveShadow = true;
+  root.add(card);
+  const restP = node.position.clone();
+  const restQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, (node.userData.ry ?? 0) + Math.PI, 0, 'YXZ'));
+  card.position.copy(restP);
+  card.quaternion.copy(restQ);
+  const inspect = makeInspectable(ctx, {
+    object: card, parent: root, meshes: [card], name: 'deck:postcard', hold: POSTCARD_HOLD, turn: true,
+    // Held up to catch the light: a touch by day, more after dark (the deck is out in the dusk and the night).
+    glow: { material: mat, amount: () => 0.03 + 0.06 * atmo.uNight.value },
+    rest: (outP, outQ) => { outP.copy(restP); outQ.copy(restQ); },
+  });
+  ctx.updaters.push((dt) => inspect.update(dt));
+  return { card, inspect };
 }

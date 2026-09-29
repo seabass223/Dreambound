@@ -170,14 +170,17 @@ const keptOut = (x, y, z) => keepOut.some((k) => k.box.containsPoint(_ko.set(x, 
 // range, re-gathered from a grid as the camera moves, so far instances cost nothing; a cheaper level can take
 // over across a cross-fade band. A level is { parts: [{ geometry, material, colored }], in, out, max, zoom,
 // castShadow, receiveShadow }: `max` culls without a fade (for materials that fade on their own), and
-// `zoom: false` measures real distance instead of zoomed (grass never needs the telescope).
+// `zoom: false` measures real distance instead of zoomed (grass never needs the telescope). sort: true draws the
+// nearest instances first, so big overlapping ones (trees) fill the depth buffer near to far and the cards behind
+// them fail the depth test before they are shaded.
 export class InstancedLod {
-  constructor(parent, { name = 'instances', matrices, colors = null, levels, step = 5, cell = 24 }) {
+  constructor(parent, { name = 'instances', matrices, colors = null, levels, step = 5, cell = 24, sort = false }) {
     this.name = name;
     this.n = matrices.length / 16;
     this.matrices = matrices;
     this.colors = colors;
     this.step = step;
+    if (sort) { this.ids = new Uint32Array(this.n); this.d2 = new Float32Array(this.n); this.byDist = (a, b) => this.d2[a] - this.d2[b]; }
     this.pos = new Float32Array(this.n * 3);
     for (let i = 0; i < this.n; i++) { this.pos[i * 3] = matrices[i * 16 + 12]; this.pos[i * 3 + 1] = matrices[i * 16 + 13]; this.pos[i * 3 + 2] = matrices[i * 16 + 14]; }
     // Uniform grid over x/z for range queries.
@@ -225,16 +228,19 @@ export class InstancedLod {
       const lo = Math.max(0, L.lo / s - margin), hi = L.hi / s + margin;   // in real metres
       const lo2 = lo * lo, hi2 = hi * hi;
       let n = 0;
+      const put = (i, k) => {
+        for (const m of L.meshes) {
+          m.instanceMatrix.array.set(this.matrices.subarray(i * 16, i * 16 + 16), k * 16);
+          if (m.instanceColor) m.instanceColor.array.set(this.colors.subarray(i * 3, i * 3 + 3), k * 3);
+        }
+      };
       const take = (i) => {
         if (this.skip[i]) return;
         const dx = P[i * 3] - cam.x, dy = P[i * 3 + 1] - cam.y, dz = P[i * 3 + 2] - cam.z;
         const d2 = dx * dx + dy * dy + dz * dz;
         if (d2 < lo2 || d2 > hi2) return;
-        for (const m of L.meshes) {
-          m.instanceMatrix.array.set(this.matrices.subarray(i * 16, i * 16 + 16), n * 16);
-          if (m.instanceColor) m.instanceColor.array.set(this.colors.subarray(i * 3, i * 3 + 3), n * 3);
-        }
-        n++;
+        if (this.ids) { this.d2[i] = d2; this.ids[n++] = i; return; }
+        put(i, n++);
       };
       if (hi < 1e6 && hi / this.cell < 40) {
         const x0 = Math.floor((cam.x - hi) / this.cell), x1 = Math.floor((cam.x + hi) / this.cell);
@@ -245,6 +251,10 @@ export class InstancedLod {
         }
       } else {
         for (let i = 0; i < this.n; i++) take(i);
+      }
+      if (this.ids) {
+        const ids = this.ids.subarray(0, n).sort(this.byDist);
+        for (let k = 0; k < n; k++) put(ids[k], k);
       }
       L.count = n;
       for (const m of L.meshes) {

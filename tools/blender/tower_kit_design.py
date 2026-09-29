@@ -5,8 +5,9 @@
 # Each piece is a part (an empty with its meshes) modelled in its own frame; src/props/powertower.js places each one
 # three times (once per LED) and merges them, so the three kits share one texture atlas. The frames:
 #   BOX     the switch box. Origin at the centre of its back face, +z out of the door (toward the deck), +x to the
-#           viewer's right, y up. It hangs on two flat bars in front of the rails: the top rail's front face is at
-#           z = -0.015 with its centre 0.07 above the origin, the knee rail 0.45 below it; the deck is 1.0 below.
+#           viewer's right, y up. It stands at chest height (BOX_Y above the deck) on two flat bars in front of the
+#           rails, which rise past the top rail to carry it: the top rail's front face is at z = -0.015 with its
+#           centre 0.23 below the origin, the knee rail 0.75 below it; the deck is 1.3 below.
 #   TAG_i   the enamel tag on the door in the colour of LED i (0 green, 1 yellow, 2 red), in the box's frame.
 #   SLIDER  one switch grip, origin on the switch plate's face (the game slides it along y).
 #   CAP     the capacitor with its backing channel. Origin at the back of the channel at the lattice's lower member,
@@ -47,8 +48,10 @@ DENS = {'BOX': 1.0, 'TAG_0': 1.0, 'TAG_1': 1.0, 'TAG_2': 1.0, 'SLIDER': 1.0, 'CA
 W, H, D = 0.30, 0.34, 0.10          # body
 FACE = 0.112                         # the door's face (slider origin)
 MIDY, PITCH, TRAVEL = -0.03, 0.085, 0.045
-KNEE, TOPR = -0.45, 0.07             # rail centres relative to the box's centre (deck + 1.0)
-DECK = -1.0
+BOX_Y = 1.3                          # the box's centre above the deck: chest height (the game's SWB.y)
+KNEE, TOPR = 0.55 - BOX_Y, 1.07 - BOX_Y   # the catwalk's rail centres (powertower.js), relative to the box's centre
+DECK = -BOX_Y
+BAR_TOP = 0.15                       # the flat bars' tops: past the upper ears, under the hood
 BAR_X, BAR_W, BAR_T = 0.17, 0.035, 0.015
 PLATE = (-0.13, 0.13, MIDY - 0.1, MIDY + 0.1)   # switch plate x0, x1, y0, y1
 PLATE_T = 0.004
@@ -339,10 +342,10 @@ def build_box():
                 q = (sx * BAR_X, y, 0.005)
                 hexnut('k_bolt', q, (0, 0, 1), 0.0075, 0.005)
                 rust(q, (0, 0, 1), 1.1, 0.1)
-        # Flat bars from below the knee rail to over the top rail, with a strap round the top rail.
+        # Flat bars from below the knee rail up past the top rail to the box's ears, with a strap round the top rail.
         for sx in (-1, 1):
             x = sx * BAR_X
-            bbox('k_galv', x - BAR_W / 2, x + BAR_W / 2, KNEE - 0.04, TOPR + 0.028, -BAR_T, 0.0, bevel=0.001)
+            bbox('k_galv', x - BAR_W / 2, x + BAR_W / 2, KNEE - 0.04, BAR_TOP, -BAR_T, 0.0, bevel=0.001)
             # strap: over the rail and down its back, bolted through
             bbox('k_galv', x - 0.015, x + 0.015, TOPR + 0.025, TOPR + 0.029, -0.069, -BAR_T, bevel=0.001)
             bbox('k_galv', x - 0.015, x + 0.015, TOPR - 0.03, TOPR + 0.029, -0.069, -0.065, bevel=0.001)
@@ -351,8 +354,8 @@ def build_box():
             for ex in (-1, 1):
                 bead('k_weld', (x + ex * (BAR_W / 2 + 0.002), KNEE - 0.021, -BAR_T - 0.003), (x + ex * (BAR_W / 2 + 0.002), KNEE + 0.021, -BAR_T - 0.003), 0.0042)
             bead('k_weld', (x - BAR_W / 2, KNEE + 0.022, -BAR_T - 0.004), (x + BAR_W / 2, KNEE + 0.022, -BAR_T - 0.004), 0.004)
-            # brace from the bar down to the shelf's front, welded at both ends
-            a = (x, KNEE + 0.05, 0.004)
+            # brace from the bar, under the top rail, up to the shelf's front, welded at both ends
+            a = (x, TOPR - 0.1, 0.004)
             b = (x, -H / 2 - 0.02, D + 0.012)
             cyl('k_galv', a, b, 0.007, 8)
             blob('k_weld', a, 0.011, (1.0, 1.3, 0.8))
@@ -369,7 +372,7 @@ def build_box():
         cyl('k_rubber', (cx, -H / 2 - 0.02, cz), (cx, -H / 2 - 0.042, cz), 0.015, 12, r1=0.012)
         cyl('k_galv', (cx, -H / 2 - 0.042, cz), (cx, DECK + 0.012, cz), 0.011, 10, caps=(False, False))
         cyl('k_galv', (cx, DECK + 0.012, cz), (cx, DECK, cz), 0.026, 12, caps=(False, True))
-        for y in (-0.62, -0.88):
+        for y in (DECK + 0.75, DECK + 0.38, DECK + 0.12):
             bbox('k_galv', cx - 0.016, cx + 0.016, y - 0.008, y + 0.008, cz - 0.014, cz + 0.014, bevel=0.002)
             rust((cx, y - 0.008, cz + 0.014), (0, 0, 1), 0.6, 0.05)
 

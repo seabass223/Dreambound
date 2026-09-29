@@ -3,8 +3,8 @@ import { tnoise, tfbm, tnoiseA, toCanvas, normalFromHeight, tex, once } from './
 
 // The cabin's two paintings, by one hand (brush, sign and finish below). The landscape over the hearth is at the
 // end of the file. The kitchen's: a square mid-century abstract, brushy greens with a soft horizon, a dark wedge and a
-// slim dark stroke as decoys, and three warm painted discs. The discs sit where the lounge card has its dots
-// (middle-left, middle-bottom, top-right), so it is the clue; everything else is there to make it pass as art.
+// slim dark stroke as decoys, and three warm painted discs. The discs (middle-left, bottom-middle, top-right) are the
+// green switch box's clue (world/towerPuzzle.js); everything else is there to make it pass as art.
 // Canvas space: u to the right, v down, both 0..1. Colours are sRGB 0..1.
 export const PAINTING_DISCS = [
   { u: 0.2, v: 0.5, r: 0.085, col: [0.8, 0.57, 0.2], ring: [0.62, 0.4, 0.13], ringAt: 0.62, halo: -0.18, ang: 0.35 },   // ochre

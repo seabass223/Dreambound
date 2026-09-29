@@ -8,6 +8,8 @@ floor at y = 0 and lifted by FLOOR via set_origin(). Front of everything faces -
 R_DOME = 14.0
 CURB_TOP = 0.3
 FLOOR = 0.5
+HX = 1.2           # the house (shell, porch, rooms) sits this far along +x in the dome, so its front door and porch
+                   # steps are centred on the flagstone walk and the dome door (x = 0); the house is authored as if at 0
 W, D, T = 6.5, 4.5, 0.25
 IW, ID = W - T, D - T
 H, RID = 3.1, 6.3
@@ -171,22 +173,105 @@ def plant_fig(x, y, z, h=1.9, seed=1, pot_tint=CERAMIC):
     C(x, y + 0.6, z, 0.5, 1.2, 0.5)
 
 
-def plant_olive(x, y, z, h=2.1, seed=2):
+def plant_olive(x, y, z, h=2.1, seed=2, xmin=None):
+    """A potted olive: a leaning, slightly twisted trunk, seven scaffold branches, side shoots and twigs, and about
+    2,700 narrow leaves in opposite pairs along them, each pair turned a quarter from the last and angled toward
+    the tip, dusty sage above, some silvery, some darker. xmin: a wall or window on the -x side; the crown is pruned
+    flat short of it (its -x half squashed toward the trunk)."""
     r2 = random.Random(seed)
     pot(x, y, z, 0.3, 0.5, TERRA)
-    TUBE('wood', [(x, y + 0.4, z), (x - 0.06, y + 0.9, z + 0.04), (x + 0.03, y + 1.35, z - 0.02)], 0.035, 6, tint=mul(BARK, 0.9), r_end=0.02)
-    for (bx, bz) in ((0.25, 0.1), (-0.2, 0.2), (0.05, -0.28), (-0.15, -0.15)):
-        TUBE('wood', [(x + 0.03, y + 1.3, z - 0.02), (x + bx * 0.6, y + 1.55, z + bz * 0.6), (x + bx, y + 1.75, z + bz)], 0.014, 5, tint=BARK, r_end=0.007)
-    for i in range(300):
-        th = r2.uniform(0, 2 * PI)
-        ph = r2.uniform(-0.9, 1.3)
-        rr = r2.uniform(0.15, 0.55)
-        px = x + math.cos(th) * rr * 1.1
-        pz = z + math.sin(th) * rr
-        py = y + 1.72 + math.sin(ph) * 0.38
-        emit(bm_leaf(r2.uniform(0.06, 0.09), 0.018, n=2, fold=0.1, droop=0.2), 'leaf',
-             xf(px, py, pz, r2.uniform(0, 2 * PI), r2.uniform(-0.6, 0.6), r2.uniform(-0.8, 0.5)),
-             jitter(SAGELEAF, 0.12))
+    up = Vector((0, 1, 0))
+    base = Vector((x, y + 0.42, z))
+    crown = Vector((x + 0.03, y + h * 0.6, z - 0.02))
+
+    def S(p):
+        # Prune against the window: pull the -x side of the crown in so nothing reaches past xmin - 0.08.
+        if xmin is None or p.x >= x:
+            return p
+        room = (x - (xmin + 0.08))
+        dx = x - p.x
+        return Vector((x - room * math.tanh(dx / room), p.y, p.z))
+
+    TUBE('wood', [base.to_tuple(), (x - 0.05, y + 0.8, z + 0.04), (x + 0.01, y + 1.05, z - 0.03), crown.to_tuple()], 0.042, 7,
+         tint=mul(BARK, 0.9), r_end=0.026)
+
+    def limb(p0, d, length, r, sides, tint, bend=(0.22, 0.2)):
+        pts, p, dd = [p0.copy()], p0.copy(), d.normalized()
+        for k in range(4):
+            dd = (dd + Vector((r2.uniform(-bend[0], bend[0]), r2.uniform(-0.04, bend[1]), r2.uniform(-bend[0], bend[0])))).normalized()
+            p = p + dd * (length / 4)
+            pts.append(p.copy())
+        pts = [S(q) for q in pts]
+        TUBE('wood', [q.to_tuple() for q in pts], r, sides, tint=tint, r_end=r * 0.45)
+        return pts
+
+    def along(pts, t):
+        # point and tangent a fraction t along a polyline
+        segs = [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
+        L = [(b - a).length for a, b in segs]
+        total, acc = sum(L), 0.0
+        for (a, b), l in zip(segs, L):
+            if acc + l >= t * total or (a, b) == segs[-1]:
+                u = min(1.0, (t * total - acc) / max(l, 1e-6))
+                return a.lerp(b, u), (b - a).normalized(), total
+            acc += l
+
+    LEAF = [SAGELEAF, SAGELEAF, SAGELEAF, srgb(96, 112, 80), srgb(150, 160, 138)]
+
+    def leaf(p, d):
+        L = r2.uniform(0.085, 0.12)
+        n = up - d * d.dot(up)
+        n = (n.normalized() if n.length > 1e-3 else Vector((1, 0, 0)))
+        n = (n + Vector((r2.uniform(-0.35, 0.35), r2.uniform(-0.2, 0.2), r2.uniform(-0.35, 0.35)))).normalized()
+        n = (n - d * d.dot(n)).normalized()
+        zb = d.cross(n)
+        M = Matrix(((d.x, n.x, zb.x, p.x), (d.y, n.y, zb.y, p.y), (d.z, n.z, zb.z, p.z), (0, 0, 0, 1)))
+        c = LEAF[r2.randrange(len(LEAF))]
+        f = 1.0 + r2.uniform(-0.1, 0.1)
+        emit(bm_leaf(L, L * r2.uniform(0.19, 0.24), n=3, fold=0.12, droop=0.15), 'leaf', M, (c[0] * f, c[1] * f, c[2] * f))
+
+    def leafy(pts, t0, step=0.016):
+        # opposite pairs from t0 to the tip, each pair a quarter turn from the last, angled 50-65 deg toward the tip
+        _, _, total = along(pts, 0.0)
+        k, t = 0, t0
+        while t <= 1.0:
+            p, tg, _ = along(pts, t)
+            side = tg.cross(up if abs(tg.dot(up)) < 0.95 else Vector((1, 0, 0))).normalized()
+            if k % 2:
+                side = tg.cross(side).normalized()
+            a = math.radians(r2.uniform(50, 65))
+            for sgn in (1, -1):
+                leaf(p, (tg * math.cos(a) + side * (sgn * math.sin(a))).normalized())
+            k += 1
+            t += step / total
+        p, tg, _ = along(pts, 1.0)
+        leaf(p, tg)
+
+    n_sc = 7
+    a0 = r2.uniform(0, 2 * PI)
+    for i in range(n_sc):
+        az = a0 + 2 * PI * i / n_sc + r2.uniform(-0.3, 0.3)
+        el = math.radians(r2.uniform(35, 62))
+        d = Vector((math.cos(az) * math.cos(el), math.sin(el), math.sin(az) * math.cos(el)))
+        p0 = crown + Vector((r2.uniform(-0.02, 0.02), r2.uniform(-0.06, 0.04), r2.uniform(-0.02, 0.02)))
+        sc = limb(p0, d, r2.uniform(0.45, 0.6), 0.02, 5, mul(BARK, 0.95))
+        leafy(sc, 0.6)
+        for j in range(4):
+            q, tg, _ = along(sc, r2.uniform(0.4, 0.9))
+            out = Vector((tg.x, 0, tg.z)).normalized() if Vector((tg.x, 0, tg.z)).length > 1e-3 else Vector((1, 0, 0))
+            rot = r2.uniform(-1.0, 1.0)
+            sd = (tg + Vector((math.cos(rot) * out.x - math.sin(rot) * out.z, 0.15, math.sin(rot) * out.x + math.cos(rot) * out.z)) * 0.9).normalized()
+            sh = limb(q, sd, r2.uniform(0.18, 0.3), 0.009, 4, mul(BARK, 1.05), bend=(0.3, 0.25))
+            leafy(sh, 0.25)
+            for m in range(4):
+                q2, tg2, _ = along(sh, r2.uniform(0.35, 0.95))
+                tw = (tg2 + Vector((r2.uniform(-0.9, 0.9), r2.uniform(-0.2, 0.5), r2.uniform(-0.9, 0.9)))).normalized()
+                twig = limb(q2, tw, r2.uniform(0.1, 0.18), 0.004, 3, mul(BARK, 1.1), bend=(0.35, 0.3))
+                leafy(twig, 0.1)
+    # (The olive once tinted its leaves from the build's shared stream; spend the same 300 draws so nothing after it
+    # in the build changes.)
+    for _ in range(300):
+        rng.uniform(-0.12, 0.12)
     C(x, y + 0.6, z, 0.6, 1.2, 0.6)
 
 
@@ -422,10 +507,17 @@ def build_garden():
         SPH('embers', rng.uniform(0.04, 0.08), rng.uniform(-0.3, 0.3), 0.07, FPZ + rng.uniform(-0.3, 0.3), 8, 6, s=(1, 0.5, 1))
     C(0, 0.25, FPZ, 1.9, 0.5, 1.9)
     empty('FIRE_pit', (0, 0.4, FPZ))
-    for ang in (35, 125, 215, 305):
+    for i, ang in enumerate((35, 125, 215, 305)):
         a = math.radians(ang)
         cx, cz = math.cos(a) * 2.1, FPZ + math.sin(a) * 2.1
-        adirondack(cx, cz, math.atan2(-math.cos(a), -math.sin(a)))
+        ry = math.atan2(-math.cos(a), -math.sin(a))
+        adirondack(cx, cz, ry)
+        # Sitting (src/props/cabin.js, as on the view deck): the chair, the seated eye against the back slats, and where
+        # you stand up, in front of it toward the fire. The chair's local +z (toward the fire) is (sin ry, cos ry).
+        fx, fz = math.sin(ry), math.cos(ry)
+        empty('PIT_CHAIR_%d' % i, (cx, 0.0, cz), ry=ry)
+        empty('PIT_SEAT_%d' % i, (cx - fx * 0.12, 1.08, cz - fz * 0.12))
+        empty('PIT_STAND_%d' % i, (cx + fx * 0.75, 0.0, cz + fz * 0.75))
     # Posts carrying festoon lights over the fire pit, strung from the cabin's back eave.
     for s in (-1, 1):
         x = s * 3.8
@@ -462,7 +554,7 @@ CHIMNEY_X = (-4.85, -3.55)
 
 
 def build_shell():
-    set_origin(0, FLOOR, 0)
+    set_origin(HX, FLOOR, 0)
     # Foundation + floor
     BOX('stone', -W - 0.06, -FLOOR - 0.05, -D - 0.06, W + 0.06, -0.05, D + 0.06, tint=mul(STONE, 0.92), tile=1.3)
     BOX('wood_floor', -W + 0.06, -0.05, -ID, IW, 0.0, ID, tint=OAK, tile=(2.4, 1.2), grain=0, col=True)
@@ -597,7 +689,7 @@ def build_shell():
     emit(bm_poly([(-1.91, 2.45, wg), (-0.49, 2.45, wg), (-0.49, 2.82, wg), (-1.91, 2.82, wg)]), 'glass')
     C(-0.67, 1.2, wg, 0.44, 2.4, 0.1)
     BOX('metal_black', -1.95, -0.05, -D - 0.01, -0.45, 0.008, -ID, tint=BLACK)
-    DOORS['FrontDoor'] = {'hinge': Vector((-1.91, FLOOR, wg)), 'buckets': {}}
+    DOORS['FrontDoor'] = {'hinge': Vector((-1.91, 0, wg)) + ORIGIN, 'buckets': {}}   # (ORIGIN: the house's HX shift and FLOOR)
     _target[0] = DOORS['FrontDoor']['buckets']
     for k in range(5):
         x0 = -1.905 + k * 0.198
@@ -737,7 +829,8 @@ def build_fireplace():
     wall_layer('x', ZM, Z1, FX0, FX1, [], lambda u: roof_y(ZM) + 0.02, 'stone', STONE, 1.1, None)
     C((FX0 + FX1) / 2, 1.7, (Z0 + Z1) / 2, FX1 - FX0, 3.4, Z1 - Z0)
     BOX('stone', -4.7, 0.4, ZM - 0.01, -3.7, 1.2, ZM, tint=mul(SOOT, 2.5))
-    BOX('stone', -4.7, 0.38, Z0 + 0.02, -3.7, 0.4, ZM, tint=mul(SOOT, 3.0))
+    # The firebox floor: 1 cm proud of the opening's sill and the hearth (all at 0.4, where they fought), out to the front.
+    BOX('stone', -4.7, 0.38, Z0, -3.7, 0.41, ZM, tint=mul(SOOT, 3.0))
     BOX('stone', -4.7, 1.18, Z0 + 0.02, -3.7, 1.2, ZM, tint=mul(SOOT, 3.0))
     # Raised hearth (seat height), mantel beam
     BOX('stone', -5.65, 0.0, Z0 - 0.62, -2.75, 0.4, Z0 + 0.01, tint=mul(STONE, 0.78), tile=0.9, col=True)
@@ -756,13 +849,14 @@ def build_fireplace():
         candle(x, 1.72, Z0 - 0.12, h)
     vase(-3.85, 1.72, Z0 - 0.15, 0.3, 0.07, mul(TERRA, 1.0))
     eucalyptus(-3.85, 1.98, Z0 - 0.15, 7, seed=115)
-    # Log holder with split logs beside the hearth
-    for s in (-1, 1):
-        emit(bm_torus(0.3, 0.012, 20, 6, arc=PI), 'metal_black', xf(-2.45, 0.32, Z0 - 0.3 + s * 0.2, 0, 0, 0), BLACK, 1.0, None, None, True)
-    for k in range(9):
-        a = PI * (k + 0.5) / 9
-        CYL('wood', 0.06, 0.06, 0.52, -2.45 + math.cos(a) * 0.16 * (k % 3) / 2, 0.08 + (k // 3) * 0.12, Z0 - 0.3, 7, rx=PI / 2, tint=jitter(BARK, 0.12))
-    C(-2.45, 0.3, Z0 - 0.3, 0.7, 0.6, 0.55)
+    # Spare split logs stacked on the hearth's end, a 4-3-2 pyramid, ends a little ragged (the same nine tint draws as
+    # the log holder they used to lie in, so nothing after them in the build changes).
+    k = 0
+    for row, n in enumerate((4, 3, 2)):
+        for i in range(n):
+            x = -3.05 + (i - (n - 1) / 2) * 0.125 + ((k * 5) % 3 - 1) * 0.004
+            CYL('wood', 0.06, 0.06, 0.52, x, 0.46 + row * 0.104, Z0 - 0.3 + ((k * 7) % 5 - 2) * 0.012, 7, rx=PI / 2, tint=jitter(BARK, 0.12))
+            k += 1
 
 
 def sofa(x, z, ry, length=2.5):
@@ -782,8 +876,9 @@ def sofa(x, z, ry, length=2.5):
         lx = -L / 2 + 0.2 + cw * (i + 0.5)
         g.put(bm_box(cw - 0.02, 0.16, 0.7, 0.06, 3), 'leather', lx, 0.42, 0.1, tint=jitter(COGNAC, 0.03), smooth=True, tile=0.4)
         g.put(bm_box(cw - 0.04, 0.46, 0.2, 0.08, 3), 'leather', lx, 0.72, -0.22, rx=-0.12, tint=jitter(COGNAC, 0.03), smooth=True, tile=0.4)
-    for (lx, tint, rz) in ((-L / 2 + 0.45, OLIVE, 0.12), (-L / 2 + 0.72, CREAM, 0.0), (L / 2 - 0.45, RUST, -0.1)):
-        g.put(bm_box(0.44, 0.44, 0.13, 0.07, 3), 'fabric', lx, 0.72, -0.08, rx=-0.28, rz=rz, tint=tint, smooth=True, tile=0.3)
+    # Throw pillows. The cream one rests in front of the olive (they overlap across; at one depth their faces fought).
+    for (lx, y, z, tint, rz) in ((-L / 2 + 0.45, 0.72, -0.08, OLIVE, 0.12), (-L / 2 + 0.72, 0.7, 0.04, CREAM, -0.06), (L / 2 - 0.45, 0.72, -0.08, RUST, -0.1)):
+        g.put(bm_box(0.44, 0.44, 0.13, 0.07, 3), 'fabric', lx, y, z, rx=-0.28, rz=rz, tint=tint, smooth=True, tile=0.3)
     g.put(bm_blanket(0.42, 0.95, (0, 0, 0.02, 0.35), 0.05, 0.008, 3), 'fabric', L / 2 - 0.1, 0.735, -0.02, tint=mul(CREAM, 0.95), tile=0.25, smooth=True)
     g.col(L, 0.9, 0.95, 0, 0.45, 0)
 
@@ -905,16 +1000,17 @@ def build_living():
     book_stack(-5.4, 0.515, -3.6, 2, 0.4)
     C(-5.35, 0.25, -3.55, 0.4, 0.5, 0.4)
     plant_fig(-5.85, 0.0, -3.85, 1.95, seed=41)
-    plant_olive(-5.92, 0.0, 2.45, 2.05, seed=42)
-    # Blanket ladder leaning on the back wall, beside the fireplace
+    plant_olive(-5.92, 0.0, 2.45, 2.05, seed=42, xmin=-W + 0.12)
+    # Blanket ladder leaning on the back wall, between the chimney breast (x -3.15) and the counter's end (x -2.28)
+    LX = -2.72
     for sx in (-1, 1):
-        beam('wood', (-2.2 + sx * 0.22, 0.02, 3.85), (-2.2 + sx * 0.22, 1.75, 4.15), 0.04, 0.03, WALNUT)
+        beam('wood', (LX + sx * 0.22, 0.02, 3.85), (LX + sx * 0.22, 1.75, 4.15), 0.04, 0.03, WALNUT)
     for k in range(5):
         t = 0.12 + k * 0.2
-        B('wood', 0.44, 0.03, 0.03, -2.2, 0.02 + 1.73 * t, 3.85 + 0.3 * t, tint=WALNUT)
-    throw_folded(-2.2, 1.05, 4.0, 0.36, 0.05, RUST, 0.0, (0, 0, 0.35, 0.3), 12)
-    throw_folded(-2.2, 1.44, 4.07, 0.38, 0.05, mul(CREAM, 0.95), 0.0, (0, 0, 0.3, 0.25), 13)
-    C(-2.2, 0.8, 4.0, 0.55, 1.6, 0.45)
+        B('wood', 0.44, 0.03, 0.03, LX, 0.02 + 1.73 * t, 3.85 + 0.3 * t, tint=WALNUT)
+    throw_folded(LX, 1.05, 4.0, 0.36, 0.05, RUST, 0.0, (0, 0, 0.35, 0.3), 12)
+    throw_folded(LX, 1.44, 4.07, 0.38, 0.05, mul(CREAM, 0.95), 0.0, (0, 0, 0.3, 0.25), 13)
+    C(LX, 0.8, 4.0, 0.55, 1.6, 0.45)
 
 
 def wishbone_chair(x, z, ry):
@@ -1337,15 +1433,15 @@ def build_bath():
 
 # ============================================================================ lights, meta
 def build_meta():
-    set_origin(0, FLOOR, 0)
+    set_origin(HX, FLOOR, 0)
     empty('LIGHT_living', (-4.2, 2.6, 0.6), color=[1.0, 0.72, 0.45], power=7.0, distance=9.0)
     empty('LIGHT_kitchen', (0.3, 2.5, 0.6), color=[1.0, 0.76, 0.5], power=6.0, distance=8.5)
     empty('LIGHT_bed', (4.4, 2.3, 2.0), color=[1.0, 0.7, 0.45], power=4.5, distance=6.5)
     empty('LIGHT_bath', (4.4, 2.3, -2.3), color=[1.0, 0.8, 0.6], power=3.5, distance=6.0)
     set_origin(0, 0, 0)
-    empty('META', (0, 0, 0), floorY=FLOOR, intX0=-W + 0.12, intX1=IW, intZ0=-ID, intZ1=ID,
-          eaveY=FLOOR + roof_y(ID), ridgeY=FLOOR + RID, domeR=R_DOME, houseX0=-W, houseX1=W, houseZ0=-D, houseZ1=D,
-          doorX=-1.43, doorZ=-D + 0.13, domeDoorZ=DZ)
+    empty('META', (0, 0, 0), floorY=FLOOR, intX0=HX - W + 0.12, intX1=HX + IW, intZ0=-ID, intZ1=ID,
+          eaveY=FLOOR + roof_y(ID), ridgeY=FLOOR + RID, domeR=R_DOME, houseX0=HX - W, houseX1=HX + W, houseZ0=-D, houseZ1=D,
+          doorX=HX - 1.43, doorZ=-D + 0.13, domeDoorZ=DZ, houseDX=HX)
 
 
 def build_all():
@@ -1359,7 +1455,7 @@ def build_all():
     with layer('near'):
         build_garden()
     build_shell()
-    set_origin(0, FLOOR, 0)
+    set_origin(HX, FLOOR, 0)
     with layer('in'):
         build_fireplace()
         build_living()

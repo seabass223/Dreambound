@@ -18,6 +18,8 @@ const LAYER_OUT = { in: [55, 75], near: [110, 140] };
 // The room probe only renders objects on this layer (the cabin, the dome terrain, the sky and every light:
 // all lights must be on it so both renders share shader programs).
 export const PROBE_LAYER = 1;
+// Seated in a fire-pit chair: how far the view may turn from the fire and look down or up (as on the view deck).
+const SIT_YAW = THREE.MathUtils.degToRad(100), SIT_PITCH = [THREE.MathUtils.degToRad(-40), THREE.MathUtils.degToRad(35)];
 
 // Materials whose meshes carry the baked AO atlas (must match BAKE_MATS in the Blender script).
 const BAKED = new Set(['wood_floor', 'plaster', 'wood', 'stone', 'metal_black', 'zellige', 'hex_tile', 'rug', 'jute', 'marble', 'painted']);
@@ -85,8 +87,8 @@ function makeMaterials(ao, probe) {
   return M;
 }
 
-// Paintings (render/painting.js), in tools/blender/cabin_design.py's coordinates (the canvas centre, y above the
-// floor) with the yaw that turns the picture's face (local +z) into the room:
+// Paintings (render/painting.js), in tools/blender/cabin_design.py's house coordinates (before its HX shift, which
+// META's houseDX adds back; the canvas centre, y above the floor) with the yaw that turns the picture's face (local +z) into the room:
 //   kitchen:   on the great room's side of the partition wall (its face is at x = PX1 - 0.06), centred between the
 //              bedroom door's casing (z 1.52) and the pantry tower (z 3.59): the one long clear stretch of wall in the
 //              great room. It faces west down the whole room, the kitchen lamp is 3 m away, and the island in front
@@ -144,7 +146,7 @@ function frameGeometry(w, h, rail) {
 
 // Each painting is canvas + frame: two meshes, two draw calls, no shadows or collider (they stand 6 cm proud of
 // the wall). The frames share one material. Culled with the rooms.
-function hangPaintings(ctx, root, floorY, envMap) {
+function hangPaintings(ctx, root, floorY, envMap, houseDX = 0) {
   const grain = Textures.woodGrain();
   const frameMat = patchMaterial(new THREE.MeshStandardMaterial({
     vertexColors: true, map: grain.map, normalMap: grain.normal, normalScale: new THREE.Vector2(0.3, 0.3),
@@ -161,7 +163,7 @@ function hangPaintings(ctx, root, floorY, envMap) {
     g.name = P.name;
     g.userData.layer = 'in';
     g.add(canvas, new THREE.Mesh(frameGeometry(P.w, P.h, P.rail), frameMat));
-    g.position.set(P.pos[0], floorY + P.pos[1], P.pos[2]);
+    g.position.set(houseDX + P.pos[0], floorY + P.pos[1], P.pos[2]);
     g.rotation.y = P.yaw;
     root.add(g);
     g.updateMatrixWorld(true);
@@ -286,7 +288,7 @@ export function placeCabin(ctx, asset, { origin, collider }) {
 
   const meta = nodes.META?.userData || {};
   const O = origin;
-  hangPaintings(ctx, root, meta.floorY ?? 0.5, probe.texture);
+  hangPaintings(ctx, root, meta.floorY ?? 0.5, probe.texture, meta.houseDX ?? 0);
   atmo.uIntA.value.set(O.x + meta.intX0, O.z + meta.intZ0, O.x + meta.intX1, O.z + meta.intZ1);
   atmo.uIntB.value.set(O.y + meta.floorY, O.y + meta.eaveY, O.y + meta.ridgeY, O.z);
 
@@ -356,7 +358,30 @@ export function placeCabin(ctx, asset, { origin, collider }) {
     stand: wp('WAKE_stand'),
     standYaw: nodes.WAKE_stand?.userData.yaw ?? 0,
   };
+  // ---- the fire pit's Adirondack chairs (PIT_*): aim at one and press to sit facing the fire (Player.sit, as on the
+  // view deck: press again or walk to stand up in front of it) ----
+  const hitMat = new THREE.MeshBasicMaterial({ visible: false }), hitGeo = new THREE.BoxGeometry(0.78, 0.75, 0.85);
+  const pitSeats = [];
+  for (let i = 0; nodes['PIT_CHAIR_' + i]; i++) {
+    const chair = nodes['PIT_CHAIR_' + i], ry = chair.userData.ry ?? 0;
+    const hit = new THREE.Mesh(hitGeo, hitMat);
+    hit.name = 'firepit:chair:' + i;
+    hit.position.copy(chair.position);
+    hit.position.y += 0.5;
+    hit.rotation.y = ry;
+    chair.parent.add(hit);
+    hit.updateMatrixWorld(true);
+    const seat = {
+      name: hit.name, eye: wp('PIT_SEAT_' + i), stand: wp('PIT_STAND_' + i),
+      yaw: ry + Math.PI,   // the player's yaw looking along the chair's +z, at the fire
+      yawRange: SIT_YAW, pitchMin: SIT_PITCH[0], pitchMax: SIT_PITCH[1],
+      onSit: () => ctx.audio?.play('step', { surface: 'wood', pos: seat.eye }),
+      onStand: () => ctx.audio?.play('step', { surface: 'grass', pos: seat.stand }),
+    };
+    pitSeats.push(seat);
+    ctx.interact.add({ name: seat.name, meshes: [hit], range: 2.6, exact: true, zone: 'surface', onPress: () => ctx.player?.sit(seat) });
+  }
   const x0 = O.x + meta.houseX0, x1 = O.x + meta.houseX1, z0 = O.z + meta.houseZ0, z1 = O.z + meta.houseZ1;
   const inside = (p) => p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1 && p.y > O.y - 0.3 && p.y < O.y + meta.ridgeY;
-  return { root, wake, inside, meta, domeR: meta.domeR || 14 };
+  return { root, wake, inside, meta, domeR: meta.domeR || 14, pitSeats };
 }

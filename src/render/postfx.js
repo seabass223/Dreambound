@@ -67,8 +67,10 @@ const DreamShader = {
     const float AZ_MINOR = ${f(AZ_SCALE.minor)}, AZ_MAJOR = ${f(AZ_SCALE.major)};
     const float ALT_MIN = ${f(ALT_SCALE.min)}, ALT_MAX = ${f(ALT_SCALE.max)}, ALT_MINOR = ${f(ALT_SCALE.minor)}, ALT_MAJOR = ${f(ALT_SCALE.major)};
     const float TGT_YAW = ${f(SKY_TARGET.yaw)}, TGT_ALT = ${f(pitchToAlt(SKY_TARGET.pitch))};
-    const float ALT_K = 0.35 / DEG;            // screen height per degree on the altitude scale (the speed it always slid at)
+    const float ALT_H = 0.34;                  // the altitude scale's half-height (screen heights), ALT_MIN at the bottom
+    const float ALT_K = 2.0 * ALT_H / (ALT_MAX - ALT_MIN);   // screen height per degree on it
     const vec3 BRASS = vec3(1.0, 0.8, 0.4);
+    const vec3 GOLD = vec3(1.0, 0.86, 0.22);   // the tube's own arrow on the altitude scale
     // Seven-segment digits (bits a b c d e f g), drawn as distance fields so they stay crisp at any angle.
     const int SEG7[10] = int[](0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F);
     float sdSeg(vec2 p, vec2 a, vec2 b) { vec2 pa = p - a, ba = b - a; return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0)); }
@@ -104,7 +106,8 @@ const DreamShader = {
       return vec2(cov, shade);
     }
     // The telescope eyepiece: field stop, etched reticle, and outside it an amber-lit azimuth ring that turns
-    // with the dome and an altitude scale that slides with the tube, numbered, with the target's brass pointers.
+    // with the dome and a fixed altitude scale with a gold arrow that rides it with the tube, numbered, with the
+    // target's brass pointers.
     vec3 eyepiece(vec3 col, vec2 uv) {
       vec2 sc = uv - 0.5; sc.x *= uAspect;
       float sr = length(sc);
@@ -156,28 +159,32 @@ const DreamShader = {
         vec2 tp = pointer(FIELD + 0.052 - sr, dA * sr, 0.021, 0.0085, px);
         outer = mix(outer, BRASS * tp.y, tp.x * band);
       }
-      // Altitude scale to the right, sliding with the tube's elevation (degrees over ALT_SCALE); index arrow at its centre.
+      // Altitude scale to the right, fixed: ALT_MIN at the bottom to ALT_MAX at the top. A gold arrow on its left
+      // slides up and down it with the tube's elevation; the target's brass pointer sits on it at SKY_TARGET, so the
+      // two meet tip to tip when the tube stands there (as the ring's notch and pointer do).
       vec2 q = sc - vec2(FIELD + 0.09, 0.0);
-      if (abs(q.y) < 0.28 && q.x > -0.0135 && q.x < 0.045) {
-        float alt = uScopeAlt * DEG;
-        float v = alt + q.y / ALT_K;             // the scale's reading at this height
-        float fade = smoothstep(0.28, 0.2, abs(q.y));
+      if (abs(q.y) < ALT_H + 0.03 && q.x > -0.045 && q.x < 0.045) {
+        float v = ALT_MIN + (q.y + ALT_H) / ALT_K;   // the scale's reading at this height
         float onScale = step(ALT_MIN - 0.3, v) * step(v, ALT_MAX + 0.3);
         float big = step(mark(v, ALT_MAJOR) * ALT_K, 1.5 * px);
         float tl = mix(0.012, 0.03, big);
-        outer += amber * 0.55 * aline(mark(v, ALT_MINOR) * ALT_K, 0.6 * px, px) * step(-0.012, q.x) * step(q.x, tl - 0.012) * fade * onScale;
+        outer += amber * 0.55 * aline(mark(v, ALT_MINOR) * ALT_K, 0.6 * px, px) * step(-0.012, q.x) * step(q.x, tl - 0.012) * onScale;
+        outer += amber * 0.3 * aline(q.x + 0.012, 0.6 * px, px) * step(abs(q.y), ALT_H);   // the scale's spine
         float vv = floor(v / ALT_MAJOR + 0.5) * ALT_MAJOR;
         if (vv >= ALT_MIN && vv <= ALT_MAX && q.x > 0.021) {
           const float H = 0.011;
-          vec2 p = vec2(q.x - 0.031, q.y - (vv - alt) * ALT_K) / H;
-          outer += amber * 0.6 * aline(numberDist(p, vv) * H, 0.08 * H, px) * fade;
+          vec2 p = vec2(q.x - 0.031, q.y - (-ALT_H + (vv - ALT_MIN) * ALT_K)) / H;
+          outer += amber * 0.6 * aline(numberDist(p, vv) * H, 0.08 * H, px);
         }
-        // The target's pointer, apex left toward the index arrow: beside it when the tube stands at SKY_TARGET.
-        vec2 tp = pointer(q.x + 0.012, q.y - (TGT_ALT - alt) * ALT_K, 0.02, 0.0085, px);
-        outer = mix(outer, BRASS * tp.y, tp.x * fade);
+        // The target's pointer, apex left.
+        vec2 tp = pointer(q.x + 0.012, q.y - (-ALT_H + (TGT_ALT - ALT_MIN) * ALT_K), 0.02, 0.0085, px);
+        outer = mix(outer, BRASS * tp.y * 0.85, tp.x);
+        // The tube's arrow, apex right, with a hairline across the ticks: where it stands on the scale.
+        float yCur = -ALT_H + (clamp(uScopeAlt * DEG, ALT_MIN, ALT_MAX) - ALT_MIN) * ALT_K;
+        outer += GOLD * 0.6 * aline(q.y - yCur, 0.5 * px, px) * step(-0.014, q.x) * step(q.x, 0.019);
+        vec2 ga = pointer(-0.014 - q.x, q.y - yCur, 0.034, 0.015, px);
+        outer = mix(outer, GOLD * ga.y * 1.2, ga.x);
       }
-      float arrow = step(abs(sc.y), (sc.x - (FIELD + 0.055)) * 0.6) * step(sc.x, FIELD + 0.072) * step(FIELD + 0.055, sc.x);
-      outer += amber * 0.7 * arrow;
       return mix(outer, inner, field);
     }
     void main() {

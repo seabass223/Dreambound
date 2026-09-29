@@ -293,14 +293,15 @@ export function buildRockPile(stack, { x, z, radius, height, seed = 1, batcher }
 
   const env = { seed, ground, ox: x, oz: z };
   const M = materials();
-  for (const b of stones) batcher.add(finish(b, env), M.cliff);
+  // (The batched copies, world space, are returned as `geos`: a decal on a stone is cut from them, props/petroglyph.js.)
+  const geos = stones.map((b) => batcher.add(finish(b, env), M.cliff));
 
   const rOut = outline(x, z, stones, ground, 64);
   let yTop = -Infinity, gMin = Infinity;
   for (const b of stones) { yTop = Math.max(yTop, b.yTop); if (b.gMin !== undefined) gMin = Math.min(gMin, b.gMin); }
   const walls = fitWalls(x, z, rOut, gMin - 1, yTop + 1);
   const { footprint, blocker } = footprintOf([{ cx: x, cz: z, r: rOut }], x, z);
-  return { footprint, blocker, walls };
+  return { footprint, blocker, walls, geos };
 }
 
 // ---------------------------------------------------------------------------------------------------------

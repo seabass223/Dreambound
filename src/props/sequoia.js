@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Rng, clamp, lerp, smoothstep, makeAngularNoise } from '../core/rng.js';
 import { foliageMaterial, patchMaterial } from '../render/materials.js';
 import { tfbm, tnoiseA, tfbmA, heightField, toCanvas, normalFromHeight, tex, once } from '../render/textures.js';
+import { FAR_BAND } from '../render/lod.js';
 
 // A giant sequoia with the Rocks elevator set into the foot of its trunk.
 // Geometry is built in "door space": trunk axis at the origin, ground at y = 0, the door facing +Z. Plate space
@@ -15,19 +17,21 @@ const PLATE_Y = -0.02;
 const DOOR = { hw: 1.9, y0: -0.1, y1: 3.35, back: -0.3, rows: 12 };  // bark carved from plate space |x| < hw, y0..y1, z > back
 const JAMB = 0.28;                              // the jambs stand this far proud of the plate
 const SHROUD = { hw: 1.28, h: 2.72, back: -2.62 };  // bark box around the car, all that shows once the elevator LOD-hides
-const TRUNK_H = 47;
+const TRUNK_H = 50;
 const SEGS = 112, DOOR_SEGS = 18;
 const TILE = 1.3, TILE_V = 2.4, AROUND = 16;     // bark tile size across / along the fibres (m); whole tiles around
 const ROOT_CLEAR = 1.2;                         // no buttress roots within this angle of the door
-const CARD_DENSITY = 12;                        // foliage cards per clump = CARD_DENSITY * radius²
+const CARD_DENSITY = 10;                        // foliage cards per lobe of a mass = CARD_DENSITY * radius²
+const FAR_CARDS = 0.2, FAR_SIZE = 1.8;          // the far card set: this share of the cards, this much bigger
+const MASS_TILE = 1.4;                          // metres per tile of the foliage masses' texture
 const TAU = Math.PI * 2;
 
 const wrap = (a) => a - Math.round(a / TAU) * TAU;
 
-// Columnar trunk: 3.4 m up to 4 m, ~1.5 m at 35 m, then quickly thin inside the crown.
+// Columnar trunk: 3.4 m up to 4 m, ~1.5 m at 35 m, ~1 m at 41 m, then thin inside the top of the crown.
 function column(y) {
   const c = R - 1.9 * Math.pow(Math.max(0, y - 4) / 31, 1.1);
-  return c * (1 - 0.92 * smoothstep(36, TRUNK_H, y));
+  return c * (1 - 0.9 * smoothstep(38, 51, y));
 }
 const swell = (y) => 0.45 * (1 - smoothstep(-0.5, 5.5, y));
 
@@ -218,8 +222,9 @@ function recessGeometry(tr) {
   return b.geometry();
 }
 
-// Tapered tube along pts (parallel-transport frames); cap (a colour) closes the far end.
-function tube(b, pts, radii, sides, shade, cap = null) {
+// Tapered tube along pts (parallel-transport frames); cap (a colour) closes the far end; `around` bark tiles
+// wrap it.
+function tube(b, pts, radii, sides, shade, cap = null, around = 2) {
   const t = new THREE.Vector3(), n = new THREE.Vector3(), bn = new THREE.Vector3(), d = new THREE.Vector3(), p = new THREE.Vector3();
   const rings = [];
   let len = 0;
@@ -236,7 +241,7 @@ function tube(b, pts, radii, sides, shade, cap = null) {
     for (let k = 0; k <= sides; k++) {
       const a = (k / sides) * TAU;
       d.copy(n).multiplyScalar(Math.cos(a)).addScaledVector(bn, Math.sin(a));
-      ring.push(b.vert(p.copy(pts[i]).addScaledVector(d, radii[i]), d, (k / sides) * 2, len / TILE_V, shade));
+      ring.push(b.vert(p.copy(pts[i]).addScaledVector(d, radii[i]), d, (k / sides) * around, len / TILE_V, shade));
     }
     rings.push(ring);
   }
@@ -258,11 +263,12 @@ function bezier(p0, p1, p2, p3, t) {
     .addScaledVector(p2, 3 * u * t * t).addScaledVector(p3, t * t * t);
 }
 
-// Old-growth crown: widest in its middle and dome-topped, not a young tree's spire.
-const crownRadius = (y) => 9.5 * Math.sqrt(Math.max(0, 1 - ((y - 33) / 18) ** 2));
+// Old-growth crown: about 22 m across, widest a little below its middle, with a broad, rounded top.
+const crownRadius = (y) => 11 * Math.sqrt(Math.max(0, 1 - ((y - 31) / 22) ** 2));
 
-// Broken stubs on the bare lower trunk, then short stout limbs (the lower ones drooping, then upturned)
-// through the crown. Returns the bark geometry and the foliage clumps it carries.
+// Broken stubs on the bare lower trunk, then massive, gnarled limbs through the crown: the low ones run out level
+// or dip and turn up at the end, the high ones sweep up. Each forks into a few upswept side branches, and every
+// branch end carries a foliage mass. Returns the bark geometry and the masses ({ pos, r }).
 function limbGeometry(rng) {
   const b = builder(), clumps = [];
   const up = new THREE.Vector3(0, 1, 0);
@@ -273,109 +279,203 @@ function limbGeometry(rng) {
     const y = rng.float(7, 17);
     let a = rng.float(-Math.PI, Math.PI);
     if (y < 10 && Math.abs(a) < 0.8) a += Math.PI;
-    const d = dirOf(a), rt = column(y), len = rng.float(0.7, 1.7) * 0.55, r0 = rng.float(0.16, 0.32);
-    const p0 = d.clone().multiplyScalar(rt * 0.7).setY(y);
+    const d = dirOf(a), rt = column(y), len = rng.float(0.7, 1.7) * 0.8, r0 = rng.float(0.26, 0.42);
+    const p0 = d.clone().multiplyScalar(rt * 0.6).setY(y);
     const p2 = d.clone().multiplyScalar(rt + len).setY(y + (rng.float(-0.25, 0.1) - 0.3) * len);
     const p1 = p0.clone().lerp(p2, 0.5);
-    if (i % 2 === 0) tube(b, [p0, p1, p2], [r0 * 1.3, r0, r0 * 0.6], 6, [0.8, 0.8, 0.8], [1, 0.82, 0.68]);
+    if (i % 2 === 0) tube(b, [p0, p1, p2], [r0 * 1.4, r0, r0 * 0.7], 8, [0.8, 0.8, 0.8], [1, 0.82, 0.68], 3);
   }
-  const N = 30, a0 = rng.float(0, TAU);
+  const N = 26, M = 10, a0 = rng.float(0, TAU);
+  const side = new THREE.Vector3(), shade = [0.7, 0.7, 0.7];
   for (let i = 0; i < N; i++) {
     const f = (i + rng.float(0.15, 0.85)) / N;
-    const y = 19.5 + f * 25.5;
+    const y = 18.5 + f * 25;
     const a = a0 + i * 2.39996 + rng.float(-0.3, 0.3);
     const d = dirOf(a), rt = column(y);
-    const tipR = lerp(2.5, 2.1, f) * rng.float(0.85, 1.15);
-    const reach = Math.max(rt + 1.2, crownRadius(y) * rng.float(0.82, 1.12) - tipR * 0.75);
-    const L = reach - rt * 0.5;
-    // Open tube ends must stay buried: in the trunk here, in the limb for the side branch below.
-    const rb = Math.min(lerp(0.55, 0.26, f) * rng.float(0.85, 1.15), rt * 0.45);
-    const droop = f < 0.55 && rng.next() < 0.65;
-    const p0 = d.clone().multiplyScalar(rt * 0.3).setY(y);
-    const c1 = p0.clone().addScaledVector(d, 0.35 * L).addScaledVector(up, (droop ? -0.14 : 0.08) * L);
-    const c2 = p0.clone().addScaledVector(d, 0.72 * L).addScaledVector(up, (droop ? -0.16 : 0.22) * L);
-    const p3 = p0.clone().addScaledVector(d, L).addScaledVector(up, (droop ? 0.02 : 0.38) * L);
+    const tipR = lerp(3.1, 2.5, f) * rng.float(0.88, 1.12);
+    // Rise of the two control points and of the tip, and the tip's reach, as fractions of the limb's length.
+    const j = () => rng.float(-0.06, 0.06);
+    const r1 = lerp(-0.12, 0.2, f) + j(), r2 = lerp(-0.08, 0.42, f) + j(), r3 = lerp(0.2, 0.6, f) + j();
+    const out = lerp(1, 0.85, f), k = rng.float(0.8, 1.06);
+    let L = 8;
+    for (let it = 0; it < 3; it++) L = Math.max(rt + 1.2, crownRadius(y + r3 * L) * k - tipR * 0.5 - rt * 0.2) / out;
+    // Up to 1.5 m thick where it leaves the trunk, with a flared collar; its open end stays buried in the trunk.
+    const rb = Math.min(lerp(0.72, 0.3, f) * rng.float(0.85, 1.15), rt * 0.36);
+    const exitU = (rt * 0.8) / L;
+    const p0 = d.clone().multiplyScalar(rt * 0.2).setY(y);
+    const c1 = p0.clone().addScaledVector(d, 0.35 * L).addScaledVector(up, r1 * L);
+    const c2 = p0.clone().addScaledVector(d, 0.7 * L).addScaledVector(up, r2 * L);
+    const p3 = p0.clone().addScaledVector(d, out * L).addScaledVector(up, r3 * L);
+    // Gnarled: bent across and up and down by a few smooth waves that vanish at both ends.
+    const amp = Math.min(0.9, 0.08 * L) * rng.float(0.6, 1.2);
+    const gs = [rng.float(-1, 1), rng.float(-1, 1), rng.float(-1, 1)], gu = [rng.float(-1, 1), rng.float(-1, 1), rng.float(-1, 1)];
+    side.set(d.z, 0, -d.x);
     const pts = [], radii = [];
-    for (let k = 0; k <= 6; k++) {
-      pts.push(bezier(p0, c1, c2, p3, k / 6));
-      radii.push(lerp(rb, 0.07, Math.pow(k / 6, 0.8)) * (k === 0 ? 1.3 : 1));
+    for (let s = 0; s <= M; s++) {
+      const u = s / M;
+      let ws = 0, wu = 0;
+      for (let h = 0; h < 3; h++) { const w = Math.sin((h + 1) * Math.PI * u) / (h + 1); ws += gs[h] * w; wu += gu[h] * w; }
+      pts.push(bezier(p0, c1, c2, p3, u).addScaledVector(side, ws * amp).addScaledVector(up, wu * amp * 0.6));
+      radii.push(rb * lerp(1, 0.3, Math.pow(u, 0.9)) * (1 + 0.45 * (1 - smoothstep(0, exitU + 0.12, u))));
     }
-    const shade = [0.72, 0.72, 0.72];
-    tube(b, pts, radii, 7, shade, shade);
-    clumps.push({ pos: p3.clone().addScaledVector(up, tipR * 0.3), r: tipR });
-    clumps.push({ pos: bezier(p0, c1, c2, p3, 0.62).addScaledVector(up, tipR * 0.55), r: tipR * 0.72 });
-    // One side branch with its own tuft.
-    const pb = bezier(p0, c1, c2, p3, 0.5);
-    const yaw = a + rng.sign() * rng.float(0.55, 0.95), el = rng.float(0.15, 0.5);
-    const d2 = new THREE.Vector3(Math.sin(yaw) * Math.cos(el), Math.sin(el), Math.cos(yaw) * Math.cos(el));
-    const l2 = L * rng.float(0.35, 0.5);
-    const tip = pb.clone().addScaledVector(d2, l2);
-    const rs = lerp(rb, 0.07, Math.pow(0.5, 0.8)) * 0.7;
-    tube(b, [pb, pb.clone().addScaledVector(d2, l2 * 0.5).addScaledVector(up, -0.06 * l2), tip], [rs, rs * 0.65, 0.05], 5, shade, shade);
-    clumps.push({ pos: tip.addScaledVector(up, tipR * 0.25), r: tipR * 0.7 });
+    tube(b, pts, radii, rb > 0.45 ? 10 : 8, shade, shade, Math.max(2, Math.round((TAU * rb) / TILE)));
+    const at = (u) => { const x = u * M, s = Math.min(M - 1, Math.floor(x)); return pts[s].clone().lerp(pts[s + 1], x - s); };
+    const rAt = (u) => { const x = u * M, s = Math.min(M - 1, Math.floor(x)); return lerp(radii[s], radii[s + 1], x - s); };
+    clumps.push({ pos: pts[M].clone().addScaledVector(up, tipR * 0.25), r: tipR });
+    if (L > 5) { const cr = tipR * rng.float(0.62, 0.78); clumps.push({ pos: at(0.6).addScaledVector(up, cr * 0.55), r: cr }); }
+    // Side branches, alternating left and right, swept up off the limb, each with its own foliage mass.
+    const nSide = L > 6 ? 3 : 2, s0 = rng.sign();
+    for (let q = 0; q < nSide; q++) {
+      const u = lerp(0.38, 0.9, (q + rng.float(0.2, 0.8)) / nSide);
+      const pb = at(u), tn = at(Math.min(1, u + 0.05)).sub(at(Math.max(0, u - 0.05)));
+      const yaw = Math.atan2(tn.x, tn.z) + s0 * (q % 2 ? -1 : 1) * rng.float(0.5, 1.1), el = rng.float(0.3, 0.85);
+      const d2 = new THREE.Vector3(Math.sin(yaw) * Math.cos(el), Math.sin(el), Math.cos(yaw) * Math.cos(el));
+      const l2 = Math.max(2.2, L * rng.float(0.28, 0.42)), rs = rAt(u) * 0.6;
+      const wob = () => new THREE.Vector3(rng.float(-1, 1), rng.float(-1, 1), rng.float(-1, 1)).multiplyScalar(0.08 * l2);
+      const tip = pb.clone().addScaledVector(d2, l2).addScaledVector(up, 0.1 * l2);
+      const m1 = pb.clone().addScaledVector(d2, 0.35 * l2).addScaledVector(up, -0.04 * l2).add(wob());
+      const m2 = pb.clone().addScaledVector(d2, 0.68 * l2).add(wob());
+      tube(b, [pb, m1, m2, tip], [rs, rs * 0.78, rs * 0.55, rs * 0.35], 7, shade, shade);
+      const cr = tipR * rng.float(0.7, 0.86);
+      clumps.push({ pos: tip.addScaledVector(up, cr * 0.25), r: cr });
+    }
   }
-  // Tufts on the trunk between the limbs, and the broad rounded top: big clumps spread round the leader.
-  for (let i = 0; i < 14; i++) {
-    const y = rng.float(23, 43), a = rng.float(0, TAU), rr = column(y) + 1.2;
-    clumps.push({ pos: new THREE.Vector3(Math.sin(a) * rr, y, Math.cos(a) * rr), r: rng.float(1.6, 2.2) });
+  // Masses round the trunk between the limbs, filling the crown out, and the broad rounded top round the leader.
+  for (let i = 0; i < 16; i++) {
+    const y = rng.float(22, 46), a = rng.float(0, TAU), r = rng.float(2, 2.8), rr = column(y) + r * rng.float(0.5, 1.4);
+    clumps.push({ pos: new THREE.Vector3(Math.sin(a) * rr, y, Math.cos(a) * rr), r });
   }
-  for (let i = 0; i < 5; i++) {
-    const a = a0 + i * 1.33 + (i % 2) * 0.35, rr = 2 + ((i * 3) % 5) * 0.375;
-    clumps.push({ pos: new THREE.Vector3(Math.sin(a) * rr, 46 + ((i * 2) % 5) * 0.75, Math.cos(a) * rr), r: 2.3 + (i % 3) * 0.25 });
+  for (let i = 0; i < 6; i++) {
+    const a = a0 + i * 1.05 + rng.float(-0.2, 0.2), rr = rng.float(1.8, 3.6);
+    clumps.push({ pos: new THREE.Vector3(Math.sin(a) * rr, rng.float(48, 50.5), Math.cos(a) * rr), r: rng.float(2.5, 3.1) });
   }
-  return { geo: b.geometry(), clumps };
+  clumps.push({ pos: new THREE.Vector3(0, 51.5, 0), r: 2.6 });
+  return { geo: b.geometry(), clumps: billow(clumps, rng) };
 }
 
-// Alpha cards in rounded cloud masses: domed tops, flatter undersides, darker inside, normals rounded outward
-// from both the clump and the crown axis so the masses shade as volumes.
-function canopyGeometry(clumps, rng) {
-  let total = 0;
-  for (const c of clumps) { c.n = Math.max(6, Math.round(CARD_DENSITY * c.r * c.r)); total += c.n; }
+// Each mass is a main lobe with one to three smaller ones round it and a little lower: billowed, not a ball.
+function billow(clumps, rng) {
+  const out = [];
+  for (const c of clumps) {
+    out.push(c);
+    const n = rng.int(1, 3), a0 = rng.float(0, TAU);
+    for (let i = 0; i < n; i++) {
+      const a = a0 + i * rng.float(1.8, 2.6), d = c.r * rng.float(0.55, 0.75);
+      out.push({ pos: new THREE.Vector3(Math.sin(a) * d, -c.r * rng.float(0.05, 0.2), Math.cos(a) * d).add(c.pos), r: c.r * rng.float(0.55, 0.72) });
+    }
+  }
+  return out;
+}
+
+// A foliage mass is an ellipsoid round c.pos: c.r across, UP of that above its centre, DOWN below (flat-bottomed).
+const UP = 0.7, DOWN = 0.5;
+const _h = new THREE.Vector3();
+// Shading normal at v on or near mass c: out of the mass, blended with out from the crown's axis and tipped up,
+// so each mass shades as a volume inside a rounded crown (lit top and outer side, dark underside).
+function massNormal(v, c, out) {
+  out.subVectors(v, c.pos);
+  out.y /= out.y < 0 ? DOWN * DOWN : UP * UP;
+  if (out.lengthSq() < 1e-8) out.set(0, 1, 0);
+  out.normalize().multiplyScalar(0.38);
+  _h.set(v.x, 0, v.z);
+  if (_h.lengthSq() > 1e-8) out.addScaledVector(_h.normalize(), 0.55);
+  out.y += 0.3;
+  return out.normalize();
+}
+// Darker low in the crown, where the masses above shade it.
+const crownShade = (y) => 0.82 + 0.18 * clamp((y - 16) / 36, 0, 1);
+
+// Alpha cards over the foliage masses: each centred a little in or out of its mass's surface, facing out of it,
+// tipped and turned at random. `density` scales the count and `size` the cards (the far set is a few big ones).
+function canopyGeometry(clumps, rng, { density = CARD_DENSITY, size = 1, min = 6 } = {}) {
+  const counts = clumps.map((c) => Math.max(min, Math.round(density * c.r * c.r)));
+  const total = counts.reduce((s, n) => s + n, 0);
   const pos = new Float32Array(total * 12), nor = new Float32Array(total * 12), col = new Float32Array(total * 12);
   const uv = new Float32Array(total * 8), idx = new Uint32Array(total * 6);
-  const o = new THREE.Vector3(), p = new THREE.Vector3(), ax = new THREE.Vector3(), ay = new THREE.Vector3();
-  const v = new THREE.Vector3(), a = new THREE.Vector3(), h = new THREE.Vector3();
-  const e = new THREE.Euler(), q = new THREE.Quaternion();
+  const o = new THREE.Vector3(), p = new THREE.Vector3(), n = new THREE.Vector3(), v = new THREE.Vector3(), a = new THREE.Vector3();
+  const ax = new THREE.Vector3(), ay = new THREE.Vector3(), Z = new THREE.Vector3(0, 0, 1);
+  const q = new THREE.Quaternion(), q2 = new THREE.Quaternion();
   const UV = [0, 1, 1, 1, 0, 0, 1, 0], SX = [-1, 1, -1, 1], SY = [1, 1, -1, -1];
   let vi = 0, ii = 0;
-  for (const c of clumps) {
+  clumps.forEach((c, ci) => {
     const blue = rng.float(-1, 1) * 0.05;
-    const tint = [1 - blue, 1, 1 + blue];
-    const size = clamp(c.r / 1.8, 0.8, 1.2);
-    for (let i = 0; i < c.n; i++) {
+    const s = size * clamp(c.r / 2.6, 0.85, 1.15);
+    for (let i = 0; i < counts[ci]; i++) {
       do o.set(rng.float(-1, 1), rng.float(-1, 1), rng.float(-1, 1)); while (o.lengthSq() > 1 || o.lengthSq() < 0.01);
       o.normalize();
-      const f = 0.35 + 0.65 * Math.sqrt(rng.next());
-      p.set(o.x * f * c.r, o.y * f * c.r * (o.y < 0 ? 0.55 : 0.8), o.z * f * c.r).add(c.pos);
-      const w = rng.float(0.5, 0.75) * size;
-      e.set(rng.float(-0.9, 0.9), rng.float(0, TAU), rng.float(-0.5, 0.5), 'YXZ');
-      q.setFromEuler(e);
+      const ry = o.y < 0 ? DOWN : UP, f = rng.float(0.8, 1.06);
+      p.set(o.x * f * c.r, o.y * f * c.r * ry, o.z * f * c.r).add(c.pos);
+      n.set(o.x + rng.float(-0.45, 0.45), o.y / ry + rng.float(-0.45, 0.45), o.z + rng.float(-0.45, 0.45)).normalize();
+      q.setFromUnitVectors(Z, n).multiply(q2.setFromAxisAngle(Z, rng.float(0, TAU)));
+      const w = rng.float(0.6, 0.9) * s;
       ax.set(w, 0, 0).applyQuaternion(q);
       ay.set(0, w, 0).applyQuaternion(q);
-      const shade = (0.6 + 0.4 * f) * (o.y < 0 ? 0.82 + 0.18 * (1 + o.y) : 1) * (0.84 + 0.16 * clamp((p.y - 18) / 33, 0, 1));
+      const shade = (0.7 + 0.3 * ((f - 0.8) / 0.26)) * (o.y < 0 ? 0.82 + 0.18 * (1 + o.y) : 1) * crownShade(p.y);
+      // Sun-bleached tips on the tops.
+      const warm = o.y > 0.35 ? rng.float(0, 0.08) : 0;
+      const tr = shade * (1 - blue + warm), tg = shade * (1 + warm * 0.6), tb = shade * (1 + blue);
       for (let k = 0; k < 4; k++) {
         v.copy(p).addScaledVector(ax, SX[k]).addScaledVector(ay, SY[k]);
-        a.subVectors(v, c.pos);
-        if (a.lengthSq() < 1e-8) a.set(0, 1, 0);
-        h.set(v.x, 0, v.z);
-        if (h.lengthSq() < 1e-8) h.copy(a);
-        a.normalize().multiplyScalar(0.55).addScaledVector(h.normalize(), 0.45);
-        a.y += 0.3;
-        a.normalize();
+        massNormal(v, c, a);
         const j = (vi + k) * 3;
         pos[j] = v.x; pos[j + 1] = v.y; pos[j + 2] = v.z;
         nor[j] = a.x; nor[j + 1] = a.y; nor[j + 2] = a.z;
-        col[j] = shade * tint[0]; col[j + 1] = shade * tint[1]; col[j + 2] = shade * tint[2];
+        col[j] = tr; col[j + 1] = tg; col[j + 2] = tb;
         uv[(vi + k) * 2] = UV[k * 2]; uv[(vi + k) * 2 + 1] = UV[k * 2 + 1];
       }
       idx.set([vi, vi + 2, vi + 1, vi + 2, vi + 3, vi + 1], ii);
       vi += 4; ii += 6;
     }
-  }
+  });
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  return g;
+}
+
+// The solid core of each foliage mass: a lumpy, flat-bottomed ellipsoid a little inside its cards, so a mass is
+// dense from every side (cards alone read as a see-through lattice from below). Darker than the cards, as the
+// inside of a mass is; normals as the cards'. The texture is mapped in world space (massMaterial), so no uv.
+function massGeometry(clumps, rng) {
+  // Small lobes get a coarser sphere.
+  const sphere = (detail) => {
+    const ico = new THREE.IcosahedronGeometry(1, detail);
+    ico.deleteAttribute('normal');
+    ico.deleteAttribute('uv');
+    const m = mergeVertices(ico);
+    return { p: m.attributes.position, idx: m.index.array };
+  };
+  const fine = sphere(2), coarse = sphere(1);
+  const bases = clumps.map((c) => (c.r > 2.4 ? fine : coarse));
+  const nv = bases.reduce((s, b) => s + b.p.count, 0), ni = bases.reduce((s, b) => s + b.idx.length, 0);
+  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3), idx = new Uint32Array(ni);
+  const v = new THREE.Vector3(), p = new THREE.Vector3(), n = new THREE.Vector3();
+  let vo = 0, io = 0;
+  clumps.forEach((c, ci) => {
+    const { p: bp, idx: bi } = bases[ci];
+    const ph = [rng.float(0, TAU), rng.float(0, TAU), rng.float(0, TAU), rng.float(0, TAU)];
+    const blue = rng.float(-1, 1) * 0.05;
+    for (let i = 0; i < bp.count; i++) {
+      v.fromBufferAttribute(bp, i);
+      const k = c.r * (1 + 0.2 * Math.sin(2.7 * v.x + ph[0]) * Math.sin(2.9 * v.y + ph[1]) * Math.sin(2.5 * v.z + ph[2])
+        + 0.06 * Math.sin(5.1 * v.x - 4.3 * v.z + ph[3]));
+      p.set(v.x * 0.84 * k, v.y * (v.y < 0 ? DOWN : UP) * 0.84 * k, v.z * 0.84 * k).add(c.pos);
+      massNormal(p, c, n);
+      const shade = 0.66 * (v.y < 0 ? 0.72 + 0.28 * (1 + v.y) : 1) * crownShade(p.y);
+      const j = (vo + i) * 3;
+      pos[j] = p.x; pos[j + 1] = p.y; pos[j + 2] = p.z;
+      nor[j] = n.x; nor[j + 1] = n.y; nor[j + 2] = n.z;
+      col[j] = shade * (1 - blue); col[j + 1] = shade; col[j + 2] = shade * (1 + blue);
+    }
+    for (let t = 0; t < bi.length; t++) idx[io + t] = bi[t] + vo;
+    vo += bp.count; io += bi.length;
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   return g;
@@ -405,53 +505,111 @@ const barkTextures = () => once('sequoiaBark', () => {
   return { map: tex(col), normal: tex(normalFromHeight(S, h, 4), { srgb: false }) };
 });
 
-// Clumped sprays of scale-like needles hanging from the card's top edge, blue-green with sun-bleached tips.
-const sprayTexture = () => once('sequoiaSpray', () => {
-  const S = 256, PAD = 20;
-  const c = document.createElement('canvas');
-  c.width = c.height = S;
-  const g = c.getContext('2d');
-  const r = new Rng(71);
-  // Strokes are bucketed by colour and drawn back to front: shaded cords, scales, bleached tips.
-  const buckets = [
-    { style: 'rgb(26,50,44)', width: 7, segs: [] },
-    { style: 'rgb(42,76,66)', width: 2.6, segs: [] },
-    { style: 'rgb(56,94,80)', width: 2.2, segs: [] },
-    { style: 'rgb(72,110,92)', width: 2, segs: [] },
-    { style: 'rgb(112,128,90)', width: 1.8, segs: [] },
-  ];
+// Scale-leaved needle sprays, strokes bucketed by colour and drawn back to front: shaded cords, scales, bleached
+// tips. `branch` grows one spray from (x, y) at angle a; `inside(x, y)` bounds it.
+function sprays(r, buckets, inside) {
   const branch = (x, y, a, len, depth) => {
     const step = 2.5;
     for (let d = 0; d < len; d += step) {
       const nx = x + Math.cos(a) * step, ny = y + Math.sin(a) * step;
-      if (nx < PAD || nx > S - PAD || ny < PAD || ny > S - PAD) return;
+      if (!inside(nx, ny)) return;
       buckets[0].segs.push(x, y, nx, ny);
       const t = d / len;
       for (let k = 0; k < 4; k++) {
-        const sa = a + r.sign() * r.float(0.3, 0.9), sl = r.float(5, 10) * (1 - t * 0.35);
-        const bk = depth > 0 && t > 0.8 && r.next() < 0.5 ? 4 : r.int(1, 3);
+        const sa = a + r.sign() * r.float(0.3, 0.9), sl = r.float(5, 11) * (1 - t * 0.35);
+        const bk = t > 0.75 && r.next() < 0.5 ? 4 : r.int(1, 3);
         buckets[bk].segs.push(x, y, x + Math.cos(sa) * sl, y + Math.sin(sa) * sl);
       }
-      if (depth < 2 && r.next() < 0.09) branch(x, y, a + r.sign() * r.float(0.5, 0.9), len * r.float(0.3, 0.5) * (1 - t), depth + 1);
-      a += r.float(-0.1, 0.1) + (Math.PI / 2 - a) * 0.01;
+      if (depth < 2 && r.next() < 0.1) branch(x, y, a + r.sign() * r.float(0.5, 0.9), len * r.float(0.35, 0.55) * (1 - t), depth + 1);
+      a += r.float(-0.1, 0.1);
       x = nx; y = ny;
     }
   };
-  // Branchlets fan out and droop from a few attachment points along the top edge.
-  for (let i = 0; i < 11; i++) {
-    const f = i / 10 - 0.5;
-    branch(S * (0.5 + f * 0.3) + r.float(-8, 8), PAD + r.float(0, 8), Math.PI / 2 + f * 2.3 + r.float(-0.15, 0.15), r.float(150, 230), 0);
-  }
+  return branch;
+}
+
+function strokeBuckets(g, buckets, offsets = [[0, 0]]) {
   g.lineCap = 'round';
   for (const bk of buckets) {
     g.strokeStyle = bk.style;
     g.lineWidth = bk.width;
     g.beginPath();
-    for (let i = 0; i < bk.segs.length; i += 4) { g.moveTo(bk.segs[i], bk.segs[i + 1]); g.lineTo(bk.segs[i + 2], bk.segs[i + 3]); }
+    for (const [ox, oy] of offsets) {
+      for (let i = 0; i < bk.segs.length; i += 4) { g.moveTo(bk.segs[i] + ox, bk.segs[i + 1] + oy); g.lineTo(bk.segs[i + 2] + ox, bk.segs[i + 3] + oy); }
+    }
     g.stroke();
   }
+}
+
+// One card: a rosette of sprays radiating from its centre, blue-green with sun-bleached tips, dense in the middle
+// and ragged at the edge (the cards face out of their foliage mass, turned at random).
+const sprayTexture = () => once('sequoiaSpray', () => {
+  const S = 256, C = S / 2, EDGE = C - 14;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const r = new Rng(71);
+  const buckets = [
+    { style: 'rgb(34,60,52)', width: 7, segs: [] },
+    { style: 'rgb(54,90,78)', width: 2.6, segs: [] },
+    { style: 'rgb(70,108,92)', width: 2.2, segs: [] },
+    { style: 'rgb(88,126,106)', width: 2, segs: [] },
+    { style: 'rgb(134,148,104)', width: 1.8, segs: [] },
+  ];
+  const branch = sprays(r, buckets, (x, y) => Math.hypot(x - C, y - C) < EDGE);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * TAU + r.float(-0.2, 0.2), s = r.float(2, 12);
+    branch(C + Math.cos(a) * s, C + Math.sin(a) * s, a + r.float(-0.25, 0.25), r.float(95, 120), 0);
+  }
+  strokeBuckets(g, buckets);
   return tex(c, { repeat: false });
 });
+
+// The foliage masses' cores: a dense, tileable tangle of the same sprays over a dark ground, like looking into
+// the inside of a mass.
+const massTexture = () => once('sequoiaMass', () => {
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const r = new Rng(73);
+  g.fillStyle = 'rgb(26,48,41)';
+  g.fillRect(0, 0, S, S);
+  const buckets = [
+    { style: 'rgb(15,29,26)', width: 5, segs: [] },
+    { style: 'rgb(34,62,54)', width: 2.4, segs: [] },
+    { style: 'rgb(46,80,68)', width: 2.2, segs: [] },
+    { style: 'rgb(60,96,80)', width: 2, segs: [] },
+    { style: 'rgb(96,114,82)', width: 1.8, segs: [] },
+  ];
+  const branch = sprays(r, buckets, () => true);
+  for (let i = 0; i < 70; i++) branch(r.float(0, S), r.float(0, S), r.float(0, TAU), r.float(20, 50), 1);
+  // Drawn at every offset of the tile, so strokes over an edge come back round the other side.
+  const offs = [];
+  for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) offs.push([ox, oy]);
+  strokeBuckets(g, buckets, offs);
+  return tex(c);
+});
+
+let massMat = null;
+// The texture is mapped in world space along the three axes (no seams or pinched poles on the lumpy masses).
+// Opaque, so the Rocks props' far stand-in takes the masses in too. No wind, like the limbs.
+function massMaterial() {
+  if (massMat) return massMat;
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: massTexture(), roughness: 0.9, envMapIntensity: 0.5, color: 0xe4ece6, name: 'sequoia-mass' });
+  m.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#ifdef USE_MAP
+      { vec3 tw = abs( ( vec4( normalize( vNormal ), 0.0 ) * viewMatrix ).xyz );
+        tw *= tw; tw *= tw; tw /= tw.x + tw.y + tw.z;
+        vec3 tp = vFogWorld * ${(1 / MASS_TILE).toFixed(4)};
+        diffuseColor *= texture2D( map, tp.zy ) * tw.x + texture2D( map, tp.xz ) * tw.y + texture2D( map, tp.xy ) * tw.z; }
+      #endif`);
+  };
+  patchMaterial(m);
+  const key = m.customProgramCacheKey;
+  m.customProgramCacheKey = () => key() + '|tri';
+  return (massMat = m);
+}
 
 let barkMat = null;
 // No wind: M.bark bends by world height², which would swing a 50 m trunk by metres.
@@ -460,13 +618,17 @@ function barkMaterial() {
   const t = barkTextures();
   barkMat = patchMaterial(new THREE.MeshStandardMaterial({
     vertexColors: true, map: t.map, normalMap: t.normal, normalScale: new THREE.Vector2(1.1, 1.1), roughness: 0.93, envMapIntensity: 0.6,
+    // Cast from the sunny side. three.js casts from the back faces by default: the trunk's shaded wall, which meets
+    // the ground, so the ground within the sun's depth bias (about 16 cm) of it counted as lit: a bright rim round
+    // the base in the trunk's own shadow. The same bias keeps the sunny side itself free of acne.
+    shadowSide: THREE.FrontSide,
   }));
   return barkMat;
 }
 
 // (x, y, z): trunk base centre on the ground; doorDir: unit horizontal direction the elevator door faces.
-// Adds trunk, limbs and doorway to `batcher` (world space) and the trunk walls to `collider`; the canopy goes to
-// ctx.surface. Returns where the elevator plate goes and the tree's extent.
+// Adds trunk, limbs, doorway and the foliage masses' cores to `batcher` (world space) and the trunk walls to
+// `collider`; the foliage cards go to ctx.surface. Returns where the elevator plate goes and the tree's extent.
 export function buildSequoia(ctx, { x, y, z, doorDir, batcher, collider }) {
   const rng = new Rng(3137);
   const rot = Math.atan2(doorDir.x, doorDir.z);
@@ -480,22 +642,42 @@ export function buildSequoia(ctx, { x, y, z, doorDir, batcher, collider }) {
   batcher.add(recessGeometry(trunk), bark, toWorld);
   const limbs = limbGeometry(rng);
   batcher.add(limbs.geo, bark, toWorld);
+  // The masses' cores go with the stack's props, so into its far stand-in too. Their material is made before the
+  // cards' and so has the lower id: three.js draws them first, and the cards behind them fail the depth test.
+  batcher.add(massGeometry(limbs.clumps, rng), massMaterial(), toWorld);
 
-  const geo = canopyGeometry(limbs.clumps, rng);
-  geo.applyMatrix4(new THREE.Matrix4().makeRotationY(rot));
-  geo.computeBoundingBox();
-  geo.computeBoundingSphere();
   const map = sprayTexture();
-  // Bend is local y² * sway: about 0.2 m at the crown top in a strong gust.
-  const fm = foliageMaterial(map, 0.00007, 0.0008, 0xe4ece6);
+  // Bend is local y² * sway: about 0.15 m at the crown top in a strong gust (the cores and limbs hold still).
+  const fm = foliageMaterial(map, 0.00005, 0.0008, 0xe4ece6);
   fm.vertexColors = true;
   fm.alphaToCoverage = true;
-  const canopy = new THREE.Mesh(geo, fm);
-  canopy.name = 'sequoia-canopy';
-  canopy.position.set(x, y, z);
+  // Both faces keep the card's rounded normal: flipped, a card seen from behind would light like the far side of
+  // its mass (the undersides of the crown turned sunlit from below).
+  const prev = fm.onBeforeCompile, key = fm.customProgramCacheKey;
+  fm.onBeforeCompile = (sh, r) => {
+    prev(sh, r);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize( vNormal );\nnonPerturbedNormal = normal;');
+  };
+  fm.customProgramCacheKey = () => key() + '|keepN';
+  const cards = (geo, name) => {
+    geo.applyMatrix4(new THREE.Matrix4().makeRotationY(rot));
+    geo.computeBoundingBox();
+    geo.computeBoundingSphere();
+    const m = new THREE.Mesh(geo, fm);
+    m.name = name;
+    m.position.set(x, y, z);
+    ctx.surface.add(m);
+    return m;
+  };
+  const canopy = cards(canopyGeometry(limbs.clumps, rng), 'sequoia-canopy');
   canopy.castShadow = true;
+  canopy.receiveShadow = true;
   canopy.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map, alphaTest: 0.45 });
-  ctx.surface.add(canopy);
+  // Across FAR_BAND (where the cores and limbs cross to the props' far stand-in) the cards cross to a fifth as
+  // many, 1.8x the size, which keep the crown's ragged edge.
+  const far = cards(canopyGeometry(limbs.clumps, new Rng(3141), { density: CARD_DENSITY * FAR_CARDS, size: FAR_SIZE, min: 3 }), 'sequoia-canopy:far');
+  ctx.lod.add(canopy, { out: FAR_BAND, name: 'sequoia-canopy' });
+  ctx.lod.add(far, { in: FAR_BAND, name: 'sequoia-canopy:far' });
 
   // Collision: the trunk wall with its door gap, jamb blocks beside the plate, and a vertical wall around the
   // buttresses (sloped bark would be climbable).
@@ -534,8 +716,8 @@ export function buildSequoia(ctx, { x, y, z, doorDir, batcher, collider }) {
   return {
     platePos: plate(0, 0).setY(y + PLATE_Y),
     plateRot: rot,
-    height: geo.boundingBox.max.y,
+    height: canopy.geometry.boundingBox.max.y,
     footprintR,
-    canopy: [canopy],
+    canopy: [canopy, far],
   };
 }

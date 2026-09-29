@@ -51,6 +51,11 @@ export const atmo = {
   uIntB: { value: new THREE.Vector4(0, 0, 0, 0) },
   uObsA: { value: new THREE.Vector4(0, 0, 0, 0) },
   uObsB: { value: new THREE.Vector4(0, 0, 0, 0) },
+  // The Tower bunker (world/bunker.js): its frame and its insides, for materials.js bunkerMask().
+  uBunA: { value: new THREE.Vector4(0, 0, 0, 0) },
+  uBunB: { value: new THREE.Vector4(0, 0, 0, 0) },
+  uBunC: { value: new THREE.Vector4(0, 0, 0, 0) },
+  uBunD: { value: new THREE.Vector4(0, 0, 0, 0) },
 };
 
 export const atmoState = {

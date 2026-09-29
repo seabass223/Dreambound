@@ -5,22 +5,40 @@ const _box = new THREE.Box3();
 const _triP = new THREE.Vector3();
 const _capP = new THREE.Vector3();
 const _dir = new THREE.Vector3();
+const _n = new THREE.Vector3();
 const _ray = new THREE.Ray();
+
+// Walkable slopes (colliders added with { maxSlope }, see resolveCapsule). A face whose normal (turned toward the
+// capsule) has a y between WALL_NY and the collider's walkNY is a slope too steep to walk: the capsule may not gain
+// height on it. Up to SLIDE_NY (50 degrees) it is ground you slide down (the controller caps the speed); steeper, it
+// is a cliff you drop past. Faces steeper than WALL_NY (about 84 degrees: risers, walls, tree trunks) are no slope:
+// they push out along the contact, so a step's edge is still climbed by rolling the capsule's foot over it.
+const WALL_NY = 0.1;
+export const SLIDE_NY = Math.cos(50 * Math.PI / 180);
 
 // Static BVH colliders (activated by proximity/zone) plus a handful of dynamic primitives.
 export class Physics {
   constructor() {
-    this.colliders = [];  // { name, bvh, box, enabled }
+    this.colliders = [];  // { name, bvh, box, enabled, walkNY? }
     this.dynamic = [];    // circles and oriented boxes
     this.ladders = [];
   }
 
-  addCollider(c, zone = 'surface') {
+  // maxSlope (degrees): the steepest face the player can walk up on this collider (see resolveCapsule), where
+  // where(x, z) (optional) is true. Elsewhere, and on a collider without one, the old rule holds: anything under about
+  // 53 degrees is ground, and steeper faces push the capsule out along their normal.
+  addCollider(c, zone = 'surface', { maxSlope, where } = {}) {
     if (!c) return;
     c.zone = zone;
     c.enabled = true;
+    if (maxSlope !== undefined) { c.walkNY = Math.cos(THREE.MathUtils.degToRad(maxSlope)); c.slopeWhere = where ?? null; }
     this.colliders.push(c);
     return c;
+  }
+
+  // The walkable limit (a normal's y) of collider c at (x, z), or undefined where the old rule holds.
+  limitAt(c, x, z) {
+    return c.walkNY !== undefined && (!c.slopeWhere || c.slopeWhere(x, z)) ? c.walkNY : undefined;
   }
 
   addCircle(o) { const c = { type: 'circle', enabled: true, ...o }; this.dynamic.push(c); return c; }
@@ -36,9 +54,21 @@ export class Physics {
   }
 
   // Resolve a capsule (feet position, radius, height) against the world. Returns contacts for dynamic pushes.
-  resolveCapsule(feet, radius, height, zone, contacts) {
+  //
+  // Each triangle within the radius pushes the capsule out. Ground (a contact whose direction is within the
+  // collider's walkable slope, or within 53 degrees on a collider without one) pushes straight up, so standing on a
+  // slope doesn't creep down it. On a collider with a walkable slope (walkNY), a face steeper than that (see
+  // WALL_NY) pushes out level only: walking into it gains no height, and gravity (the controller) slides the capsule
+  // down it. That holds for the face's edges too, so a steep hillside can't be climbed through its creases; a ridge or
+  // a lip holds you up only where the contact itself points up within the limit (an edge that steep is itself no
+  // steeper than the limit). Everything else pushes out along the contact: an edge below the capsule's middle (a
+  // step's nosing) rolls it up and over the step.
+  // info (optional, out): slide (touching a slope too steep to walk but not a cliff: SLIDE_NY), slideH (the largest
+  // horizontal part of such a slope's normal, i.e. the sine of its angle).
+  resolveCapsule(feet, radius, height, zone, contacts, info = null) {
     _seg.start.set(feet.x, feet.y + radius, feet.z);
     _seg.end.set(feet.x, feet.y + height - radius, feet.z);
+    if (info) { info.slide = false; info.slideH = 0; }
     const act = this.active(feet, zone);
     for (let pass = 0; pass < 2; pass++) {
       for (const c of act) {
@@ -51,9 +81,16 @@ export class Physics {
             const dist = tri.closestPointToSegment(_seg, _triP, _capP);
             if (dist < radius) {
               const depth = radius - dist;
+              const lim = c.walkNY === undefined ? undefined : this.limitAt(c, _triP.x, _triP.z);
               _dir.subVectors(_capP, _triP);
               if (_dir.lengthSq() < 1e-10) tri.getNormal(_dir); else _dir.normalize();
-              if (_dir.y > 0.6) {
+              if (lim !== undefined && _dir.y >= 0 && _dir.y <= lim && tooSteep(tri, lim)) {
+                // Too steep to walk: out along the level part of the contact only (|_dir.xz| >= sin(limit)).
+                const h = Math.hypot(_dir.x, _dir.z), push = Math.min(depth / h, radius) / h;
+                _seg.start.x += _dir.x * push; _seg.start.z += _dir.z * push;
+                _seg.end.x += _dir.x * push; _seg.end.z += _dir.z * push;
+                if (info && _n.y >= SLIDE_NY) { info.slide = true; info.slideH = Math.max(info.slideH, Math.sqrt(1 - _n.y * _n.y)); }
+              } else if (_dir.y > (lim ?? 0.6)) {
                 // Walkable: push straight up so we don't creep down slopes.
                 const up = Math.min(depth / _dir.y, radius);
                 _seg.start.y += up; _seg.end.y += up;
@@ -101,14 +138,30 @@ export class Physics {
     }
   }
 
+  // The first ground below pos (from 0.5 m above it, down to maxDist below). The hit carries walkable: false when its
+  // face is too steep to stand on (a collider with a walkable slope), and limited: true when it is on such a collider
+  // where the slope rule applies (a hillside, not a cliff).
   raycastDown(pos, maxDist, zone) {
     _ray.origin.set(pos.x, pos.y + 0.5, pos.z);
     _ray.direction.set(0, -1, 0);
     let best = null;
     for (const c of this.active(pos, zone)) {
       const hit = c.bvh.raycastFirst(_ray, THREE.DoubleSide, 0, maxDist + 0.5);
-      if (hit && (!best || hit.distance < best.distance)) best = hit;
+      if (hit && (!best || hit.distance < best.distance)) {
+        best = hit;
+        const lim = c.walkNY === undefined ? undefined : this.limitAt(c, hit.point.x, hit.point.z);
+        best.walkable = lim === undefined || Math.abs(hit.face.normal.y) > lim;
+        best.limited = lim !== undefined;
+      }
     }
     return best;
   }
+}
+
+// Whether a triangle is a slope too steep to walk on a collider whose walkable limit is lim (its normal turned
+// toward the capsule, in _n, whose y the caller reads).
+function tooSteep(tri, lim) {
+  tri.getNormal(_n);
+  if (_n.dot(_dir) < 0) _n.negate();
+  return _n.y > WALL_NY && _n.y <= lim;
 }

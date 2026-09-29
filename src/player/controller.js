@@ -6,7 +6,14 @@ const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
 const _move = new THREE.Vector3();
 const _prev = new THREE.Vector3();
+const _UP = new THREE.Vector3(0, 1, 0);
+const _o = new THREE.Vector3();
+const LADDER_EYE_OUT = 0.2;   // m: on a curved ladder, the eyes are this much further off it than the feet
 const SIT_TIME = 0.9;   // seconds to sit down or stand up
+// Down a slope too steep to walk (a collider with a walkable slope, see Physics.resolveCapsule), the most you slide at,
+// along the slope. The fall's vertical speed is capped at this times the slope's sine, and the level push-out turns it
+// into sliding down the face.
+const SLIDE_SPEED = 2.8;
 const smooth = (t) => t * t * (3 - 2 * t);
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -19,12 +26,20 @@ export class Player {
     this.vel = new THREE.Vector3();
     this.yaw = 0; this.pitch = 0; this.roll = 0;
     this.onGround = false;
+    this.sliding = false;        // on a slope too steep to walk (and not standing on walkable ground)
+    this.col = { slide: false, slideH: 0 };   // Physics.resolveCapsule's info
     this.zone = 'surface';
     this.mode = 'walk';          // walk | ladder | sit | locked
     this.seat = null;            // the chair sat in (mode 'sit', see sit())
     this.canMove = false;
     this.lookHandler = null;     // when set, mouse drives this instead of the view
     this.ladder = null;
+    // The body's axis, feet to eyes: straight up, except on a curved ladder, where the climber lies along it (see
+    // updateCamera). ladderAxis is that ladder's upward direction where the feet are.
+    this.bodyUp = new THREE.Vector3(0, 1, 0);
+    this.ladderAxis = new THREE.Vector3(0, 1, 0);
+    this.ladderOut = new THREE.Vector3();   // and its outward normal (away from what it's fixed to)
+    this.eyeOut = new THREE.Vector3();      // the eyes' offset off the ladder, eased like bodyUp
     this.bob = 0;
     this.stepDist = 0;
     this.lastGroundY = 0;
@@ -44,6 +59,9 @@ export class Player {
     if (this.mode === 'sit') { this.mode = 'walk'; this.seat = null; }
     this.feet.set(x, y, z);
     this.vel.set(0, 0, 0);
+    this.sliding = false;
+    this.bodyUp.copy(_UP);
+    this.eyeOut.set(0, 0, 0);
     this.yaw = yaw;
     this.lastGroundY = y;
     this.history.length = 0;
@@ -83,6 +101,7 @@ export class Player {
     const steps = 4;
     const sdt = dt / steps;
     const wasGround = this.onGround;
+    const col = this.col;
     for (let i = 0; i < steps; i++) {
       if (this.onGround) this.vel.y = PLAYER.gravity * sdt;
       else this.vel.y = Math.max(PLAYER.terminal, this.vel.y + PLAYER.gravity * sdt);
@@ -90,15 +109,29 @@ export class Player {
       this.feet.y += this.vel.y * sdt;
       this.feet.addScaledVector(_move, speed * sdt);
       this.contacts.length = 0;
-      this.physics.resolveCapsule(this.feet, PLAYER.radius, PLAYER.height, this.zone, this.contacts);
+      this.physics.resolveCapsule(this.feet, PLAYER.radius, PLAYER.height, this.zone, this.contacts, col);
       const dy = this.feet.y - (_prev.y + this.vel.y * sdt);
       this.onGround = dy > Math.abs(this.vel.y * sdt * 0.25) || (this.onGround && dy > 1e-4);
+      // On a slope too steep to walk the push-out is level, so the capsule drops down the face as it falls: cap that
+      // fall so it slides down at SLIDE_SPEED instead of plunging.
+      this.sliding = col.slide && !this.onGround;
       if (this.onGround) this.vel.y = 0;
+      else if (this.sliding) this.vel.y = Math.max(this.vel.y, -SLIDE_SPEED * col.slideH);
     }
-    // Snap down gentle descents so walking downhill doesn't hop.
+    // Snap down gentle descents so walking downhill doesn't hop (onto ground you can stand on: off a steep face you
+    // slide instead).
     if (wasGround && !this.onGround && this.vel.y <= 0) {
       const hit = this.physics.raycastDown(this.feet, 0.45, this.zone);
-      if (hit) { this.feet.y = hit.point.y; this.onGround = true; this.vel.y = 0; }
+      if (hit?.walkable) { this.feet.y = hit.point.y; this.onGround = true; this.sliding = false; this.vel.y = 0; }
+    }
+    // Sliding is on the ground as far as the dream-fall is concerned: a long slide down a hillside isn't a fall. Nor is
+    // bounding down one: running down a face too steep to walk, the capsule is mostly in the air, just clear of it, and
+    // the drop would add up to the 9 m trigger (whose fall ignores the ground: you sank through the hillside). While
+    // such a hillside is close below, the drop is measured from here. Real falls (off a rim, whose cliff is outside
+    // the slope rule) are untouched.
+    if (this.sliding) this.lastGroundY = this.feet.y;
+    else if (!this.onGround && this.feet.y < this.lastGroundY - 2) {
+      if (this.physics.raycastDown(this.feet, 1.5, this.zone)?.limited) this.lastGroundY = this.feet.y;
     }
 
     const moving = _move.lengthSq() > 0.01;
@@ -136,8 +169,8 @@ export class Player {
 
   // A ladder is { base, n, height, width, zone } (straight, against a wall) plus optional hooks: enabled (false: can't be
   // taken hold of), fromAbove (false: its top has no lip to get on from), grab(player, axis) -> the height to take hold
-  // at or null (instead of the straight tests), path(h, feet, tangent) (a curved ladder: where the feet are h metres up
-  // it, and its upward direction), onTop / onBottom(player) (at that end: move the player on and return true, or return
+  // at or null (instead of the straight tests), path(h, feet, tangent, normal) (a curved ladder: where the feet are h
+  // metres up it, its upward direction and its outward normal), onTop / onBottom(player) (at that end: move the player on and return true, or return
   // false to hold them there).
   tryAttachLadder(a) {
     if (a.y === 0) return false;
@@ -191,7 +224,7 @@ export class Player {
     const end = this.ladderH >= L.height ? L.onTop : this.ladderH <= 0 ? L.onBottom : null;
     if (end && end(this)) return;
     if (end || L.path) this.ladderH = clamp(this.ladderH, 0, L.height);   // held at this end
-    if (L.path) { L.path(this.ladderH, this.feet); return; }
+    if (L.path) { this.ladderOut.set(0, 0, 0); L.path(this.ladderH, this.feet, this.ladderAxis, this.ladderOut); this.ladderAxis.normalize(); return; }
     const p = this.ladderLocal(L);
     const s = clamp(p.s, -L.width * 0.25, L.width * 0.25);
     const d = 0.5;
@@ -293,8 +326,18 @@ export class Player {
       roll = THREE.MathUtils.lerp(0, o.roll ?? 0, w);
     }
     const c = this.camera;
+    // On a curved ladder (the observatory dome's) the eyes are along the ladder from the feet, not straight above them,
+    // and a little further off it than the feet (a climber's head is held back from the rungs): otherwise, where it
+    // leans in over the dome, the view floats out into the air. Eased, so taking hold and stepping off don't jump.
+    const onCurve = this.mode === 'ladder' && this.ladder?.path;
+    const k = 1 - Math.exp(-dt * 8);
+    this.bodyUp.lerp(onCurve ? this.ladderAxis : _UP, k).normalize();
+    if (this.bodyUp.y > 0.99999) this.bodyUp.copy(_UP);
+    this.eyeOut.lerp(onCurve ? _o.copy(this.ladderOut).multiplyScalar(LADDER_EYE_OUT) : _o.set(0, 0, 0), k);
+    if (!onCurve && this.eyeOut.lengthSq() < 1e-8) this.eyeOut.set(0, 0, 0);
+    const u = this.bodyUp, o = this.eyeOut;
     if (this.mode === 'sit') this.seatedEye(c.position);
-    else c.position.set(this.feet.x + Math.cos(this.yaw) * bobX, this.feet.y + eye + bobY, this.feet.z - Math.sin(this.yaw) * bobX);
+    else c.position.set(this.feet.x + u.x * eye + o.x + Math.cos(this.yaw) * bobX, this.feet.y + u.y * eye + o.y + bobY, this.feet.z + u.z * eye + o.z - Math.sin(this.yaw) * bobX);
     if (this.extraCam) c.position.add(this.extraCam);
     const t = performance.now() / 1000;
     const sh = this.shake;

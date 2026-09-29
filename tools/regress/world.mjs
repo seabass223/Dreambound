@@ -23,6 +23,9 @@ const TAPS = {
   'world/stacks/tower.js': ['buildTower'],
   'world/stacks/mountain.js': ['buildMountain'],
   'world/features.js': ['buildLedge', 'buildLadder', 'buildCave', 'buildTrail', 'scatter'],
+  // The Dome's path and cave (recorded as a ledge and a cave: see describe).
+  'world/cliffPath.js': ['buildCliffPath'],
+  'world/cliffCave.js': ['buildCliffCave'],
   'world/water.js': ['edgeWaterfall', 'streamGeometry'],
   'world/waterfx.js': ['splashFX'],
   'world/rockpiles.js': ['buildTor', 'buildRockPile'],
@@ -134,6 +137,18 @@ class Recorder {
         info.samples = a[1].map((s) => ({ theta: s.theta, depth: s.depth, width: s.width }));
         info.geometry = ret;
         break;
+      case 'buildCliffPath':
+        info.stack = a[0].cfg.name;
+        info.samples = a[1].map((s) => ({ theta: s.theta, depth: s.depth, width: s.width }));
+        info.geometry = ret.top;
+        break;
+      case 'buildCliffCave': {
+        // As a straight cave: from the mouth (on the cliff, at floor level) toward the elevator plate.
+        const m = ret.mouth, pl = ret.platePos, d = pl.clone().sub(m).setY(0);
+        info.mouth = v3(m); info.length = d.length(); info.dir = v3(d.normalize());
+        info.platePos = v3(pl); info.plateRot = ret.plateRot;
+        break;
+      }
       case 'buildLadder': info.base = v3(o.base); info.n = v3(o.n); info.height = o.height; break;
       case 'buildCave':
         info.mouth = v3(o.mouth); info.dir = v3(o.dir); info.length = o.length;
@@ -193,7 +208,8 @@ export async function buildHeadless({ walls } = {}) {
   const imp = (p) => import(SRC + p);
   const config = await imp('config.js');
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const [cabin, observatory, cave, lounge, elevator, towerKit, deck] = await Promise.all(['cabin.glb', 'observatory.glb', 'cave.glb', 'lounge.glb', 'elevator.glb', 'tower_kit.glb', 'deck.glb'].map((f) => parseGlb(GLTFLoader, f)));
+  const [cabin, observatory, cave, lounge, elevator, towerKit, deck, shed, iris] = await Promise.all(['cabin.glb', 'observatory.glb', 'cave.glb', 'lounge.glb', 'elevator.glb', 'tower_kit.glb', 'deck.glb', 'shed.glb', 'iris.glb'].map((f) => parseGlb(GLTFLoader, f)));
+  (await import(SRC + 'props/aperture.js')).setIrisAsset(iris);   // the iris diaphragm (End door, roof station)
   const { Physics } = await imp('player/collision.js');
   const { Stack } = await imp('world/terrain.js');
   const { Flowers } = await imp('world/flowers.js');
@@ -229,6 +245,7 @@ export async function buildHeadless({ walls } = {}) {
     elevatorAsset: { gltf: elevator, extAlbedo: tex(), extNormal: tex(), extOrm: tex(), intAlbedo: tex(), intLm: tex() },
     towerKitAsset: { gltf: towerKit, albedo: tex(), normal: tex(), orm: tex() },
     deckAsset: { gltf: deck, ao: tex(), wood: tex(), normal: tex() },
+    shedAsset: { gltf: shed, atlas: tex(), wood: tex(), woodN: tex(), metal: tex(), metalN: tex(), stone: tex(), stoneN: tex() },
   });
   const buildMs = performance.now() - t0;
   Stack.prototype.build = build;

@@ -4,6 +4,7 @@ import { ColliderBuilder, mat4 } from '../world/builders.js';
 import { patchMaterial } from '../render/materials.js';
 import { clamp, smoothstep } from '../core/rng.js';
 import { createIris } from './aperture.js';
+import { TOWER_SEQUENCE } from '../world/towerPuzzle.js';
 import { SKY_TARGET, AZ_SCALE, ALT_SCALE, yawToAz, pitchToAlt } from '../world/skyTarget.js';
 
 // The Mountain observatory's service ladders and roof station, modelled in tools/blender/observatory_design.py
@@ -16,8 +17,9 @@ import { SKY_TARGET, AZ_SCALE, ALT_SCALE, yawToAz, pitchToAlt } from '../world/s
 // How far off the aligned yaw (rad) the ladders still meet. At the limit the rungs are 0.22 m apart sideways at the
 // joint and the climber is eased across; one mouse count on the dome's handwheel turns it 0.09 deg.
 const LADDER_TOL = THREE.MathUtils.degToRad(2);
-// The buttons to press, in order: 0 green (left as you face the iris from the ladder), 1 yellow, 2 red.
-export const STATION_ORDER = [0, 1, 2];
+// The buttons to press, in order (0 green, left as you face the iris from the ladder, 1 yellow, 2 red): the sequence the
+// power tower's LEDs flash once its switch boxes are set (world/towerPuzzle.js), R Y Y R G G G Y R R R.
+export const STATION_ORDER = TOWER_SEQUENCE;
 const OPEN_TIME = 0.7;          // s for the blades to fly open
 const FEET_OUT = 0.28;          // the climber's feet ride this far off the rung line (a straight ladder's 0.5 - 0.22)
 const SEAM = 0.6;               // m of the curved ladder over which the climber is eased onto it from the fixed one
@@ -70,21 +72,24 @@ export function createStation(ctx, { root, nodes, st, doorAngle, domeAngle, cent
   const fixedTop = fixed.base.clone().addScaledVector(fixed.n, 0.5).setY(fixed.base.y + fixed.height);
   // Curved: the feet ride a polyline FEET_OUT off the rung line (exported from Blender in the ladder's meridian plane),
   // parametrised by distance along it.
-  const P = [], S = [0], pts = lad.path, np = pts.length / 2;
+  const P = [], N = [], S = [0], pts = lad.path, np = pts.length / 2;
   for (let i = 0; i < np; i++) {
     const j0 = Math.max(0, i - 1), j1 = Math.min(np - 1, i + 1);
     const tr = pts[2 * j1] - pts[2 * j0], ty = pts[2 * j1 + 1] - pts[2 * j0 + 1], l = Math.hypot(tr, ty);
     P.push(pol(pts[2 * i] + (ty / l) * FEET_OUT, lon, pts[2 * i + 1] - (tr / l) * FEET_OUT));   // outward normal (ty, -tr)
+    N.push(pol(ty / l, lon, -tr / l));
     if (i) S.push(S[i - 1] + P[i].distanceTo(P[i - 1]));
   }
   const seam = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
   const dome = {
     base: pol(pts[0], lon, pts[1]).applyMatrix4(MA), n: pol(1, lon).transformDirection(MA),
     height: S[np - 1], width: 0.7, zone: 'surface', enabled: false,
-    path(h, out, tan) {
+    path(h, out, tan, nrm) {
       let i = 0;
       while (i < np - 2 && S[i + 1] < h) i++;
-      out.lerpVectors(P[i], P[i + 1], clamp((h - S[i]) / (S[i + 1] - S[i]), 0, 1)).applyMatrix4(cur);
+      const u = clamp((h - S[i]) / (S[i + 1] - S[i]), 0, 1);
+      out.lerpVectors(P[i], P[i + 1], u).applyMatrix4(cur);
+      if (nrm) nrm.lerpVectors(N[i], N[i + 1], u).transformDirection(cur);
       // Within the tolerance the dome's ladder may stand a little to the side of the fixed one's top: ease across.
       if (h < SEAM) out.addScaledVector(seam, 1 - smoothstep(0, SEAM, h));
       if (tan) tan.subVectors(P[i + 1], P[i]).transformDirection(cur);
@@ -105,10 +110,11 @@ export function createStation(ctx, { root, nodes, st, doorAngle, domeAngle, cent
       letGo(p);
       return true;
     },
-    // Down onto the fixed ladder, or (if the dome was turned under you) let go.
+    // Down onto the fixed ladder. If the ladders don't meet (the dome turned under you), you're held at the foot of the
+    // curved one rather than let go over the dome: climb back up to the deck.
     onBottom(p) {
-      if (aligned) p.attach(fixed, fixed.height - 1e-3);
-      else letGo(p);
+      if (!aligned) return false;
+      p.attach(fixed, fixed.height - 1e-3);
       return true;
     },
   };
@@ -121,12 +127,14 @@ export function createStation(ctx, { root, nodes, st, doorAngle, domeAngle, cent
   const WA = new THREE.Matrix4().multiplyMatrices(MA, F);
   const box = (x, y, z, w, h, d) => colB.addGeometry(new THREE.BoxGeometry(w, h, d), WA.clone().multiply(mat4(x, y, z)));
   box(0, -0.05, 0, sta.hx * 2, 0.1, sta.hz * 2);
-  // Rail walls on three sides; the ladder's end is open either side of its 0.66 m gap (walking into the gap facing
-  // out puts you on the ladder: see dome.grab).
+  // Rail walls all round, across the ladder's 0.66 m opening too: walking into it facing out still takes hold of the
+  // ladder (dome.grab tests from within the capsule's reach of this wall), and nothing else gets you over the edge
+  // (strafing or backing out through the opening used to drop you through the dome, which has no collision).
   for (const s of [-1, 1]) {
     box(s * (sta.hx - 0.03), 0.6, 0, 0.06, 1.3, sta.hz * 2);
     box(s * (sta.hx + 0.33) / 2, 0.6, sta.hz - 0.03, sta.hx - 0.33, 1.3, 0.06);
   }
+  box(0, 0.6, sta.hz - 0.03, 0.72, 1.3, 0.06);
   box(0, 0.6, -(sta.hz - 0.03), sta.hx * 2, 1.3, 0.06);
   if (sta.panel) {   // the panel's case, leaning back over the rear rail
     const [py, pz, pt, px, z0, z1] = sta.panel;
@@ -192,7 +200,13 @@ export function createStation(ctx, { root, nodes, st, doorAngle, domeAngle, cent
       ctx.audio?.play('click', { pos });
       if (!st.stationOpen && ++seq === STATION_ORDER.length) open();
     } else {
-      seq = i === STATION_ORDER[0] ? 1 : 0;           // a wrong button starts over (from itself, if it comes first)
+      // A wrong button starts over, keeping the longest run of the latest presses (this one included) that begins the
+      // order: the order repeats colours, so a slip can already be the start of it again.
+      const tried = [...STATION_ORDER.slice(0, seq), i];
+      seq = 0;
+      for (let k = Math.min(tried.length, STATION_ORDER.length - 1); k > 0; k--) {
+        if (tried.slice(-k).every((v, j) => v === STATION_ORDER[j])) { seq = k; break; }
+      }
       ctx.audio?.play('switch', { pos, rate: 0.45 });  // a dull click
     }
   };

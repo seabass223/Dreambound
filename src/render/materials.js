@@ -20,7 +20,20 @@ uniform vec4 uIntA;
 uniform vec4 uIntB;
 uniform vec4 uObsA;
 uniform vec4 uObsB;
-// 1 inside an interior (under the cabin's roof, or inside the observatory's drum and dome), 0 outside.
+uniform vec4 uBunA, uBunB, uBunC, uBunD;
+// 1 inside the Tower bunker's hood, stairwell and room (world/bunker.js), 0 outside: its frame at (uBunA.z, uBunB.x,
+// uBunA.w) turned so local +x is (cos, -sin) of uBunA.xy; uBunB = (y, landing ceiling, slope start z, slope);
+// uBunC = (stairwell half width, room start z, room half width, room ceiling); uBunD = (far end z, on).
+float bunkerMask(vec3 p) {
+  if (uBunD.y < 0.5) return 0.0;
+  vec2 d = p.xz - uBunA.zw;
+  float lx = d.x * uBunA.x - d.y * uBunA.y, lz = d.x * uBunA.y + d.y * uBunA.x, ly = p.y - uBunB.x;
+  float room = step(uBunC.y, lz);
+  float hw = mix(uBunC.x, uBunC.z, room) + 0.06;
+  float ceil = mix(uBunB.y - max(0.0, lz - uBunB.z) * uBunB.w, uBunC.w, room) + 0.05;
+  return step(abs(lx), hw) * step(0.12, lz) * step(lz, uBunD.x) * step(ly, ceil);
+}
+// 1 inside an interior (under the cabin's roof, inside the observatory's drum and dome, in the bunker), 0 outside.
 float interiorMask(vec3 p) {
   float m = 0.0;
   if (uIntA.z > uIntA.x) {
@@ -37,7 +50,7 @@ float interiorMask(vec3 p) {
     float dome = smoothstep(uObsB.z - 0.035, uObsB.z - 0.045, distance(p, vec3(uObsA.x, uObsB.y, uObsA.y))) * step(uObsB.x - 0.2, p.y);
     m = max(m, max(drum, dome));
   }
-  return m;
+  return max(m, bunkerMask(p));
 }
 varying vec3 vFogWorld;
 float dbHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -133,6 +146,7 @@ export function patchMaterial(mat, { wind = null, fadeDist = 0, indoorEnv = fals
       uHorizonSun: atmo.uHorizonSun, uSunGlow: atmo.uSunGlow, uUnderground: atmo.uUnderground,
       uFogDensity: atmo.uFogDensity, uTime: atmo.uTime, uWind: atmo.uWind, uCloudColor: atmo.uCloudColor,
       uFogLow: atmo.uFogLow, uFogTint: atmo.uFogTint, uIntA: atmo.uIntA, uIntB: atmo.uIntB, uObsA: atmo.uObsA, uObsB: atmo.uObsB,
+      uBunA: atmo.uBunA, uBunB: atmo.uBunB, uBunC: atmo.uBunC, uBunD: atmo.uBunD,
     });
     let vs = shader.vertexShader;
     vs = vs.replace('#include <common>', '#include <common>\nvarying vec3 vFogWorld;\nuniform float uTime;\nuniform vec2 uWind;\nuniform float uSwayAmount;\nuniform float uFlutter;');
@@ -174,8 +188,18 @@ export function materials() {
   const metal = Textures.metal(), pavers = Textures.pavers();
   M = {
     cap: std({ vertexColors: true, map: ground.map, normalMap: ground.normal, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.96, envMapIntensity: 0.6 }),
-    cliff: std({ vertexColors: true, map: rock.map, normalMap: rock.normal, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.95, envMapIntensity: 0.6 }),
+    // The tor, the rock piles and the cave hoods (each stack's walls have their own material, render/wallMaterial.js).
+    // Shadows from both sides: three.js casts from the back faces by default, so a rock's shaded side, which meets
+    // the ground, set the shadow's depth, and the ground within the sun's depth bias (about 16 cm) of it counted as
+    // lit, a bright rim round every rock's foot. Both sides keep the nearest (the sunny side) for the solid rocks, and
+    // the hoods, open shells, still cast from whichever side faces the sun.
+    cliff: std({ vertexColors: true, map: rock.map, normalMap: rock.normal, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.95, envMapIntensity: 0.6, shadowSide: THREE.DoubleSide }),
     stone: std({ vertexColors: true, map: rock.map, normalMap: rock.normal, roughness: 0.9, color: 0xd8d2c8 }),
+    // The Dome's ledge path (world/cliffPath.js): laid flagstones, with a sheen at grazing light.
+    path: (() => {
+      const f = Textures.flagstone();
+      return std({ map: f.map, normalMap: f.normal, normalScale: new THREE.Vector2(1.2, 1.2), roughnessMap: f.rough, roughness: 1, metalness: 0, envMapIntensity: 0.55, name: 'path' });
+    })(),
     bark: std({ vertexColors: true, map: bark.map, normalMap: bark.normal, roughness: 0.95 }, { wind: { sway: 0.0009 } }),
     wood: std({ vertexColors: true, map: wood.map, normalMap: wood.normal, roughness: 0.85, color: 0xcfc0a8 }),
     metal: std({ vertexColors: true, map: metal.map, roughnessMap: metal.rough, roughness: 1.0, metalness: 0.75, color: 0xb8b8b8 }),
@@ -185,6 +209,16 @@ export function materials() {
     glass: patchMaterial(new THREE.MeshPhysicalMaterial({ color: 0xcfe6f0, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.16, envMapIntensity: 1.6, side: THREE.DoubleSide, depthWrite: false, specularIntensity: 1 })),
     plaster: std({ vertexColors: true, roughness: 0.9, color: 0xd9d2c4 }),
     rope: std({ vertexColors: true, roughness: 1.0, color: 0x9a8565 }),
+    // Limestone slabs (the Home stack's walkway): UVs in metres; each slab tinted a little.
+    limestone: (() => {
+      const l = Textures.limestone();
+      return std({ vertexColors: true, map: l.map, normalMap: l.normal, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.88, envMapIntensity: 0.5 });
+    })(),
+    // Board-formed concrete (the Tower's bunker): UVs in metres / 2, the boards' rows along u.
+    concrete: (() => {
+      const c = Textures.concrete();
+      return std({ vertexColors: true, map: c.map, normalMap: c.normal, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.93, envMapIntensity: 0.45 });
+    })(),
   };
   return M;
 }

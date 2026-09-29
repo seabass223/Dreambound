@@ -92,7 +92,68 @@ const once = (k, f) => cache[k] || (cache[k] = f());
 // Building blocks for procedural textures defined in other modules (tileable noise, canvas + normal-map helpers).
 export { periodicHash, tnoise, tfbm, tnoiseA, tfbmA, heightField, toCanvas, normalFromHeight, tex, once };
 
+// Tileable Voronoi over [0,1)^2 with `n` x `n` jittered cells: the nearest and second-nearest distances and the
+// nearest cell's id (for per-stone colour), for flagstones and cobbles.
+function voronoi(u, v, n, seed) {
+  const x = u * n, y = v * n, ix = Math.floor(x), iy = Math.floor(y);
+  let d1 = 9, d2 = 9, id = 0;
+  for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+    const cx = ix + ox, cy = iy + oy;
+    const px = cx + 0.02 + 0.96 * periodicHash(cx, cy, n, seed), py = cy + 0.02 + 0.96 * periodicHash(cx, cy, n, seed + 17);
+    const d = Math.hypot(px - x, py - y);
+    if (d < d1) { d2 = d1; d1 = d; id = periodicHash(cx, cy, n, seed + 29); } else if (d < d2) d2 = d;
+  }
+  return { d1, d2, edge: d2 - d1, id };
+}
+
 export const Textures = {
+  // Laid path stones (the Dome's ledge path): irregular flagstones with dark joints, each its own shade and a worn,
+  // bevelled edge; the roughness map leaves their tops fairly smooth (and some patches polished by feet and wet), so a
+  // low sun glances off them, while the joints stay matt.
+  flagstone: () => once('flagstone', () => {
+    const S = 512, N = 5;   // (one tile is laid over about 2.4 m of path)
+    const h = new Float32Array(S * S), shade = new Float32Array(S * S), joint = new Float32Array(S * S), polish = new Float32Array(S * S);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const u = x / S, v = y / S;
+      // Warped cells, so the stones' sides wander instead of running straight.
+      const wu = u + (tfbm(u, v, 5, 3, 71) - 0.5) * 0.09, wv = v + (tfbm(u, v, 5, 3, 73) - 0.5) * 0.09;
+      const c = voronoi(((wu % 1) + 1) % 1, ((wv % 1) + 1) % 1, N, 77);
+      const e = c.edge * N;                                  // 0 at a joint
+      const jw = 0.1 + 0.07 * tnoise(u, v, 12, 75);          // joints of varying width, packed with grit
+      const j = 1 - Math.min(1, e / jw);
+      const bevel = Math.min(1, e / 0.5);                    // worn, softly rounded edges
+      const grain = tfbm(u, v, 24, 4, 79), fine = tnoise(u, v, 256, 81);
+      const tilt = (c.id - 0.5) * 0.15;
+      const i = y * S + x;
+      h[i] = bevel * 0.55 + grain * 0.22 + fine * 0.06 + tilt * (u + v) * 0.3 - j * 0.2;
+      shade[i] = c.id; joint[i] = j;
+      polish[i] = Math.max(0, tfbm(u, v, 6, 3, 83) - 0.52) * 2.5 * bevel;
+    }
+    const col = toCanvas(S, (x, y) => {
+      const i = y * S + x, id = shade[i];
+      const u = x / S, v = y / S;
+      // Each stone its own weathered shade (grey-brown, some warmer), mottled, a little lighter where it's worn.
+      const mott = tfbm(u, v, 16, 4, 85);
+      const base = 0.5 + id * 0.3 + (mott - 0.5) * 0.35 + (h[i] - 0.4) * 0.15;
+      const warm = 1.0 + (periodicHash(Math.floor(id * 97), 3, 997, 5) - 0.4) * 0.22;
+      let r = 112 * base * warm, g = 101 * base, b = 88 * base / warm;
+      const dirt = joint[i];
+      r = r * (1 - dirt * 0.8) + 30 * dirt; g = g * (1 - dirt * 0.8) + 26 * dirt; b = b * (1 - dirt * 0.8) + 21 * dirt;
+      return [r, g, b];
+    });
+    const rough = toCanvas(S, (x, y) => {
+      const i = y * S + x;
+      const k = 0.6 - polish[i] * 0.28 + joint[i] * 0.35 + (1 - Math.min(1, h[i] * 1.4)) * 0.06;
+      const r = Math.max(0.12, Math.min(1, k)) * 255;
+      return [r, r, r];
+    });
+    return {
+      map: tex(col),
+      normal: tex(normalFromHeight(S, h, 5), { srgb: false }),
+      rough: tex(rough, { srgb: false }),
+    };
+  }),
+
   rock: () => once('rock', () => {
     const S = 512;
     const h = heightField(S, (u, v) => {
@@ -184,6 +245,60 @@ export const Textures = {
       return moss ? [70 * k + 20, 90 * k + 20, 50 * k + 10] : [150 * k + 20, 110 * k + 18, 90 * k + 16];
     });
     return { map: tex(col), normal: tex(normalFromHeight(S, h, 4), { srgb: false }) };
+  }),
+
+  // Board-formed concrete (the Tower's bunker, world/bunker.js), a 2 m tile: the formwork's boards in rows 25 cm high
+  // with their grain pressed in and a lip at each joint, pinholes, and a mottle of damp and lime stains.
+  concrete: () => once('concrete', () => {
+    const S = 512, ROWS = 8;
+    const h = heightField(S, (u, v) => {
+      const row = Math.floor(v * ROWS), f = (v * ROWS) % 1;
+      const joint = Math.max(0, 1 - Math.min(f, 1 - f) / 0.018);
+      const grain = tnoiseA(u, v, 6, 192, 7 + row) * 0.5 + tnoiseA(u, v, 14, 384, 11 + row) * 0.25;   // streaks along the boards
+      const pits = Math.max(0, tnoise(u, v, 128, 3) - 0.8) * 3;
+      return 0.55 + grain * 0.12 + tfbm(u, v, 4, 4, 5) * 0.2 - joint * 0.25 - pits * 0.35;
+    });
+    const col = toCanvas(S, (x, y) => {
+      const u = x / S, v = y / S, k = h[y * S + x];
+      const damp = Math.max(0, tfbm(u, v, 3, 4, 61) - 0.45) * 1.4;   // patches
+      const lime = Math.max(0, tnoiseA(u, v, 24, 3, 71) - 0.62) * 1.2;   // run-down streaks
+      const board = 0.94 + 0.06 * Math.sin(Math.floor(v * ROWS) * 12.9898);
+      const g = (118 + k * 70) * board;
+      return [g * (1 - damp * 0.28) + lime * 18, g * (0.99 - damp * 0.24) + lime * 18, g * (0.95 - damp * 0.22) + lime * 16];
+    });
+    return { map: tex(col), normal: tex(normalFromHeight(S, h, 2.2), { srgb: false }) };
+  }),
+
+  // Limestone (the Home stack's walkway, world/walkway.js), a 1 m tile: pale buff, a soft mottle and faint bedding,
+  // fine dark speckle, pits and the odd fossil shell, and a little grey lichen.
+  limestone: () => once('limestone', () => {
+    const S = 512;
+    const rng = new Rng(3131);
+    const shells = Array.from({ length: 7 }, () => ({ u: rng.next(), v: rng.next(), r: rng.float(0.012, 0.028), a: rng.float(0, Math.PI * 2) }));
+    const shellAt = (u, v) => {
+      let k = 0;
+      for (const s of shells) {
+        let du = u - s.u, dv = v - s.v;
+        du -= Math.round(du); dv -= Math.round(dv);
+        const d = Math.hypot(du, dv), ang = Math.atan2(dv, du) - s.a;
+        if (d < s.r * 1.1 && Math.cos(ang) > -0.3) k = Math.max(k, Math.max(0, 1 - Math.abs(Math.sin(d / s.r * Math.PI * 3)) * 3));   // ribbed arcs
+      }
+      return k;
+    };
+    const h = heightField(S, (u, v) => {
+      const pits = Math.max(0, tnoise(u, v, 96, 5) - 0.78) * 4 + Math.max(0, tnoise(u, v, 192, 6) - 0.82) * 3;
+      return 0.6 + tfbm(u, v, 3, 5, 7) * 0.25 + tnoiseA(u, v, 2, 24, 9) * 0.04 - pits * 0.3 + shellAt(u, v) * 0.1;
+    });
+    const col = toCanvas(S, (x, y) => {
+      const u = x / S, v = y / S, k = h[y * S + x];
+      const mottle = tfbm(u, v, 4, 4, 13);
+      const speck = tnoise(u, v, 256, 17) > 0.86 ? 0.82 : 1;
+      const lichen = Math.max(0, tfbm(u, v, 6, 3, 23) - 0.63) * 2.2;
+      const b = (0.8 + k * 0.3) * (0.92 + mottle * 0.14) * speck;
+      const r = 214 * b, g = 204 * b, bl = 180 * b;
+      return [r * (1 - lichen * 0.3) + lichen * 30, g * (1 - lichen * 0.22) + lichen * 34, bl * (1 - lichen * 0.18) + lichen * 30];
+    });
+    return { map: tex(col), normal: tex(normalFromHeight(S, h, 2.6), { srgb: false }) };
   }),
 
   panel: () => once('panel', () => {

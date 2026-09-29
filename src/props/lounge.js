@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { patchMaterial } from '../render/materials.js';
+import { placeSecret } from './loungeSecret.js';
 
 // The cartographer's lounge: the Tower elevator's secret third stop, straight below its cave station (press Down again
 // there). Modeled and lit in Blender (tools/blender/lounge_design.py): the desk lamp and two faint sconces are baked
@@ -9,7 +10,8 @@ import { patchMaterial } from '../render/materials.js';
 // things, the glowing shades).
 
 export const LOUNGE_DEPTH = 150;          // metres below the Tower's cave station
-const SLOT = 100;                         // decal ids are packed in the texture u: u = SLOT * id + u_local
+const SLOT = 100;
+const GLOBE_GAIN = 0.0021;                // the bulbs' power (W) to the globe's live lighting, matched to the bake beside it                         // decal ids are packed in the texture u: u = SLOT * id + u_local
 
 const FILES = {
   lm: 'lounge_lm.png', wood: 'lounge_wood.png', leather: 'lounge_leather.png', map: 'lounge_map.png', card: 'lounge_card.png',
@@ -124,6 +126,8 @@ export function placeLounge(ctx, asset, { below, group, collider, hide = null })
 
   // ---- geometry: merged per material; the COLLIDER boxes become collision ----
   const groups = {};
+  const globeParts = { globe_tilt: {}, globe_spin: {} };   // the globe's moving parts, by layer then material
+  const secretParts = {};                                  // the bookcase's secret door, by material
   const m4 = new THREE.Matrix4();
   src.traverse((o) => {
     if (!o.isMesh) return;
@@ -136,7 +140,10 @@ export function placeLounge(ctx, asset, { below, group, collider, hide = null })
     g.applyMatrix4(o.matrixWorld);
     if (g.attributes.uv1) { g.setAttribute('aLmUv', g.attributes.uv1); g.deleteAttribute('uv1'); }
     for (const k of Object.keys(g.attributes)) if (k.startsWith('uv') && k !== 'uv') g.deleteAttribute(k);
-    (groups[name] ||= []).push(g);
+    const lay = o.userData?.layer ?? o.name.split('@')[1]?.replace(/[._]\d+$/, '');
+    if (lay in globeParts) (globeParts[lay][name] ||= []).push(g);
+    else if (lay === 'secret') (secretParts[name] ||= []).push(g);
+    else (groups[name] ||= []).push(g);
   });
 
   const meta = nodes.META?.userData || {};
@@ -174,6 +181,17 @@ export function placeLounge(ctx, asset, { below, group, collider, hide = null })
     root.add(mesh);
   }
 
+  // ---- the globe: two transforms, so it never gimbal-locks. The stand's frame (GLOBE: its centre, turned ry) holds
+  // the tilt, about the frame's z (the meridian slides through the horizon ring); inside it the spin, about the polar
+  // axis (the tilted y). Hold press on the ball and move the mouse: across spins it (and it coasts on a little when you
+  // let go), up and down tilts the axis, between upright and 60 degrees. Its parts were modelled in their rest pose
+  // (baked there, so the stand keeps their shadow); here they are moved into the frames, and lit by the room's bulbs
+  // as they turn (a baked lightmap would turn with them).
+  // ---- the secret: the bookcase's two east bays swing back into a passage to another elevator (props/loungeSecret.js),
+  // opened by pressing the island on the globe that the deck's postcard shows ----
+  const secret = nodes.SECRET ? placeSecret(ctx, { root, group, node: nodes.SECRET, parts: secretParts, M, collider }) : null;
+  const globe = nodes.GLOBE ? placeGlobe(ctx, { root, group, node: nodes.GLOBE, parts: globeParts, U, asset, nodes, wp, secret }) : null;
+
   // ---- the elevator's stop, sound, the lamp on the (standard-material) elevator doors ----
   const sn = nodes.STATION;
   const station = { pos: wp('STATION'), rotY: below.rotY + (sn.userData.rotY ?? 0), callPos: sn.userData.callPos };
@@ -185,7 +203,7 @@ export function placeLounge(ctx, asset, { below, group, collider, hide = null })
   const center = root.localToWorld(box.getCenter(new THREE.Vector3()));
   ctx.lightPool.add({
     center: center.clone(), radius: 5,
-    lights: [{ pos: lampPos.clone(), color: new THREE.Color(1, 0.72, 0.45), distance: 10, intensity: () => 5 }],
+    lights: [{ pos: lampPos.clone(), color: new THREE.Color(1, 0.72, 0.45), distance: 10, intensity: () => 5 }, ...(secret?.lights ?? [])],
   });
   // Registered once the world is built (world/index.js), so the lounge's collision and sound come after everything
   // else's. Walls and furniture collide as oriented boxes (sideways pushes only; see lounge_design.py colliders()).
@@ -205,5 +223,190 @@ export function placeLounge(ctx, asset, { below, group, collider, hide = null })
   ctx.lod?.add(root, { out: [40, 55], fade: false, name: 'lounge' });
   ctx.updaters.push(() => { if (hide) hide.visible = !root.visible; });
 
-  return { root, station, inside, center, lampPos, uniforms: U, finish };
+  return { root, station, inside, center, lampPos, uniforms: U, finish, globe, secret };
+}
+
+const GLOBE_TILT = [0, THREE.MathUtils.degToRad(60)];   // the axis's tilt from upright, as far as it will go each way
+const GLOBE_LIGHT = /* glsl */ `
+uniform vec3 uGLPos[3];
+uniform vec3 uGLCol[3];
+// The room's bulbs on a surface that moves: Lambert with the inverse-square fall-off, over the room's floor light.
+vec3 globeLight() {
+  vec3 N = normalize(vLN), acc = vec3(0.0);
+  for (int i = 0; i < 3; i++) {
+    vec3 L = uGLPos[i] - vLP;
+    float d2 = dot(L, L);
+    acc += uGLCol[i] * max(dot(N, L * inversesqrt(d2)), 0.0) / (d2 + 0.04);
+  }
+  return acc + uAmb * 4.0;
+}
+`;
+
+function placeGlobe(ctx, { root, group, node, parts, U, asset, nodes, wp, secret }) {
+  const u = node.userData;
+  const frame = new THREE.Group();
+  frame.name = 'lounge-globe';
+  frame.position.copy(node.position);
+  frame.rotation.y = u.ry ?? 0;
+  const tiltNode = new THREE.Group(), spinNode = new THREE.Group();
+  tiltNode.rotation.z = u.tilt ?? 0;
+  frame.add(tiltNode);
+  tiltNode.add(spinNode);
+  root.add(frame);
+  frame.updateMatrixWorld(true);
+  // Model space -> the rest pose's local frame (the stand's turn, then the tilt; the spin starts at 0).
+  const rest = new THREE.Matrix4().makeRotationY(u.ry ?? 0).multiply(new THREE.Matrix4().makeRotationZ(u.tilt ?? 0)).setPosition(node.position);
+  const toLocal = rest.clone().invert();
+
+  // Up to three bulbs (the desk lamp and the two sconces), in world space.
+  const lights = Object.keys(nodes).filter((n) => /^LIGHT_\d+$/.test(n)).sort().slice(0, 3);
+  const GU = {
+    ...U,
+    uGLPos: { value: [0, 1, 2].map((i) => (lights[i] ? wp(lights[i]) : new THREE.Vector3(0, -1000, 0))) },
+    uGLCol: { value: [0, 1, 2].map((i) => {
+      const d = lights[i] ? nodes[lights[i]].userData : null;
+      return d ? new THREE.Color(...(d.color ?? [1, 0.7, 0.45])).multiplyScalar((d.power ?? 20) * GLOBE_GAIN) : new THREE.Color(0, 0, 0);
+    }) },
+  };
+  const decalU = {
+    uMapT: { value: asset.map }, uCard: { value: asset.card }, uDots: { value: asset.dots }, uRug: { value: asset.rug },
+    uPrints: { value: asset.prints }, uFloor: { value: asset.floor },
+  };
+  const mats = {
+    brass: loungeMaterial('globe_brass', GU, {}, `vec3 lt = globeLight();
+      vec3 bN = normalize(vLN), bV = normalize(cameraPosition - vLP);
+      float fres = pow(1.0 - abs(dot(bN, bV)), 3.0);
+      diffuseColor.rgb = diffuseColor.rgb * (lt * (0.75 + 1.2 * fres) + lampSpec(lt, 60.0) * 3.0);`, GLOBE_LIGHT),
+    decal: loungeMaterial('globe_decal', { ...GU, ...decalU }, {}, 'diffuseColor.rgb *= decal(vLUv) * globeLight();', DECAL + GLOBE_LIGHT),
+  };
+  const addParts = (byMat, parent) => {
+    for (const [key, geos] of Object.entries(byMat)) {
+      const mat = mats[key];
+      if (!mat) { console.warn('lounge globe: no material for', key); continue; }
+      const geo = mergeGeometries(geos, false);
+      geo.applyMatrix4(toLocal);
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = 'lounge_globe_' + key;
+      parent.add(mesh);
+    }
+  };
+  addParts(parts.globe_tilt, tiltNode);
+  addParts(parts.globe_spin, spinNode);
+
+  // Hold press on it and move the mouse. The pick sphere is outside the LOD group, so it stays pickable.
+  const R = u.radius ?? 0.24;
+  const pick = new THREE.Mesh(new THREE.SphereGeometry(R + 0.05, 12, 8), new THREE.MeshBasicMaterial({ visible: false }));
+  pick.name = 'lounge-globe-pick';
+  pick.position.copy(frame.getWorldPosition(new THREE.Vector3()));
+  group.add(pick);
+  pick.updateMatrixWorld(true);
+  const state = { spin: 0, tilt: u.tilt ?? 0, vel: 0, held: false };
+  let restSpin = 0;   // the spin it rests at (set below: the island toward the wall)
+  // The island on the deck's postcard (the small one at the globe map's east edge, 52 N): a press on its land opens the
+  // bookcase (props/loungeSecret.js). Its box on the map (s along the map from its west edge, t up from the south pole)
+  // and, where the page can read the texture, the atlas's pixels over that box, to tell land from sea.
+  const ISLAND = { s: [0.94, 0.985], t: [0.755, 0.83] };
+  const ball = spinNode.children.find((m) => m.name === 'lounge_globe_decal');
+  const _rc = new THREE.Raycaster(), _c0 = new THREE.Vector2(0, 0);
+  let land = null;
+  const img = asset.prints?.image;
+  if (typeof document !== 'undefined' && img?.width) {
+    try {
+      const W = img.width, H = img.height;
+      const x0 = Math.floor((0.5 + ISLAND.s[0] * 0.5) * W), x1 = Math.ceil((0.5 + ISLAND.s[1] * 0.5) * W);
+      const y0 = Math.floor((0.5 - ISLAND.t[1] * 0.5) * H), y1 = Math.ceil((0.5 - ISLAND.t[0] * 0.5) * H);
+      const cv = document.createElement('canvas');
+      cv.width = x1 - x0; cv.height = y1 - y0;
+      const g = cv.getContext('2d', { willReadFrequently: true });
+      g.drawImage(img, x0, y0, cv.width, cv.height, 0, 0, cv.width, cv.height);
+      land = { data: g.getImageData(0, 0, cv.width, cv.height).data, x0, y0, w: cv.width, h: cv.height, W, H };
+    } catch { land = null; }
+  }
+  const SEA = [201, 185, 156];   // the globe's sea (sRGB); land, coast and ink are all well off it
+  const onIsland = () => {
+    if (!ball) return false;
+    _rc.setFromCamera(_c0, ctx.camera);
+    const h = _rc.intersectObject(ball, false)[0];
+    if (!h?.uv) return false;
+    const ms = ((h.uv.x % SLOT) - 0.5) * 2, mt = (0.5 - h.uv.y) * 2;   // the globe's region of the prints atlas
+    if (ms < ISLAND.s[0] || ms > ISLAND.s[1] || mt < ISLAND.t[0] || mt > ISLAND.t[1]) return false;
+    if (!land) return true;
+    const px = Math.floor((h.uv.x % SLOT) * land.W) - land.x0, py = Math.floor(h.uv.y * land.H) - land.y0;
+    if (px < 0 || py < 0 || px >= land.w || py >= land.h) return false;
+    const k = (py * land.w + px) * 4, d = land.data;
+    return Math.abs(d[k] - SEA[0]) + Math.abs(d[k + 1] - SEA[1]) + Math.abs(d[k + 2] - SEA[2]) > 26;
+  };
+  const apply = () => { spinNode.rotation.y = state.spin; tiltNode.rotation.z = state.tilt; };
+  let lastDt = 1 / 60;
+  const turn = (mx, my) => {
+    const ds = mx * 0.006;
+    state.spin += ds;
+    state.vel = state.vel * 0.6 + (ds / lastDt) * 0.4;   // for the coast when you let go
+    state.tilt = THREE.MathUtils.clamp(state.tilt + my * 0.004, GLOBE_TILT[0], GLOBE_TILT[1]);
+    apply();
+  };
+  ctx.interact.add({
+    name: 'lounge:globe', meshes: [pick], range: 2.2, zone: 'tunnel',
+    onPress: () => {
+      if (secret && onIsland() && secret.trigger()) return;   // the island: the bookcase opens (and the globe stays put)
+      state.held = true;
+      state.vel = 0;
+      ctx.player.lookHandler = turn;
+    },
+    onRelease: () => { state.held = false; if (ctx.player.lookHandler === turn) ctx.player.lookHandler = null; },
+  });
+  // Let go mid-spin and it coasts, slowing on its bearings.
+  ctx.updaters.push((dt) => {
+    if (dt > 0) lastDt = dt;
+    if (state.held) { state.vel *= Math.exp(-dt * 6); return; }   // (held still, the flick dies away)
+    if (Math.abs(state.vel) < 0.01) { state.vel = 0; return; }
+    state.spin += state.vel * dt;
+    state.vel *= Math.exp(-dt * 1.4);
+    apply();
+  });
+  // At rest the island faces the wall behind the globe (it stands too close to it to walk round), so it has to be
+  // found by turning the globe. Its direction on the ball: the mean of the ball's vertices nearest it on the map.
+  const islandDir = (() => {
+    const g = ball?.geometry;
+    if (!g?.attributes.uv) return null;
+    const P = g.attributes.position, UV = g.attributes.uv;
+    const iu = 0.5 + ((ISLAND.s[0] + ISLAND.s[1]) / 2) * 0.5, iv = 0.5 - ((ISLAND.t[0] + ISLAND.t[1]) / 2) * 0.5;   // in the atlas
+    const near = [];
+    for (let i = 0; i < UV.count; i++) {
+      const d = Math.hypot((UV.getX(i) % SLOT) - iu, UV.getY(i) - iv);
+      near.push([d, i]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    const v = new THREE.Vector3();
+    for (const [d, i] of near.slice(0, 4)) v.add(new THREE.Vector3(P.getX(i), P.getY(i), P.getZ(i)).multiplyScalar(1 / (d + 1e-4)));
+    return v.normalize();
+  })();
+  if (islandDir) {
+    // The spin that shows it least to anyone standing in the room: over a grid of the places you can stand (in from the
+    // walls, out of the globe's stand), the most squarely any of them sees it, made as small as it can be (one turn only
+    // moves it round its latitude, so from beside the globe near the wall it can still be glimpsed, edge-on).
+    const g0 = node.position, eyes = [];
+    for (let x = -3.2; x <= 3.2; x += 0.2) for (let z = -2.7; z <= 2.3; z += 0.2) {
+      if (Math.abs(x - g0.x) < 0.66 && Math.abs(z - g0.z) < 0.66) continue;
+      eyes.push(root.localToWorld(new THREE.Vector3(x, 1.66, z)));
+    }
+    const c = frame.getWorldPosition(new THREE.Vector3()), n = new THREE.Vector3(), q = new THREE.Vector3(), R0 = u.radius ?? 0.24;
+    let best = Infinity;
+    for (let k = 0; k < 360; k++) {
+      state.spin = (k / 360) * Math.PI * 2;
+      apply();
+      frame.updateMatrixWorld(true);
+      n.copy(islandDir).transformDirection(spinNode.matrixWorld);
+      let worst = -1;
+      for (const e of eyes) worst = Math.max(worst, q.copy(e).sub(c).addScaledVector(n, -R0).normalize().dot(n));
+      if (worst < best) { best = worst; restSpin = state.spin; }
+    }
+    state.spin = restSpin;
+  }
+  apply();
+  return {
+    frame, tiltNode, spinNode, state, restSpin,
+    set(spin, tilt) { state.spin = spin; if (tilt != null) state.tilt = THREE.MathUtils.clamp(tilt, GLOBE_TILT[0], GLOBE_TILT[1]); state.vel = 0; apply(); },
+  };
 }
