@@ -4,7 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { SKY_TARGET, AZ_SCALE, ALT_SCALE, pitchToAlt } from '../world/skyTarget.js';
+import { AZ_SCALE, ALT_SCALE } from '../world/skyTarget.js';
 
 const f = (v) => v.toFixed(6);   // a JS number as a GLSL float
 
@@ -63,14 +63,12 @@ const DreamShader = {
     const float FIELD = 0.425;
     const float DEG = 57.29578;
     // The scales read like the roof station's (world/skyTarget.js): the ring in compass headings, the altitude scale in
-    // degrees of tube elevation, with a brass pointer on each at SKY_TARGET.
+    // degrees of tube elevation.
     const float AZ_MINOR = ${f(AZ_SCALE.minor)}, AZ_MAJOR = ${f(AZ_SCALE.major)};
     const float ALT_MIN = ${f(ALT_SCALE.min)}, ALT_MAX = ${f(ALT_SCALE.max)}, ALT_MINOR = ${f(ALT_SCALE.minor)}, ALT_MAJOR = ${f(ALT_SCALE.major)};
-    const float TGT_YAW = ${f(SKY_TARGET.yaw)}, TGT_ALT = ${f(pitchToAlt(SKY_TARGET.pitch))};
     const float ALT_H = 0.34;                  // the altitude scale's half-height (screen heights), ALT_MIN at the bottom
     const float ALT_K = 2.0 * ALT_H / (ALT_MAX - ALT_MIN);   // screen height per degree on it
-    const vec3 BRASS = vec3(1.0, 0.8, 0.4);
-    const vec3 GOLD = vec3(1.0, 0.86, 0.22);   // the tube's own arrow on the altitude scale
+    const vec3 GOLD = vec3(1.0, 0.86, 0.22);   // the ring's index and the tube's arrow on the altitude scale
     // Seven-segment digits (bits a b c d e f g), drawn as distance fields so they stay crisp at any angle.
     const int SEG7[10] = int[](0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F);
     float sdSeg(vec2 p, vec2 a, vec2 b) { vec2 pa = p - a, ba = b - a; return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0)); }
@@ -106,8 +104,8 @@ const DreamShader = {
       return vec2(cov, shade);
     }
     // The telescope eyepiece: field stop, etched reticle, and outside it an amber-lit azimuth ring that turns
-    // with the dome and a fixed altitude scale with a gold arrow that rides it with the tube, numbered, with the
-    // target's brass pointers.
+    // with the dome under a fixed gold index, and a fixed altitude scale with a gold arrow that rides it with the tube,
+    // both numbered.
     vec3 eyepiece(vec3 col, vec2 uv) {
       vec2 sc = uv - 0.5; sc.x *= uAspect;
       float sr = length(sc);
@@ -149,19 +147,16 @@ const DreamShader = {
         vec2 p = vec2((hd - k * AZ_MAJOR) / DEG * sr, sr - (FIELD + 0.0215)) / H;
         outer += amber * 0.6 * aline(numberDist(p, mod(k * AZ_MAJOR, 360.0)) * H, 0.08 * H, px);
       }
-      // Fixed index at the top of the ring.
-      float notch = step(abs(sc.x), (sc.y - FIELD - 0.055) * 0.5 + 0.012) * step(FIELD + 0.055, sc.y) * step(sc.y, FIELD + 0.075);
-      outer += amber * 0.7 * notch;
+      // Fixed index at the top of the ring: a gold arrow like the altitude scale's, apex down onto the ring, with a
+      // hairline across its ticks at the heading the dome faces.
       {
-        // The target's pointer on the ring, apex out: tip to tip with the notch when the dome faces SKY_TARGET.
-        float dA = ang - TGT_YAW;
-        dA -= 6.2831853 * floor(dA / 6.2831853 + 0.5);
-        vec2 tp = pointer(FIELD + 0.052 - sr, dA * sr, 0.021, 0.0085, px);
-        outer = mix(outer, BRASS * tp.y, tp.x * band);
+        float y0 = FIELD + 0.047;
+        outer += GOLD * 0.6 * aline(sc.x, 0.5 * px, px) * step(FIELD + 0.03, sc.y) * step(sc.y, y0);
+        vec2 ga = pointer(sc.y - y0, sc.x, 0.024, 0.012, px);
+        outer = mix(outer, GOLD * ga.y * 1.2, ga.x);
       }
       // Altitude scale to the right, fixed: ALT_MIN at the bottom to ALT_MAX at the top. A gold arrow on its left
-      // slides up and down it with the tube's elevation; the target's brass pointer sits on it at SKY_TARGET, so the
-      // two meet tip to tip when the tube stands there (as the ring's notch and pointer do).
+      // slides up and down it with the tube's elevation.
       vec2 q = sc - vec2(FIELD + 0.09, 0.0);
       if (abs(q.y) < ALT_H + 0.03 && q.x > -0.045 && q.x < 0.045) {
         float v = ALT_MIN + (q.y + ALT_H) / ALT_K;   // the scale's reading at this height
@@ -176,9 +171,6 @@ const DreamShader = {
           vec2 p = vec2(q.x - 0.031, q.y - (-ALT_H + (vv - ALT_MIN) * ALT_K)) / H;
           outer += amber * 0.6 * aline(numberDist(p, vv) * H, 0.08 * H, px);
         }
-        // The target's pointer, apex left.
-        vec2 tp = pointer(q.x + 0.012, q.y - (-ALT_H + (TGT_ALT - ALT_MIN) * ALT_K), 0.02, 0.0085, px);
-        outer = mix(outer, BRASS * tp.y * 0.85, tp.x);
         // The tube's arrow, apex right, with a hairline across the ticks: where it stands on the scale.
         float yCur = -ALT_H + (clamp(uScopeAlt * DEG, ALT_MIN, ALT_MAX) - ALT_MIN) * ALT_K;
         outer += GOLD * 0.6 * aline(q.y - yCur, 0.5 * px, px) * step(-0.014, q.x) * step(q.x, 0.019);

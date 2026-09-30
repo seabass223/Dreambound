@@ -5,5 +5,5 @@ Live (MCP): STAGE = 'build'; exec(open(r'C:/repos/Dreambound/tools/blender/build
 """
 KIT = r"C:/repos/Dreambound/tools/blender/dbkit.py"
 exec(compile(open(KIT, encoding='utf-8').read(), KIT, 'exec'))
-configure('cabin', 'cabin_', 'Dreambound_Cabin', ao_size=2048)
+configure('cabin', 'cabin_', 'Dreambound_Cabin', ao_size=2048, uv_method='smart')
 result = main(globals())

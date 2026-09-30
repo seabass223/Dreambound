@@ -748,6 +748,60 @@ def _clear_scene(sc):
         if me.name.startswith('DB_') and me.users == 0:
             bpy.data.meshes.remove(me)
 
+def weld_tjunctions(ob, eps=1e-4, sharp_deg=30.0):
+    """Join an object's separately built faces into one connected surface: merge coincident vertices, then split every
+    edge at any vertex lying along it (a T-junction, where one wall strip's corner meets the middle of its neighbour's
+    edge) and merge again. A flat wall built from strips then comes out of the lightmap unwrap as a single island, so
+    its baked AO has no seams between the strips. Edges between faces more than sharp_deg apart are marked sharp, so
+    welding never smooths shading across a corner. Corner data (UVs, colours) carries over."""
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=eps)
+    for _ in range(8):
+        cell = 0.5
+        grid = {}
+        for v in bm.verts:
+            grid.setdefault((int(v.co.x // cell), int(v.co.y // cell), int(v.co.z // cell)), []).append(v)
+        splits = {}
+        for e in bm.edges:
+            a, b = e.verts[0].co, e.verts[1].co
+            d = b - a
+            L = d.length
+            if L < 4 * eps:
+                continue
+            lo = [min(a[i], b[i]) - eps for i in range(3)]
+            hi = [max(a[i], b[i]) + eps for i in range(3)]
+            best = None
+            for gx in range(int(lo[0] // cell), int(hi[0] // cell) + 1):
+                for gy in range(int(lo[1] // cell), int(hi[1] // cell) + 1):
+                    for gz in range(int(lo[2] // cell), int(hi[2] // cell) + 1):
+                        for v in grid.get((gx, gy, gz), ()):
+                            if v in e.verts:
+                                continue
+                            t = (v.co - a).dot(d) / (L * L)
+                            if t * L < 2 * eps or (1 - t) * L < 2 * eps:
+                                continue
+                            if (a + d * t - v.co).length < eps and (best is None or t < best[0]):
+                                best = (t, v)
+            if best:
+                splits[e] = best
+        if not splits:
+            break
+        for e, (t, v) in splits.items():
+            if not e.is_valid:
+                continue
+            ne, nv = bmesh.utils.edge_split(e, e.verts[0], t)
+            nv.co = v.co.copy()
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=eps)
+    cos_sharp = math.cos(math.radians(sharp_deg))
+    for e in bm.edges:
+        if len(e.link_faces) == 2 and e.link_faces[0].normal.dot(e.link_faces[1].normal) < cos_sharp:
+            e.smooth = False
+    bm.to_mesh(ob.data)
+    bm.free()
+    ob.data.update()
+
+
 def realize():
     """Turn the gathered buckets into Blender objects in the asset scene."""
     sc = _scene()

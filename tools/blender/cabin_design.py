@@ -1467,6 +1467,11 @@ def build_all():
     build_meta()
     set_origin(0, 0, 0)
     stats = realize()
+    # The plaster walls are built strip by strip round the doors and windows: welded into connected surfaces, each flat
+    # wall unwraps as one lightmap island and bakes without seams between its strips.
+    for ob in _scene().objects:
+        if ob.type == 'MESH' and ob.name.startswith(PREFIX + 'plaster'):
+            weld_tjunctions(ob)
     show_scene()
     tris = 0
     for ob in _scene().objects:
