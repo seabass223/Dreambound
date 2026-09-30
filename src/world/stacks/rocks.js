@@ -362,10 +362,20 @@ export function buildRocks(ctx) {
   ctx.bridgeA = bridgeA;
 
   // ---- Movable rocks ----
-  const spots = [
+  // Where the boulders first stood (the scatter below still keeps its trees, shrubs and flowers off these, so nothing
+  // else moved when one was moved).
+  const spots0 = [
     { ...xz(L(-2, -14)), r: 1.15 }, { ...xz(L(14, 12)), r: 1.0 }, { ...xz(L(-22, -6)), r: 1.25 },
     { ...xz(L(-4, 24)), r: 0.95 }, { ...xz(L(24, -22)), r: 1.1 },
   ];
+  // One of them sits in the sequoia's doorway, 0.4 m out from the elevator's plate (too close to squeeze past along
+  // the plate): the first time you step out of the car you walk into it and shove it out of the way, and so learn that
+  // these boulders move. (From there it has a clear push onto the nearest target: tools/regress/out/rock_puzzle_test.mjs.)
+  const doorOut = new THREE.Vector3(Math.sin(seq.plateRot), 0, Math.cos(seq.plateRot));
+  const DOORSTOP = 3, DOORSTOP_GAP = 0.3;
+  const spots = spots0.map((s, i) => (i === DOORSTOP
+    ? { x: seq.platePos.x + doorOut.x * (DOORSTOP_GAP + s.r), z: seq.platePos.z + doorOut.z * (DOORSTOP_GAP + s.r), r: s.r }
+    : s));
   createMovableRocks(ctx, stack, spots, {
     blockers: [tree, tor.blocker, ...piles.map((p) => p.blocker), { x: pool.x, z: pool.z, r: POOL_R }],
     targets: ROCK_TARGETS.map((t) => xz(L(t.x, t.z))),
@@ -376,7 +386,7 @@ export function buildRocks(ctx) {
     stream.closest(x, z, q);
     if (q.d < 3.2 || Math.hypot(x - pool.x, z - pool.z) < POOL_R + 1.5) return false;
     if (nearTree(x, z, 2) || onRock(x, z)) return false;
-    for (const s of spots) if (Math.hypot(x - s.x, z - s.z) < s.r + 2) return false;
+    for (const s of spots0) if (Math.hypot(x - s.x, z - s.z) < s.r + 2) return false;
     const bx = x - bridgeA.x, bz = z - bridgeA.z;
     if (Math.hypot(bx, bz) < 12) return false;
     return true;

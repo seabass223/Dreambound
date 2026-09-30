@@ -125,9 +125,11 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
         if (Array.isArray(snap.switches) && s.switches) snap.switches.forEach((on, i) => { if (i < s.switches.length) s.switches[i] = !!on; });
         if (snap.power && ctx.power) for (const k of Object.keys(ctx.power)) if (k in snap.power) ctx.power[k] = !!snap.power[k];
 
-        // The Rocks boulders (props/movableRocks.js).
+        // The Rocks boulders (props/movableRocks.js): only the ones that have been pushed. One never touched stays where
+        // the world now starts it (a save from before the doorstop was set in the sequoia's doorway gets it there too).
         if (snap.rocks && s.rocks && ctx.boulders?.place) {
-          snap.rocks.positions.forEach((q, i) => ctx.boulders.place(i, q.x, q.z));
+          const pushed = Array.isArray(snap.rocks.pushes) ? new Set(snap.rocks.pushes) : null;
+          snap.rocks.positions.forEach((q, i) => { if (!pushed || pushed.has(i)) ctx.boulders.place(i, q.x, q.z); });
           s.rocks.pushes = Array.isArray(snap.rocks.pushes) ? [...snap.rocks.pushes] : [];
           if (snap.rocks.solved && !s.rocks.solved) { s.rocks.solved = true; ctx.onRocksSolved?.(); }
         }

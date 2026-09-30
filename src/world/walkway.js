@@ -1,88 +1,138 @@
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { materials } from '../render/materials.js';
-import { Rng } from '../core/rng.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { patchMaterial } from '../render/materials.js';
+import { Rng, noise2 } from '../core/rng.js';
 
-// A walkway of cut limestone slabs laid along a path over a stack's cap (the Home stack's, from the trail at the dome
-// door round the dome to the deck track: world/stacks/dome.js). Rows square across the path, 42-70 cm long with
-// 5-8 cm soil joints between; a row is one slab across, or two split somewhere near the middle. Each slab sits on the
-// ground (its top 2.5 cm proud), tilted with it and a hair off square, its texture and tint its own. Over the last
-// `fade` metres the rows turn into stepping stones, narrower and further apart, running out into the ground.
-//
-// Returns { on(x, z): whether (x, z) is on a slab's row (for footsteps and to keep grass and stones off it) }.
-export function buildWalkway(stack, path, batcher, { width = 1.1, fade = 4, seed = 1 } = {}) {
-  const M = materials();
+// Limestone stepping stones laid along a path over a stack's cap (the Home stack's, from the trail at the dome door
+// round the dome to the deck track: world/stacks/dome.js). The stones are modelled in Blender
+// (tools/blender/walkstone_design.py: seven weathered flags, big to small, with a seamless limestone tile: albedo, normal
+// and roughness, worn smooth on top so they catch a little light). Here they're laid one after another with grass
+// between, meandering a little either side of the line, each turned its own way, now and then a small one beside a
+// big one, nearly flush with the ground and tilted with it; over the last few metres they get smaller and further
+// apart, running out into the deck track. All in the stack's batch: one draw call.
+
+const FILES = { albedo: 'walkstone_albedo.png', normal: 'walkstone_normal.png', rough: 'walkstone_rough.png' };
+
+export async function loadWalkstones() {
+  const base = import.meta.env.BASE_URL + 'models/';
+  const tl = new THREE.TextureLoader();
+  const keys = Object.keys(FILES);
+  const [gltf, ...tex] = await Promise.all([new GLTFLoader().loadAsync(base + 'walkstone.glb'), ...keys.map((k) => tl.loadAsync(base + FILES[k]))]);
+  const T = Object.fromEntries(keys.map((k, i) => [k, tex[i]]));
+  for (const [k, t] of Object.entries(T)) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.flipY = false;                                    // (UVs are the stones' own: metres across their tops)
+    t.colorSpace = k === 'albedo' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    t.anisotropy = 8;
+  }
+  return { gltf, ...T };
+}
+
+let material = null;
+function stoneMaterial(asset) {
+  // Worn limestone: its roughness map runs from a smooth, faintly glossy top to rough pits and lichen.
+  return (material ||= patchMaterial(new THREE.MeshStandardMaterial({
+    name: 'walkstone', vertexColors: true, map: asset.albedo, normalMap: asset.normal, normalScale: new THREE.Vector2(1.1, 1.1),
+    roughnessMap: asset.rough, roughness: 1, metalness: 0, envMapIntensity: 0.9,
+  })));
+}
+
+// The seven stones, as { geo, r (their mean reach) }, biggest first.
+function variants(asset) {
+  const out = [];
+  asset.gltf.scene.updateMatrixWorld(true);
+  asset.gltf.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    const lay = o.userData?.layer ?? o.name.split('@')[1] ?? '';
+    const k = /^s(\d+)$/.exec(lay);
+    if (!k) return;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', o.geometry.attributes.position.clone());
+    g.setAttribute('normal', o.geometry.attributes.normal.clone());
+    g.setAttribute('uv', o.geometry.attributes.uv.clone());
+    // Colours as plain floats (the export may pack them), three per vertex.
+    const src = o.geometry.attributes.color, n = g.attributes.position.count, c = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { c[i * 3] = src ? src.getX(i) : 1; c[i * 3 + 1] = src ? src.getY(i) : 1; c[i * 3 + 2] = src ? src.getZ(i) : 1; }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    g.setIndex(o.geometry.index.clone());
+    g.applyMatrix4(o.matrixWorld);
+    g.computeBoundingBox();
+    const bb = g.boundingBox;
+    out[+k[1]] = { geo: g, r: ((bb.max.x - bb.min.x) + (bb.max.z - bb.min.z)) / 4 };
+  });
+  return out.filter(Boolean);
+}
+
+// Returns { on(x, z, margin): on (or within margin of) a stone, stones: [{ x, z, r }] }.
+// keepOff: { x, z, r }: no stone's centre nearer than r to (x, z) (the dome's curb); one that would be is pushed out.
+export function buildWalkway(stack, path, batcher, asset, { fade = 6, seed = 1, keepOff = null } = {}) {
+  const none = { on: () => false, stones: [] };
+  if (!asset?.gltf) return none;
+  const V = variants(asset);
+  if (!V.length) return none;
+  const mat = stoneMaterial(asset);
   const rng = new Rng(seed);
-  const THICK = 0.07, PROUD = 0.025;
-  const up = new THREE.Vector3(), q = new THREE.Quaternion(), m = new THREE.Matrix4(), e = new THREE.Euler();
-  const n = new THREE.Vector3(), tx = new THREE.Vector3(), tz = new THREE.Vector3(), b = new THREE.Matrix4();
+  const stones = [];
   const ground = (x, z) => stack.heightAt(x, z) ?? stack.heightAtAnalytic(x, z);
-  const rows = [];   // [t0, t1, half width] of each row, for on()
+  const tx = new THREE.Vector3(), tz = new THREE.Vector3(), n = new THREE.Vector3(), b = new THREE.Matrix4(), q = new THREE.Quaternion();
+  const m = new THREE.Matrix4(), e = new THREE.Euler(), sv = new THREE.Vector3(), at = new THREE.Vector3();
+  const pick = (weights) => { let s = weights.reduce((a, w) => a + w, 0) * rng.next(); for (let i = 0; i < weights.length; i++) if ((s -= weights[i]) <= 0) return i; return weights.length - 1; };
 
-  const slab = (x, z, along, across, yaw) => {
-    // The ground's slope under it: its normal from four samples.
-    const s = 0.3, ca = Math.cos(yaw), sa = Math.sin(yaw);
-    const hx = ground(x + ca * s, z - sa * s) - ground(x - ca * s, z + sa * s);
-    const hz = ground(x + sa * s, z + ca * s) - ground(x - sa * s, z - ca * s);
-    tx.set(ca * 2 * s, hx, -sa * 2 * s).normalize();
-    tz.set(sa * 2 * s, hz, ca * 2 * s).normalize();
-    n.crossVectors(tz, tx).normalize();
-    tz.crossVectors(tx, n).normalize();   // (square again: a proper rotation)
-    b.makeBasis(tx, n, tz);
-    q.setFromRotationMatrix(b).multiply(new THREE.Quaternion().setFromEuler(e.set(rng.float(-0.01, 0.01), 0, rng.float(-0.01, 0.01))));
-    const y = ground(x, z) + PROUD - THICK / 2;
-    m.compose(new THREE.Vector3(x, y, z), q, up.set(1, 1, 1));
-    const g = new RoundedBoxGeometry(across, THICK, along, 1, 0.012);
-    // Texture in metres (the top), each slab from its own part of the tile; a tint of its own.
-    const P = g.attributes.position, uv = g.attributes.uv, ou = rng.next(), ov = rng.next(), rot = rng.next() < 0.5;
-    for (let i = 0; i < P.count; i++) {
-      const a = P.getX(i), c = P.getZ(i);
-      uv.setXY(i, ou + (rot ? c : a), ov + (rot ? a : c));
+  const lay = (vi, x, z, sc, yaw) => {
+    const v = V[Math.min(vi, V.length - 1)];
+    if (keepOff) {
+      const dx = x - keepOff.x, dz = z - keepOff.z, d = Math.hypot(dx, dz);
+      if (d < keepOff.r) { x = keepOff.x + (dx / d) * keepOff.r; z = keepOff.z + (dz / d) * keepOff.r; }
     }
-    const k = rng.float(0.6, 0.8), warm = rng.float(0.96, 1.05);   // (weathered buff and grey, not new-cut white)
-    const col = new Float32Array(P.count * 3);
-    for (let i = 0; i < P.count; i++) col.set([k * warm, k, k * (2 - warm) * 0.98], i * 3);
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    batcher.add(g, M.limestone, m);
+    // The ground's tilt under it, from four samples.
+    const s = 0.3, ca = Math.cos(yaw), sa = Math.sin(yaw);
+    tx.set(ca * 2 * s, ground(x + ca * s, z - sa * s) - ground(x - ca * s, z + sa * s), -sa * 2 * s).normalize();
+    tz.set(sa * 2 * s, ground(x + sa * s, z + ca * s) - ground(x - sa * s, z - ca * s), ca * 2 * s).normalize();
+    n.crossVectors(tz, tx).normalize();
+    tz.crossVectors(tx, n).normalize();
+    b.makeBasis(tx, n, tz);
+    q.setFromRotationMatrix(b).multiply(new THREE.Quaternion().setFromEuler(e.set(rng.float(-0.02, 0.02), 0, rng.float(-0.02, 0.02))));
+    // Settled in: the rim at the ground or just proud of it, the domed top 1.5-2.5 cm over it (any lower and the grass-
+    // coloured ground swallows all but the crown, and they read as pale chips).
+    at.set(x, ground(x, z) + rng.float(0.002, 0.01), z);
+    m.compose(at, q, sv.set(sc, sc * rng.float(0.9, 1.1), sc));
+    const g = v.geo.clone();
+    const uv = g.attributes.uv, du = rng.next(), dv = rng.next();
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) + du, uv.getY(i) + dv);
+    const c = g.attributes.color, k = rng.float(0.5, 0.7), warm = rng.float(0.97, 1.04);
+    for (let i = 0; i < c.count; i++) c.setXYZ(i, c.getX(i) * k * warm, c.getY(i) * k, c.getZ(i) * k * (2 - warm));
+    batcher.add(g, mat, m);
+    stones.push({ x, z, r: v.r * sc });
   };
 
   const fadeFrom = path.total - fade;
-  let t = 0.1;
-  while (t < path.total - 0.3) {
-    const stepping = t > fadeFrom;
-    const f = stepping ? (t - fadeFrom) / fade : 0;
-    const along = stepping ? rng.float(0.42, 0.55) : rng.float(0.42, 0.7);
-    const tc = t + along / 2;
+  let t = 0.25;
+  while (t < path.total - 0.2) {
+    const f = t > fadeFrom ? (t - fadeFrom) / fade : 0;   // 0 .. 1 over the run-out
+    const vi = f > 0 ? pick([0, 1, 2, 3, 3, 3, 2]) : pick([3, 3, 3, 3, 2, 1, 0.5]);
+    const sc = rng.float(0.9, 1.12) * (1 - 0.25 * f);
+    const reach = V[Math.min(vi, V.length - 1)].r * sc * 0.9;
+    const tc = t + reach;
     const p = path.pointAt(tc), len = Math.hypot(p.dx, p.dz) || 1;
-    const dx = p.dx / len, dz = p.dz / len;
-    const yaw = Math.atan2(dx, dz) + rng.float(-0.03, 0.03);
-    const sx = dz, sz = -dx;   // across (to the path's right)
-    if (stepping) {
-      // One stone, narrower as it goes, a little off the centre line.
-      const w = width * (0.62 - 0.2 * f), off = rng.float(-0.12, 0.12);
-      slab(p.x + sx * off, p.z + sz * off, along, w, yaw);
-      rows.push([t, t + along, w / 2 + Math.abs(off)]);
-      t += along + 0.25 + f * 0.35 + rng.float(0, 0.1);
-      continue;
+    const dx = p.dx / len, dz = p.dz / len, sx = dz, sz = -dx;
+    // A little either side of the line, slowly, and a little more at random.
+    const off = 0.3 * noise2(tc * 0.22, 0.5, seed + 3) + rng.float(-0.1, 0.1);
+    lay(vi, p.x + sx * off, p.z + sz * off, sc, Math.atan2(dx, dz) + rng.float(-0.8, 0.8));
+    // Now and then a small one beside it.
+    if (f < 0.5 && rng.next() < 0.2) {
+      const vj = pick([0, 0, 0, 0, 1, 2, 2]), sj = rng.float(0.85, 1.05), side = off > 0 ? -1 : 1;
+      const o2 = off + side * (reach + V[Math.min(vj, V.length - 1)].r * sj + rng.float(0.05, 0.14)), a2 = rng.float(-0.15, 0.15);
+      lay(vj, p.x + sx * o2 + dx * a2, p.z + sz * o2 + dz * a2, sj, rng.float(0, Math.PI * 2));
     }
-    if (rng.next() < 0.6) slab(p.x, p.z, along, width, yaw);
-    else {
-      // Two across, split somewhere near the middle.
-      const joint = 0.04, a = width * rng.float(0.35, 0.65) - joint / 2, c = width - a - joint;
-      const oa = -width / 2 + a / 2, oc = width / 2 - c / 2;
-      slab(p.x + sx * oa, p.z + sz * oa, along, a, yaw);
-      slab(p.x + sx * oc, p.z + sz * oc, along, c, yaw);
-    }
-    rows.push([t, t + along, width / 2]);
-    t += along + rng.float(0.05, 0.08);
+    // Grass between them, a stride or so; now and then a longer gap (a stone sunk out of sight); wider toward the end.
+    const gap = rng.next() < 0.14 ? rng.float(0.7, 1.1) : rng.float(0.24, 0.52);
+    t = tc + reach + gap * (1 + 1.4 * f);
   }
 
-  const qp = {};
   return {
-    on(x, z, margin = 0.06) {
-      path.closest(x, z, qp);
-      if (!(qp.d < width / 2 + margin + 0.2)) return false;
-      for (const [t0, t1, hw] of rows) if (qp.t >= t0 - margin && qp.t <= t1 + margin) return qp.d < hw + margin;
+    stones,
+    on(x, z, margin = 0.05) {
+      for (const s of stones) if ((x - s.x) ** 2 + (z - s.z) ** 2 < (s.r + margin) ** 2) return true;
       return false;
     },
   };

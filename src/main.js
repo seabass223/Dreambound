@@ -29,6 +29,7 @@ import { loadElevator } from './props/elevator.js';
 import { loadTowerKit } from './props/powertower.js';
 import { loadDeck } from './props/deck.js';
 import { loadShed } from './props/shed.js';
+import { loadWalkstones } from './world/walkway.js';
 import { loadIris } from './props/aperture.js';
 import { preload } from './render/preload.js';
 import { TRAIL } from './world/mountainPath.js';
@@ -108,11 +109,11 @@ const setProgress = (f) => loader.progress(f);
 // ---------- World ----------
 let loaded = 0;
 const counted = (p) => p.then((a) => { setProgress((++loaded / 9) * 0.1); return a; });
-const [cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset] = await Promise.all([loadCabin(), loadObservatory(), loadCave(), loadLounge(), loadElevator(), loadTowerKit(), loadDeck(), loadShed(), loadIris()].map(counted));
+const [cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset, , walkstoneAsset] = await Promise.all([loadCabin(), loadObservatory(), loadCave(), loadLounge(), loadElevator(), loadTowerKit(), loadDeck(), loadShed(), loadIris(), loadWalkstones()].map(counted));
 const loadedT = performance.now();
 loader.glide(0.55);                             // the build blocks the page: the fill glides on meanwhile
 await new Promise((r) => setTimeout(r, 20));   // let the line show it before the (synchronous) build
-const ctx = buildWorld({ renderer, scene, camera, physics, interact, audio, input, fx, later, updaters: [], cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset });
+const ctx = buildWorld({ renderer, scene, camera, physics, interact, audio, input, fx, later, updaters: [], cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset, walkstoneAsset });
 prepareEnding(ctx);   // the ending's clock and steam, hidden until then, so the preload warms them too
 setProgress(0.55);
 const player = new Player(camera, input, physics);

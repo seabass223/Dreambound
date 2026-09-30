@@ -208,7 +208,7 @@ export async function buildHeadless({ walls } = {}) {
   const imp = (p) => import(SRC + p);
   const config = await imp('config.js');
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const [cabin, observatory, cave, lounge, elevator, towerKit, deck, shed, iris] = await Promise.all(['cabin.glb', 'observatory.glb', 'cave.glb', 'lounge.glb', 'elevator.glb', 'tower_kit.glb', 'deck.glb', 'shed.glb', 'iris.glb'].map((f) => parseGlb(GLTFLoader, f)));
+  const [cabin, observatory, cave, lounge, elevator, towerKit, deck, shed, iris, walkstone] = await Promise.all(['cabin.glb', 'observatory.glb', 'cave.glb', 'lounge.glb', 'elevator.glb', 'tower_kit.glb', 'deck.glb', 'shed.glb', 'iris.glb', 'walkstone.glb'].map((f) => parseGlb(GLTFLoader, f)));
   (await import(SRC + 'props/aperture.js')).setIrisAsset(iris);   // the iris diaphragm (End door, roof station)
   const { Physics } = await imp('player/collision.js');
   const { Stack } = await imp('world/terrain.js');
@@ -246,6 +246,7 @@ export async function buildHeadless({ walls } = {}) {
     towerKitAsset: { gltf: towerKit, albedo: tex(), normal: tex(), orm: tex() },
     deckAsset: { gltf: deck, ao: tex(), wood: tex(), normal: tex() },
     shedAsset: { gltf: shed, atlas: tex(), wood: tex(), woodN: tex(), metal: tex(), metalN: tex(), stone: tex(), stoneN: tex() },
+    walkstoneAsset: { gltf: walkstone, albedo: tex(), normal: tex(), rough: tex() },
   });
   const buildMs = performance.now() - t0;
   Stack.prototype.build = build;

@@ -29,7 +29,7 @@
     "sha": {
      "position": "fc4327bb2610d5c02a0f229bff60d76a",
      "index": "fd5070f0ec8475f9bf3219ef463aed1f",
-     "color": "ad689884a92230351e78ba38bdae531c",
+     "color": "5c2855d830e838cfe446b5e1eb0b60f0",
      "uv": "eedcfc93c9c4e38c8e6b07b86b7b17d7",
      "normal": "8272871c5e605fdbb69bdc04c066c2f1"
     }
@@ -3141,9 +3141,9 @@
     },
     {
      "name": "dome-props",
-     "material": "limestone",
-     "verts": 29160,
-     "position": "7cee2ea6bda58bfa9ec57c1ea7c7fa11"
+     "material": "walkstone",
+     "verts": 11700,
+     "position": "17405556d05546ef468a51f471195a69"
     },
     {
      "name": "dome-props",
@@ -3172,8 +3172,8 @@
     {
      "name": "dome-props",
      "material": "far",
-     "verts": 51834,
-     "position": "5a8a2621c7dba12abeef0be944912e2c"
+     "verts": 34374,
+     "position": "e9e554b43f5e4917e55e1440d6620d5d"
     }
    ],
    "edgeR": "6a0197e93c1a417109248dc5766388e9",
@@ -8321,11 +8321,11 @@
    },
    {
     "type": "circle",
-    "x": -304,
-    "z": 199,
+    "x": -316.24435659678034,
+    "z": 188.74522481266033,
     "r": 0.874,
-    "y0": 5.952437381187082,
-    "y1": 8.472437381187081,
+    "y0": 5.143284830533645,
+    "y1": 7.6632848305336445,
     "zone": "surface"
    },
    {
@@ -10381,11 +10381,11 @@
     "edgeDist": 27.888389939271764
    },
    {
-    "x": -304,
-    "z": 199,
+    "x": -316.24435659678034,
+    "z": 188.74522481266033,
     "r": 0.95,
-    "y": 6.952437381187082,
-    "edgeDist": 25.838024746321658
+    "y": 6.143284830533645,
+    "edgeDist": 27.92339719418501
    },
    {
     "x": -276,
@@ -10774,11 +10774,11 @@
      "sp": "cdaf53b7ee91ee4eb88b41fcb5369d06"
     },
     "meadow": {
-     "n": 6897,
-     "xz": "34626bac0336b894a6c0dfdace65522d",
-     "y": "d3d41134480b2eba6d1c02aaa04df8e9",
-     "s": "8affba5192b57a2033d8b10d4a8ae59a",
-     "sp": "82a03d184f7989ab101a32f30fb8eb3a"
+     "n": 6938,
+     "xz": "311f329a3a6ee8864fb67ac9a0d1dbe6",
+     "y": "b951d25cae683118bc870b9b057858cc",
+     "s": "b5c7481513d9d21c798dfde68fed3d1a",
+     "sp": "918186dd230ccb9023dccf149a8da6cb"
     },
     "pebble": {
      "n": 59,
@@ -11057,5 +11057,5 @@
   "missing": [],
   "unrecordable": []
  },
- "tree": "c83493fa42ab3891"
+ "tree": "955f1ba574f5e884"
 }

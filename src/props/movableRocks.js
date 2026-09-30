@@ -32,11 +32,16 @@ export function createMovableRocks(ctx, stack, spots, { blockers = [], targets =
   });
 
   // The push rules: a boulder stays 2 m + its radius inside the rim and never overlaps another boulder or a blocker
-  // (the sequoia, the tor, the piles, the splash pool).
+  // (the sequoia and the splash pool as circles, the tor and the piles as their convex hulls). One that starts inside a
+  // blocker's reach (the one set in the sequoia's doorway, among its roots) may only move out of it, never deeper in.
+  const clearOf = (b, x, z) => (b.hull ? hullDist(b.hull, x, z) : Math.hypot(b.x - x, b.z - z) - b.r);
   const canMoveTo = (rk, nx, nz) => {
     if (stack.edgeDist(nx, nz) < rk.r + 2) return false;
     for (const o of rocks) if (o !== rk && Math.hypot(o.col.x - nx, o.col.z - nz) < o.r + rk.r) return false;
-    for (const b of blockers) if (Math.hypot(b.x - nx, b.z - nz) < b.r + rk.r) return false;
+    for (const b of blockers) {
+      const d = clearOf(b, nx, nz);
+      if (d < rk.r && d < clearOf(b, rk.col.x, rk.col.z)) return false;
+    }
     return true;
   };
   const checkSolved = () => {
@@ -118,4 +123,19 @@ export function createMovableRocks(ctx, stack, spots, { blockers = [], targets =
   // For tests and the console: the boulders, the rules and the targets.
   ctx.boulders = { rocks, blockers, targets, canMoveTo, checkSolved, place };
   return rocks;
+}
+
+// How far (x, z) is outside a convex polygon [x0, z0, x1, z1, ...] (negative inside: minus the distance to its edge).
+function hullDist(h, x, z) {
+  const n = h.length / 2;
+  let d2 = Infinity, sgn = 0, inside = true;
+  for (let i = 0; i < n; i++) {
+    const ax = h[i * 2], az = h[i * 2 + 1], bx = h[((i + 1) % n) * 2], bz = h[((i + 1) % n) * 2 + 1];
+    const ex = bx - ax, ez = bz - az, px = x - ax, pz = z - az;
+    const t = Math.max(0, Math.min(1, (px * ex + pz * ez) / (ex * ex + ez * ez)));
+    d2 = Math.min(d2, (px - ex * t) ** 2 + (pz - ez * t) ** 2);
+    const c = Math.sign(ex * pz - ez * px);
+    if (c !== 0) { if (sgn === 0) sgn = c; else if (c !== sgn) inside = false; }
+  }
+  return inside ? -Math.sqrt(d2) : Math.sqrt(d2);
 }

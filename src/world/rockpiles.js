@@ -695,13 +695,21 @@ function fitWalls(cx, cz, rOut, y0, y1, tau = 0.25) {
   return walls;
 }
 
-// footprint: inside any outline + 0.6 m (keeps grass, flowers and pebbles off the rock); blocker: a
-// bounding circle for the pushable boulders.
+// footprint: inside any outline + 0.6 m (keeps grass, flowers and pebbles off the rock); blocker: for the pushable
+// boulders, a bounding circle and the convex hull of the outlines, 0.1 m out. (The hull is what they're kept off: much
+// tighter than the circle where the spilled boulders stretch it one way, and being convex it has no nook to wedge a
+// boulder in.)
 function footprintOf(shapes, x, z) {
   let r = 0;
+  const pts = [];
   const bound = shapes.map((s) => {
     const m = Math.max(...s.r) + 0.6;
     r = Math.max(r, Math.hypot(s.cx - x, s.cz - z) + m - 0.6);
+    const K = s.r.length;
+    for (let k = 0; k < K; k++) {
+      const a = (k / K) * TAU;
+      pts.push([s.cx + (s.r[k] + 0.1) * Math.cos(a), s.cz + (s.r[k] + 0.1) * Math.sin(a)]);
+    }
     return m;
   });
   const footprint = (px, pz) => {
@@ -711,5 +719,22 @@ function footprintOf(shapes, x, z) {
     }
     return false;
   };
-  return { footprint, blocker: { x, z, r: r + 0.1 } };
+  return { footprint, blocker: { x, z, r: r + 0.1, hull: convexHull(pts) } };
+}
+
+// Counter-clockwise convex hull of [x, z] points (monotone chain), as a flat [x0, z0, x1, z1, ...].
+function convexHull(pts) {
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], hi = [];
+  for (const p of pts) {
+    while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop();
+    lo.push(p);
+  }
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], p) <= 0) hi.pop();
+    hi.push(p);
+  }
+  return [...lo.slice(0, -1), ...hi.slice(0, -1)].flatMap(([px, pz]) => [+px.toFixed(3), +pz.toFixed(3)]);
 }

@@ -209,11 +209,6 @@ export function materials() {
     glass: patchMaterial(new THREE.MeshPhysicalMaterial({ color: 0xcfe6f0, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.16, envMapIntensity: 1.6, side: THREE.DoubleSide, depthWrite: false, specularIntensity: 1 })),
     plaster: std({ vertexColors: true, roughness: 0.9, color: 0xd9d2c4 }),
     rope: std({ vertexColors: true, roughness: 1.0, color: 0x9a8565 }),
-    // Limestone slabs (the Home stack's walkway): UVs in metres; each slab tinted a little.
-    limestone: (() => {
-      const l = Textures.limestone();
-      return std({ vertexColors: true, map: l.map, normalMap: l.normal, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.88, envMapIntensity: 0.5 });
-    })(),
     // Board-formed concrete (the Tower's bunker): UVs in metres / 2, the boards' rows along u.
     concrete: (() => {
       const c = Textures.concrete();

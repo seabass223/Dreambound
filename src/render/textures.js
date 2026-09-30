@@ -269,38 +269,6 @@ export const Textures = {
     return { map: tex(col), normal: tex(normalFromHeight(S, h, 2.2), { srgb: false }) };
   }),
 
-  // Limestone (the Home stack's walkway, world/walkway.js), a 1 m tile: pale buff, a soft mottle and faint bedding,
-  // fine dark speckle, pits and the odd fossil shell, and a little grey lichen.
-  limestone: () => once('limestone', () => {
-    const S = 512;
-    const rng = new Rng(3131);
-    const shells = Array.from({ length: 7 }, () => ({ u: rng.next(), v: rng.next(), r: rng.float(0.012, 0.028), a: rng.float(0, Math.PI * 2) }));
-    const shellAt = (u, v) => {
-      let k = 0;
-      for (const s of shells) {
-        let du = u - s.u, dv = v - s.v;
-        du -= Math.round(du); dv -= Math.round(dv);
-        const d = Math.hypot(du, dv), ang = Math.atan2(dv, du) - s.a;
-        if (d < s.r * 1.1 && Math.cos(ang) > -0.3) k = Math.max(k, Math.max(0, 1 - Math.abs(Math.sin(d / s.r * Math.PI * 3)) * 3));   // ribbed arcs
-      }
-      return k;
-    };
-    const h = heightField(S, (u, v) => {
-      const pits = Math.max(0, tnoise(u, v, 96, 5) - 0.78) * 4 + Math.max(0, tnoise(u, v, 192, 6) - 0.82) * 3;
-      return 0.6 + tfbm(u, v, 3, 5, 7) * 0.25 + tnoiseA(u, v, 2, 24, 9) * 0.04 - pits * 0.3 + shellAt(u, v) * 0.1;
-    });
-    const col = toCanvas(S, (x, y) => {
-      const u = x / S, v = y / S, k = h[y * S + x];
-      const mottle = tfbm(u, v, 4, 4, 13);
-      const speck = tnoise(u, v, 256, 17) > 0.86 ? 0.82 : 1;
-      const lichen = Math.max(0, tfbm(u, v, 6, 3, 23) - 0.63) * 2.2;
-      const b = (0.8 + k * 0.3) * (0.92 + mottle * 0.14) * speck;
-      const r = 214 * b, g = 204 * b, bl = 180 * b;
-      return [r * (1 - lichen * 0.3) + lichen * 30, g * (1 - lichen * 0.22) + lichen * 34, bl * (1 - lichen * 0.18) + lichen * 30];
-    });
-    return { map: tex(col), normal: tex(normalFromHeight(S, h, 2.6), { srgb: false }) };
-  }),
-
   panel: () => once('panel', () => {
     const S = 256;
     const col = toCanvas(S, (x, y) => {

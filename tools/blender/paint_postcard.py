@@ -32,7 +32,11 @@ POSTMARK = (0.2, 0.18, 0.24)
 def front():
     pw, ph = CARD_PX
     mw, mh = CW - 2 * BORDER, CH - 2 * BORDER
-    win_u = WIN_V * (mw / mh) / 2    # the map is 2:1 (u spans twice the distance v does)
+    # The map is 2:1 (u spans twice the distance v does), but on the ball a degree of longitude at the island's latitude
+    # is only cos(lat) of a degree of latitude: the window takes in 1/cos(lat) more longitude, so the land comes out as
+    # narrow as it looks on the globe (the flat map's own proportions stretch it half as wide again).
+    lat = (ISLAND_UV[1] - 0.5) * PI
+    win_u = WIN_V * (mw / mh) / 2 / math.cos(lat)
     u0, v0 = ISLAND_UV[0] - win_u / 2, ISLAND_UV[1] - WIN_V / 2
 
     def make(nt, pos, uv):

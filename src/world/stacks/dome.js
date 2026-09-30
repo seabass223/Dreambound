@@ -74,13 +74,19 @@ export function buildDome(ctx) {
     [cx - 4.13, cz + 14.63], [cx - 5.4, cz + 18.5], [cx - 7.7, cz + 23.2], [cx - 9.2, cz + 30.8], [cx - 10.1, cz + 36.0],
     [cx - 10.3, cz + 40.6], [cx - 12.0, cz + 45.5], [cx - 14.04, cz + 49.79],
   ], 1.5, 1.4);
-  // A limestone walkway out front: off the trail just outside the dome door, left (west) round the dome in the clear
-  // ring the trees leave it (16 m out), turning into stepping stones where it meets the start of the deck track.
+  // Limestone stepping stones out front (world/walkway.js): off the trail just outside the dome door, left (west) round
+  // the dome in the clear ring the trees leave it, running out into the start of the deck track. About 16 m out, and
+  // drawn in toward the dome (to about 15.3) past the three pines whose low boughs reach over the ring on the west side
+  // (at -130, -168 and 169 degrees), so the way goes round under the glass instead of through their branches.
   const walk = Path.smooth([
-    [cx - 0.75, cz - 15.55], [cx - 2.6, cz - 16.05], [cx - 6.85, cz - 14.68], [cx - 12.41, cz - 10.41], [cx - 15.65, cz - 4.19],
-    [cx - 16.2, cz], [cx - 15.65, cz + 4.19], [cx - 13.27, cz + 9.29], [cx - 9.29, cz + 13.27], [cx - 6.07, cz + 15.02], [cx - 4.75, cz + 16.53],
+    [cx - 0.8, cz - 15.6],
+    ...[[-100, 16.35], [-118, 15.75], [-138, 15.35], [-158, 15.3], [-178, 15.25], [162, 15.3], [143, 15.7], [125, 16.4], [111, 16.0]].map(([deg, r]) => {
+      const a = (deg * Math.PI) / 180;
+      return [cx + Math.cos(a) * r, cz + Math.sin(a) * r];
+    }),
+    [cx - 4.75, cz + 16.53],
   ], 0.5, 1.1);
-  const qt = {};
+  const qt = {}, qw = {};
   // How worn the ground is at (x, z): 0 off the track, up to 1 on its centre line, easing in over its first and last
   // metres (it begins in the dirt ring and ends at the deck's back step).
   const worn = (x, z) => {
@@ -127,6 +133,9 @@ export function buildDome(ctx) {
     if (Math.abs(d - DOME_R) < 1.3) col.lerp(new THREE.Color(0.14, 0.12, 0.09), 0.5);
     const w = worn(x, z);
     if (w > 0) col.lerp(new THREE.Color(0.23, 0.18, 0.12), w * 0.55);
+    // A faint trodden line along the stepping stones, as along the deck track it joins.
+    walk.closest(x, z, qw);
+    if (qw.d < 1.3) col.lerp(new THREE.Color(0.23, 0.18, 0.12), (1 - smoothstep(0.3, 1.3, qw.d)) * 0.28);
   });
 
   const collider = new ColliderBuilder('dome');
@@ -134,7 +143,7 @@ export function buildDome(ctx) {
   stack.build(collider);
 
   buildTrail(stack, trail, batcher, { width: 1.25 });
-  const walkway = buildWalkway(stack, walk, batcher, { seed: 17 });
+  const walkway = buildWalkway(stack, walk, batcher, ctx.walkstoneAsset, { seed: 17, keepOff: { x: cx, z: cz, r: 15.0 } });   // (clear of the dome's curb)
   ctx.walkway = walkway;
 
   // ---- Geodesic glass dome with the cabin inside (modeled in Blender: tools/blender/build_cabin.py) ----
@@ -240,8 +249,9 @@ export function buildDome(ctx) {
     const s = rng.float(0.7, 1.25);
     // (Thinned along the deck track after the draws, so no other tuft moves: none on its centre, fewer beside it.)
     const tw = worn(p.x, p.z), keep = tw < 0.25 || (tw < 0.7 && ((Math.sin(p.x * 12.9898 + p.z * 78.233) * 43758.5) % 1 + 1) % 1 > tw);
-    // (and off the walkway's slabs, likewise after the draws)
-    if (deckOutside(p.x - cx, p.z - cz) > 0.2 && keep && !walkway.on(p.x, p.z, 0.35)) ctx.meadow.add(p.x, p.y, p.z, s);   // (a tuft's blades spread 0.3 m)
+    // (and off the stepping stones, likewise after the draws: only tufts rooted well inside a stone, so the grass grows
+    // right up to their edges)
+    if (deckOutside(p.x - cx, p.z - cz) > 0.2 && keep && !walkway.on(p.x, p.z, -0.06)) ctx.meadow.add(p.x, p.y, p.z, s);
   }
   // A lush lawn, two small trees and a few shrubs in the dome garden.
   const garden = (x, z) => Math.hypot(x - cx, z - cz) < DOME_R - 0.75 && !inHouse(x, z) && !onGardenPath(x, z);
@@ -262,7 +272,7 @@ export function buildDome(ctx) {
   for (const p of scatter(stack, 22, rng, (x, z) => { const d = Math.hypot(x - cx, z - cz); return d < DOME_R - 1.6 && !inHouse(x, z) && !onGardenPath(x, z); }, { margin: 2, tries: 60 })) ctx.forest.add('shrub', p.x, p.y, p.z, rng.float(0.8, 1.3));
 
   // Scattered stones
-  ctx.pebbles.scatter(stack, 60, rng, clear, (x, z) => deckOutside(x - cx, z - cz) > 1 && !walkway.on(x, z, 0.2));
+  ctx.pebbles.scatter(stack, 60, rng, clear, (x, z) => deckOutside(x - cx, z - cz) > 1 && !walkway.on(x, z, 0.15));
 
   const props = batcher.build(stack.group, { name: 'dome-props' });
   // From other stacks the props are one merged stand-in (see render/lod.js).
