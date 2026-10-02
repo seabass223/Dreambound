@@ -338,6 +338,66 @@ export function buildPowerTower(ctx, { base, rotY = 0, batcher, collider }) {
   // For tests and the console: whether the sequence is showing, and how far into it (s).
   ctx.towerSequence = { active: () => seqT >= 0, time: () => seqT, length: seqLen };
 
+  // ---- Utility lamps: a small caged bulb hanging under each brace over the catwalk, dim and warm, left on for whoever
+  // climbs up. The fittings are in the tower's batch; the bulbs (one mesh) and their soft glow (one points draw) show
+  // only while you're on the Tower stack (from any other they'd be a string of sparks on the horizon), and four of
+  // them light the grating through the shared point-light pool when the catwalk is the nearest lit place: the two end
+  // ones over the switch boxes there, and the two either side of the middle box and the capacitor. (Bright enough to
+  // pool on the grating, which is mostly metal and so takes little diffuse light.)
+  {
+    const braceY = armY1 * S - 0.05 * S;           // underside of the braces (0.1 design units thick)
+    const xs = [];
+    for (let x = -span; x <= span + 1e-6; x += 2.3) if (Math.abs(x * S) <= dl) xs.push(x * S);
+    const fit = [], bulbParts = [], glowPos = [], lampPos = [];
+    const flat = new THREE.Matrix4();
+    for (const x of xs) {
+      const y = braceY;
+      fit.push({ geo: new THREE.BoxGeometry(0.14, 0.05, 0.1), matrix: mat4(x, y - 0.025, 0) });               // junction box
+      fit.push({ geo: new THREE.CylinderGeometry(0.012, 0.012, 0.14, 6), matrix: mat4(x, y - 0.12, 0) });     // conduit stem
+      fit.push({ geo: new THREE.CylinderGeometry(0.045, 0.05, 0.05, 10), matrix: mat4(x, y - 0.215, 0) });    // socket
+      for (let k = 0; k < 4; k++) {                                                                            // the cage
+        const a = (k + 0.5) * Math.PI / 2;
+        fit.push(member(new THREE.Vector3(x + Math.cos(a) * 0.05, y - 0.24, Math.sin(a) * 0.05), new THREE.Vector3(x + Math.cos(a) * 0.03, y - 0.37, Math.sin(a) * 0.03), 0.008));
+      }
+      fit.push({ geo: new THREE.TorusGeometry(0.046, 0.005, 4, 14), matrix: flat.clone().makeRotationX(Math.PI / 2).setPosition(x, y - 0.31, 0) });
+      bulbParts.push({ geo: new THREE.SphereGeometry(0.034, 10, 8), matrix: mat4(x, y - 0.29, 0) });
+      const w = P(x, y - 0.29, 0);
+      glowPos.push(w.x, w.y, w.z);
+      lampPos.push(w);
+    }
+    const fg = mergeParts(fit);
+    fg.applyMatrix4(m);
+    batcher.add(fg, M.darkMetal, null, 0x3a3835);
+    const bg = mergeParts(bulbParts);
+    bg.applyMatrix4(m);
+    const bulbs = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ name: 'tower-utility-bulb', color: new THREE.Color(1.1, 0.86, 0.56) }));
+    bulbs.name = 'tower-utility-bulbs';
+    const gg = new THREE.BufferGeometry();
+    gg.setAttribute('position', new THREE.Float32BufferAttribute(glowPos, 3));
+    const glowMat = new THREE.PointsMaterial({
+      name: 'tower-utility-glow', map: haloTexture(), color: 0xffc98e, size: 0.8, sizeAttenuation: true,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3,
+    });
+    const glows = new THREE.Points(gg, glowMat);
+    glows.name = 'tower-utility-glow';
+    const lamps = new THREE.Group();
+    lamps.name = 'tower-utility-lamps';
+    lamps.add(bulbs, glows);
+    ctx.surface.add(lamps);   // (visible at build, so the preload draws and compiles it; the updater hides it)
+    let on = false;
+    ctx.updaters.push(() => {
+      const st = ctx.stacks?.tower, p = ctx.player;
+      on = !!st && !!p && p.zone === 'surface' && st.edgeDist(p.feet.x, p.feet.z) > -2;
+      lamps.visible = on;
+      if (on) glowMat.opacity = 0.14 + 0.36 * atmo.uNight.value;   // a faint bloom by day, a soft one at night
+    });
+    const warm = new THREE.Color(1, 0.8, 0.58);
+    ctx.lightPool?.add({
+      center: P(0, deckY + 1, 0), radius: dl + 3,
+      lights: [0, 3, 5, 8].map((i) => lampPos[Math.min(i, lampPos.length - 1)]).map((pos) => ({ pos, color: warm, distance: 6.5, intensity: () => (on ? 5 : 0) })),
+    });
+  }
+
   // ---- The kits: per LED one near mesh (box, tag, panel; gone beyond ~36 m, so not from the ground), and one mesh for
   // all three capacitors, drawn at any distance. The leads are cables in the tower's batch.
   const kit = ctx.towerKitAsset ? towerKit(ctx.towerKitAsset) : null;

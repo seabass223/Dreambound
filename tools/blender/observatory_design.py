@@ -1181,27 +1181,19 @@ def build_outside():
     B('steel', 0.02, 0.02, 0.5, x, 4.1, z + 0.1, tint=STEELG)
     emit(bm_prism([(0.0, 0.0), (0.2, 0.06), (0.2, -0.06)], -0.005, 0.005, 'y'), 'steel', xf(x, 4.1, z + 0.35), STEELG)
     C(x, 1.5, z, 0.25, 3.0, 0.25)
-    # Louvred instrument shelter on legs.
-    x, _, z = pol(7.2, D(98))
-    g = G(x, 0, z, -D(98))
-    for sx in (-1, 1):
-        for sz in (-1, 1):
-            g.box('wood', 0.05, 1.2, 0.05, sx * 0.24, 0.6, sz * 0.2, tint=CREAMP)
-    g.box('wood', 0.62, 0.05, 0.52, 0, 1.2, 0, tint=CREAMP)
-    g.box('wood', 0.66, 0.06, 0.56, 0, 1.78, 0, tint=CREAMP)
-    for k in range(10):
-        for (sx, sz, ry_) in ((0, 0.25, 0), (0, -0.25, 0), (0.3, 0, PI / 2), (-0.3, 0, PI / 2)):
-            w_ = 0.58 if ry_ == 0 else 0.48
-            g.box('wood', w_, 0.012, 0.05, sx, 1.24 + k * 0.05, sz, ry=ry_, rx=0.6, tint=CREAMP)
-    g.col(0.7, 1.9, 0.6, 0, 0.95, 0)
-    # A bench by the door, looking out over the clouds.
-    x, _, z = pol(6.7, D(36))
-    g = G(x, 0, z, PI - D(36))
+    # (A louvred instrument shelter on legs stood by the mast; removed at the user's request, bug report b9b75050.)
+    # A bench at the summit's edge, looking out over the clouds toward the Dome and Rocks stacks (moved from by the door,
+    # bug report 2fe12a13). Press it to sit (props/observatory.js): BENCH_SEAT is the seated eye, BENCH_STAND where you
+    # stand up, in front of it.
+    g = G(7.8, 0, -3.18, PI - D(24.5))
     for k in range(4):
         g.box('wood', 1.5, 0.035, 0.09, 0, 0.44, -0.16 + k * 0.105, tint=jitter(TIMBER, 0.06), grain=0)
     for sx in (-1, 1):
         g.box('metal_black', 0.05, 0.44, 0.38, sx * 0.62, 0.22, 0, tint=BLACK)
     g.col(1.5, 0.5, 0.45, 0, 0.25, 0)
+    empty('BENCH', g.p(0, 0, 0), ry=g.ry)
+    empty('BENCH_SEAT', g.p(0, 1.12, -0.04))
+    empty('BENCH_STAND', g.p(0, 0, 0.72))
 
 # ============================================================================ rear hatch
 def hatch_quads(quads, mat, tint):

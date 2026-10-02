@@ -180,14 +180,13 @@ export function buildTower(ctx) {
   }
 
   // The bunker, after everything placed on the cap has drawn from its streams (it takes nothing from them), and the
-  // lounge's secret elevator up into it.
-  const bunker = buildBunker(ctx, stack, { batcher, collider, frame: bunkerF });
+  // lounge's secret elevator up into it. Its room is a model (props/bunkerRoom.js) when it loaded, else a bare shell.
+  const bunker = buildBunker(ctx, stack, { batcher, collider, frame: bunkerF, asset: ctx.bunkerAsset ?? null });
   if (bunker) {
     ctx.bunker = bunker;
     const secret = ctx.tunnels?.lounge?.secret;
     if (secret?.station) {
-      const el = createElevator(ctx, { id: 'study', ends: { top: bunker.station, bottom: secret.station } });
-      el.at = 'bottom';   // it waits at the lounge's passage
+      const el = createElevator(ctx, { id: 'study', ends: { top: bunker.station, bottom: secret.station }, start: 'bottom' });   // it waits at the lounge's passage
       secret.elevator = el;
     }
   }
@@ -200,6 +199,7 @@ export function buildTower(ctx) {
 
   createElevator(ctx, {
     id: 'tower',
+    start: 'bottom',   // waiting on the cave floor (only the Home stack's waits up top, by the cabin)
     ends: {
       top: { pos: cave.platePos, rotY: cave.plateRot, zone: 'surface', parent: ctx.surface, collider: ctx.lateCollider('tower-car') },
       bottom: ctx.tunnelStation('tower'),

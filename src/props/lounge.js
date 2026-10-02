@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { patchMaterial } from '../render/materials.js';
 import { placeSecret } from './loungeSecret.js';
+import { makeInspectable } from './inspect.js';
 
 // The cartographer's lounge: the Tower elevator's secret third stop, straight below its cave station (press Down again
 // there). Modeled and lit in Blender (tools/blender/lounge_design.py): the desk lamp and two faint sconces are baked
@@ -128,6 +129,7 @@ export function placeLounge(ctx, asset, { below, group, collider, hide = null })
   const groups = {};
   const globeParts = { globe_tilt: {}, globe_spin: {} };   // the globe's moving parts, by layer then material
   const secretParts = {};                                  // the bookcase's secret door, by material
+  const drawerParts = {};                                  // the desk's opening drawer, by material
   const m4 = new THREE.Matrix4();
   src.traverse((o) => {
     if (!o.isMesh) return;
@@ -143,6 +145,7 @@ export function placeLounge(ctx, asset, { below, group, collider, hide = null })
     const lay = o.userData?.layer ?? o.name.split('@')[1]?.replace(/[._]\d+$/, '');
     if (lay in globeParts) (globeParts[lay][name] ||= []).push(g);
     else if (lay === 'secret') (secretParts[name] ||= []).push(g);
+    else if (lay === 'drawer') (drawerParts[name] ||= []).push(g);
     else (groups[name] ||= []).push(g);
   });
 
@@ -191,6 +194,8 @@ export function placeLounge(ctx, asset, { below, group, collider, hide = null })
   // opened by pressing the island on the globe that the deck's postcard shows ----
   const secret = nodes.SECRET ? placeSecret(ctx, { root, group, node: nodes.SECRET, parts: secretParts, M, collider }) : null;
   const globe = nodes.GLOBE ? placeGlobe(ctx, { root, group, node: nodes.GLOBE, parts: globeParts, U, asset, nodes, wp, secret }) : null;
+  // ---- the desk's drawer: press it to slide it out, a note in it ----
+  const drawer = nodes.DESK_DRAWER ? placeDeskDrawer(ctx, { root, parts: drawerParts, M, node: nodes.DESK_DRAWER, note: nodes.DESK_NOTE }) : null;
 
   // ---- the elevator's stop, sound, the lamp on the (standard-material) elevator doors ----
   const sn = nodes.STATION;
@@ -223,7 +228,112 @@ export function placeLounge(ctx, asset, { below, group, collider, hide = null })
   ctx.lod?.add(root, { out: [40, 55], fade: false, name: 'lounge' });
   ctx.updaters.push(() => { if (hide) hide.visible = !root.visible; });
 
-  return { root, station, inside, center, lampPos, uniforms: U, finish, globe, secret };
+  return { root, station, inside, center, lampPos, uniforms: U, finish, globe, secret, drawer };
+}
+
+// The desk's opening drawer (the chair side's left one; layer 'drawer' in lounge_design.py): its front, pull and box,
+// built pulled out by DESK_DRAWER.travel (so the bake lit its inside), are moved back in to start shut. Press its front
+// to slide it out, again to push it in. A note lies in it (DESK_NOTE), one typed line: REMOTE_TRANSFORM; with the drawer
+// out, press the note to hold it up to read (props/inspect.js), again to put it back. It rides in and out with the drawer.
+const DESK_DRAWER_TIME = 0.5;
+function placeDeskDrawer(ctx, { root, parts, M, node, note }) {
+  const u = node.userData, travel = u.travel ?? 0.3;
+  const group = new THREE.Group();
+  group.name = 'lounge-desk-drawer';
+  for (const [key, geos] of Object.entries(parts)) {
+    const mat = M[key], geo = mat && mergeGeometries(geos, false);
+    if (!geo) continue;
+    geo.computeBoundingSphere();
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = 'lounge_drawer_' + key;
+    group.add(mesh);
+  }
+  root.add(group);
+  const hit = new THREE.Mesh(new THREE.BoxGeometry(u.w ?? 0.44, 0.12, 0.06), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.name = 'lounge:desk-drawer';
+  hit.position.copy(node.position).add(new THREE.Vector3(0, 0, 0.02));
+  group.add(hit);
+  let x = 0, target = 0, e = 0;                  // 0 shut .. 1 out (x linear, e eased)
+  const place = () => { group.position.z = (e - 1) * travel; group.updateMatrixWorld(true); };
+  place();
+  ctx.interact.add({
+    name: 'lounge:desk-drawer', meshes: [hit], range: 2.2, exact: true, zone: 'tunnel',
+    onPress: () => {
+      if (paper && paper.mode() !== 'rest') return;   // (the note is out: put it back first)
+      target = target > 0.5 ? 0 : 1;
+      ctx.audio?.play('drawer', { pos: root.localToWorld(node.position.clone()), open: target > 0.5, dur: DESK_DRAWER_TIME * Math.abs(target - x) });
+    },
+  });
+
+  // The note: card stock, typed, lying face up in the drawer.
+  let paper = null;
+  if (note) {
+    const n = note.userData, w = n.w ?? 0.2, h = n.h ?? 0.14;
+    const tex = noteTexture();
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(w, h), patchMaterial(new THREE.MeshStandardMaterial({
+      // (Dim: the lamp's light pool casts no shadow, and in the drawer, under the desk's top, the card sits in the shade
+      // the baked wood round it shows; held up, its glow brings it to the light.)
+      name: 'lounge-note', map: tex, color: tex ? 0x4a4640 : 0x46423c, roughness: 0.88, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0,
+    })));
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(w, h), patchMaterial(new THREE.MeshStandardMaterial({ name: 'lounge-note-back', color: 0x45403a, roughness: 0.9 })));
+    back.rotation.y = Math.PI;
+    back.position.z = -0.0005;
+    const obj = new THREE.Group();
+    obj.name = 'lounge-note';
+    obj.add(front, back);
+    root.add(obj);
+    const restQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, n.ry ?? 0, 0, 'YXZ'));
+    const restP0 = note.position.clone();
+    const inspect = makeInspectable(ctx, {
+      object: obj, parent: root, meshes: [front, back], name: 'lounge:note', hold: 0.24, glow: { material: front.material, amount: 0.3 },
+      canLift: () => e >= 0.9,
+      rest: (outP, outQ) => { outP.copy(restP0); outP.z += (e - 1) * travel; outQ.copy(restQ); },
+    });
+    paper = inspect;
+  }
+  ctx.updaters.push((dt) => {
+    if (x !== target) {
+      x = target > x ? Math.min(target, x + dt / DESK_DRAWER_TIME) : Math.max(target, x - dt / DESK_DRAWER_TIME);
+      e = x * x * (3 - 2 * x);
+      place();
+    }
+    paper?.update(dt);
+  });
+  return { group, note: paper, isOpen: () => target > 0.5, set(o) { target = x = o ? 1 : 0; e = x; place(); } };
+}
+
+// The note's face: cream card stock with a faint tooth, one typed line (a typewriter's uneven strike), a little off
+// square. Drawn to a canvas (no text anywhere else in the world is meant to be read; this one is). Headless: none.
+function noteTexture() {
+  if (typeof document === 'undefined') return null;
+  const W = 1024, H = 717, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ece3cf';
+  g.fillRect(0, 0, W, H);
+  // Tooth and a little foxing.
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 9000; i++) { const v = 200 + rnd() * 40; g.fillStyle = `rgba(${v},${v - 12},${v - 34},0.05)`; g.fillRect(rnd() * W, rnd() * H, 2, 2); }
+  for (let i = 0; i < 6; i++) { const r = 8 + rnd() * 22; const gr = g.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, 'rgba(150,110,60,0.10)'); gr.addColorStop(1, 'rgba(150,110,60,0)'); g.save(); g.translate(rnd() * W, rnd() * H); g.fillStyle = gr; g.fillRect(-r, -r, 2 * r, 2 * r); g.restore(); }
+  // The line, typed: each letter struck a little differently.
+  const text = 'REMOTE_TRANSFORM';
+  g.save();
+  g.translate(W / 2, H / 2);
+  g.rotate(-0.012);
+  g.font = 'bold 74px "Courier New", Courier, monospace';
+  g.textBaseline = 'middle';
+  const adv = g.measureText('M').width, x0 = -(adv * text.length) / 2;
+  for (let i = 0; i < text.length; i++) {
+    const k = 0.72 + rnd() * 0.28;
+    g.fillStyle = `rgba(28,26,34,${k.toFixed(2)})`;
+    g.fillText(text[i], x0 + i * adv + (rnd() - 0.5) * 2, (rnd() - 0.5) * 3);
+  }
+  g.restore();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
 }
 
 const GLOBE_TILT = [0, THREE.MathUtils.degToRad(60)];   // the axis's tilt from upright, as far as it will go each way
@@ -339,7 +449,13 @@ function placeGlobe(ctx, { root, group, node, parts, U, asset, nodes, wp, secret
   };
   const apply = () => { spinNode.rotation.y = state.spin; tiltNode.rotation.z = state.tilt; };
   let lastDt = 1 / 60;
+  // The island only counts as a deliberate click on it: pressed with the globe at rest, released without dragging (the
+  // mouse moved under CLICK_SLOP pixels while held), the reticle still on the island. A press that lands on it while
+  // spinning the globe, or a drag that starts on it, just turns the globe.
+  const CLICK_SLOP = 8, AT_REST = 0.25;   // px of mouse travel; spin speed (rad/s) below which the globe is at rest
+  const click = { armed: false, moved: 0 };
   const turn = (mx, my) => {
+    click.moved += Math.abs(mx) + Math.abs(my);
     const ds = mx * 0.006;
     state.spin += ds;
     state.vel = state.vel * 0.6 + (ds / lastDt) * 0.4;   // for the coast when you let go
@@ -349,12 +465,19 @@ function placeGlobe(ctx, { root, group, node, parts, U, asset, nodes, wp, secret
   ctx.interact.add({
     name: 'lounge:globe', meshes: [pick], range: 2.2, zone: 'tunnel',
     onPress: () => {
-      if (secret && onIsland() && secret.trigger()) return;   // the island: the bookcase opens (and the globe stays put)
+      click.armed = !!secret && Math.abs(state.vel) < AT_REST && onIsland();
+      click.moved = 0;
       state.held = true;
       state.vel = 0;
       ctx.player.lookHandler = turn;
     },
-    onRelease: () => { state.held = false; if (ctx.player.lookHandler === turn) ctx.player.lookHandler = null; },
+    onRelease: () => {
+      state.held = false;
+      if (ctx.player.lookHandler === turn) ctx.player.lookHandler = null;
+      // the island, clicked: the bookcase opens (and the globe stays put)
+      if (click.armed && click.moved < CLICK_SLOP && onIsland() && secret.trigger()) state.vel = 0;
+      click.armed = false;
+    },
   });
   // Let go mid-spin and it coasts, slowing on its bearings.
   ctx.updaters.push((dt) => {

@@ -9,6 +9,7 @@ import { layoutTrail, buildMountainTrail, dressTrail, crownClear } from '../moun
 import { placeObservatory } from '../../props/observatory.js';
 import { createElevator } from '../../props/elevator.js';
 import { placeShed } from '../../props/shed.js';
+import { mineFrame, buildMine } from '../../props/mine.js';
 
 const PEAK = 38, R_PLATEAU = 9.5, R_BASE = 52;
 
@@ -48,6 +49,9 @@ export function buildMountain(ctx) {
     return h;
   });
   trail = layoutTrail({ sx, sz, head: [door, [door[0] + tang.x * 2.5, door[1] + tang.z * 2.5]], legs, ground: (x, z) => stack.heightAtAnalytic(x, z) });
+  // The mine adit (props/mine.js) in the south hillside: its cut and the hole behind its portal are the cap's, so they
+  // go in before it is built.
+  const mineF = mineFrame(stack, { sx, sz });
   const verge = new THREE.Color(0.2, 0.16, 0.11);
   stack.colorFns.push((x, z, h, col) => {
     trail.near(x, z, q);
@@ -70,6 +74,9 @@ export function buildMountain(ctx) {
   // The elevator's plate, built into the shed as its partition; the car behind it.
   const platePos = new THREE.Vector3(0, 0.12, -0.05).applyMatrix4(sm);
 
+  // ---- Mine ---- (the rock into this batch; the timber and the rest: tools/blender/mine_design.py)
+  ctx.mine = buildMine(ctx, stack, ctx.mineAsset ?? null, mineF, { batcher });
+
   // ---- Observatory ----
   const oy = stack.heightAt(sx, sz);
   const lastLeg = legs[legs.length - 2];
@@ -86,15 +93,19 @@ export function buildMountain(ctx) {
   for (const p of scatter(stack, 55, rng, (x, z) => clear(x, z) && Math.hypot(x - sx, z - sz) > 24, { margin: 4 })) {
     const sp = rng.next() < 0.75 ? 'pine' : 'broadleaf';
     const s = rng.float(0.7, 1.15);
+    if (mineF.near(p.x, p.z, 1)) continue;   // (after its draws) not in the mine's cut or over its drive
     if (!crownClear(ctx.forest, trail, sp, p.x, p.y, p.z, s)) continue;   // (after its draws) no bough low over the path
     ctx.forest.add(sp, p.x, p.y, p.z, s);
     collider.addCylinder(p.x, p.y - 0.5, p.z, ctx.forest.radiusOf(sp) * s + 0.08, 4, 6);
     trees.push({ x: p.x, z: p.z, r: 0 });
   }
-  for (const p of scatter(stack, 45, rng, clear, { margin: 2 })) ctx.forest.add('shrub', p.x, p.y, p.z, rng.float(0.6, 1.1));
+  for (const p of scatter(stack, 45, rng, clear, { margin: 2 })) {
+    const s = rng.float(0.6, 1.1);
+    if (!mineF.near(p.x, p.z)) ctx.forest.add('shrub', p.x, p.y, p.z, s);
+  }
   for (const p of scatter(stack, 5200, rng, (x, z) => trail.near(x, z, q).d > 1.2 && Math.hypot(x - sx, z - sz) > 6.7, { margin: 1.2, tries: 3 })) {
     const n = stack.normalAt(p.x, p.z);
-    if (n.y > 0.7) ctx.meadow.add(p.x, p.y, p.z, rng.float(0.7, 1.2));
+    if (n.y > 0.7) { const s = rng.float(0.7, 1.2); if (!mineF.near(p.x, p.z)) ctx.meadow.add(p.x, p.y, p.z, s); }
   }
   ctx.pebbles.scatter(stack, 90, rng, clear);
   // Along the path: grass and wildflowers on its verges, trees beside it, stones round the hairpins.
@@ -117,6 +128,7 @@ export function buildMountain(ctx) {
 
   createElevator(ctx, {
     id: 'mountain',
+    start: 'bottom',   // waiting on the cave floor (only the Home stack's waits up top, by the cabin)
     ends: {
       top: { pos: platePos, rotY: shedRot, zone: 'surface', parent: ctx.surface, collider: ctx.lateCollider('mountain-car') },
       bottom: ctx.tunnelStation('mountain'),

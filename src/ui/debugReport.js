@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 import { WALLS, TUNNEL_ORIGIN } from '../config.js';
+import { openReportDialog } from './reportDialog.js';
+import { isDialogOpen } from './kit/index.js';
 
-// Debug reports (Escape panel > Debug reports): F8 or a middle click casts a ray from the view's centre and copies a
-// JSON snapshot (where you stand and look, what the ray hits, the game state) to the clipboard, for bug reports.
+// Debug reports (Menu > Debug > Debug reports): F8 or a middle click takes a screenshot of the next frame drawn and a
+// JSON snapshot of the same frame (where you stand and look, what a ray from the view's centre hits, the game state),
+// and opens the bug report dialog (ui/reportDialog.js) to describe it and send it to Azure Storage, or copy it.
 // It only reads the game; nothing here changes what the game does.
 
 const R = (v, d = 3) => (Number.isFinite(v) ? Math.round(v * 10 ** d) / 10 ** d : v);
@@ -235,18 +238,31 @@ export function createDebugReport({ ctx, player, camera, clock, renderer, scene,
     return false;
   };
 
-  const report = async () => {
+  // A report asked for: taken at the end of the next frame drawn (afterRender), while the drawing buffer still holds
+  // it (the canvas doesn't keep it past the frame: no preserveDrawingBuffer, which costs every frame).
+  let pending = false;
+  const report = () => { if (!isDialogOpen()) pending = true; };
+  const afterRender = () => {
+    if (!pending) return;
+    pending = false;
     let payload;
     try { payload = build(); } catch (err) { console.error('[debug report] failed', err); show('Report failed (see console)'); return; }
     window.__lastReport = payload;
-    const text = JSON.stringify(payload, null, 2);
     const h = payload.hit;
-    const what = h ? `${h.object || h.owner || h.type} @ ${h.distance.toFixed(1)} m` : 'no hit';
-    if (await copy(text)) show(`Copied report · ${what}`);
-    else { console.log(text); show('Report logged to console'); }
+    const st = payload.player.stack;
+    const where = st ? `${st.name} (${st.local.x}, ${st.local.y}, ${st.local.z})` : payload.player.tunnel ? 'tunnels' : '';
+    const summary = [h ? `${h.object || h.owner || h.type} @ ${h.distance.toFixed(1)} m` : 'no hit', where].filter(Boolean).join(' · ');
+    const canvas = renderer.domElement;
+    const width = canvas.width, height = canvas.height;
+    const open = (blob) => openReportDialog({
+      shot: blob ? { blob, width, height } : null,
+      report: payload, summary, config: settings.debug, copy, toast: show,
+      openSettings: () => settings.openPage?.('debug'),
+    });
+    try { canvas.toBlob((blob) => open(blob), 'image/jpeg', 0.85); } catch (err) { console.error('[debug report] screenshot failed', err); open(null); }
   };
 
-  const enabled = () => settings.values.debugReports && game().started && !settings.open;
+  const enabled = () => settings.values.debugReports && game().started && !settings.open && !isDialogOpen();
   addEventListener('keydown', (e) => {
     if (e.code !== 'F8') return;
     e.preventDefault();
@@ -261,6 +277,7 @@ export function createDebugReport({ ctx, player, camera, clock, renderer, scene,
 
   return {
     report,
+    afterRender,
     build,
     tick(dt) { if (dt > 0) dtAvg += (dt - dtAvg) * 0.05; },
   };

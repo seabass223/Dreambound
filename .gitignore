@@ -21,6 +21,10 @@ tools/regress/out/
 npm-debug.log*
 .env
 .env.*
+!.env.example
+
+# Bug reports pulled from the queue (tools/bugqueue): screenshots and reports stay local
+bugs/
 
 # Editor / OS
 .vscode/*
@@ -33,3 +37,4 @@ desktop.ini
 
 # Claude Code per-user settings (launch.json is shared)
 .claude/settings.local.json
+tools/blender/tor_src.json

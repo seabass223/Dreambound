@@ -4,6 +4,7 @@
 import './theme.css';
 import './kit.css';
 import { h, nextId, button } from './dom.js';
+import { icon } from './nav.js';
 
 export { h, nextId, button };
 
@@ -74,5 +75,34 @@ export function select({ options, value, onChange }) {
   return { el, focusEl: el, get: () => el.value, set(v) { el.value = v; } };
 }
 
+// ---- input: a text field (shadcn's Input). secret: masked, with a show / hide button. Returns { el, get(), set(v) }.
+export function input({ value = '', placeholder = '', onInput, maxLength, secret = false, spellcheck = false, label }) {
+  const el = h('input', { type: secret ? 'password' : 'text', class: 'ui-input ui-input-text', placeholder, maxLength, spellcheck, autocomplete: 'off', 'aria-label': label });
+  el.value = value;
+  el.addEventListener('input', () => onInput?.(el.value));
+  let wrap = el;
+  if (secret) {
+    const eye = h('button', { type: 'button', class: 'ui-input-eye', 'aria-label': 'Show', title: 'Show' }, icon('eye', 16));
+    eye.addEventListener('click', () => {
+      const show = el.type === 'password';
+      el.type = show ? 'text' : 'password';
+      eye.replaceChildren(icon(show ? 'eyeOff' : 'eye', 16));
+      eye.setAttribute('aria-label', show ? 'Hide' : 'Show');
+      eye.title = show ? 'Hide' : 'Show';
+    });
+    wrap = h('div', { class: 'ui-input-wrap' }, el, eye);
+  }
+  return { el: wrap, focusEl: el, get: () => el.value, set(v) { if (document.activeElement !== el) el.value = v ?? ''; } };
+}
+
+// ---- textarea (shadcn's Textarea).
+export function textarea({ value = '', placeholder = '', rows = 4, maxLength, onInput, label }) {
+  const el = h('textarea', { class: 'ui-input ui-textarea', placeholder, rows, maxLength, 'aria-label': label });
+  el.value = value;
+  el.addEventListener('input', () => onInput?.(el.value));
+  return { el, focusEl: el, get: () => el.value, set(v) { el.value = v ?? ''; } };
+}
+
 export { colorPicker, closeColorPickers, parseHex } from './colorPicker.js';
-export { openDialog, confirmDialog, isDialogOpen } from './dialog.js';
+export { modal, openDialog, confirmDialog, isDialogOpen } from './dialog.js';
+export { icon, item, itemGroup, toggleGroup, buttonGroup, navStack } from './nav.js';

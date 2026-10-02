@@ -4,7 +4,8 @@ import { patchMaterial } from '../render/materials.js';
 import { Rng, noise2 } from '../core/rng.js';
 
 // Limestone stepping stones laid along a path over a stack's cap (the Home stack's, from the trail at the dome door
-// round the dome to the deck track: world/stacks/dome.js). The stones are modelled in Blender
+// round the dome to the deck track: world/stacks/dome.js; the Rocks stack's, from the creek to the petroglyph:
+// world/stacks/rocks.js). The stones are modelled in Blender
 // (tools/blender/walkstone_design.py: seven weathered flags, big to small, with a seamless limestone tile: albedo, normal
 // and roughness, worn smooth on top so they catch a little light). Here they're laid one after another with grass
 // between, meandering a little either side of the line, each turned its own way, now and then a small one beside a
@@ -65,7 +66,8 @@ function variants(asset) {
 
 // Returns { on(x, z, margin): on (or within margin of) a stone, stones: [{ x, z, r }] }.
 // keepOff: { x, z, r }: no stone's centre nearer than r to (x, z) (the dome's curb); one that would be is pushed out.
-export function buildWalkway(stack, path, batcher, asset, { fade = 6, seed = 1, keepOff = null } = {}) {
+// skip(x, z): true leaves a stone out there (on rock, in the water).
+export function buildWalkway(stack, path, batcher, asset, { fade = 6, seed = 1, keepOff = null, skip = null } = {}) {
   const none = { on: () => false, stones: [] };
   if (!asset?.gltf) return none;
   const V = variants(asset);
@@ -84,6 +86,7 @@ export function buildWalkway(stack, path, batcher, asset, { fade = 6, seed = 1, 
       const dx = x - keepOff.x, dz = z - keepOff.z, d = Math.hypot(dx, dz);
       if (d < keepOff.r) { x = keepOff.x + (dx / d) * keepOff.r; z = keepOff.z + (dz / d) * keepOff.r; }
     }
+    if (skip?.(x, z)) return;
     // The ground's tilt under it, from four samples.
     const s = 0.3, ca = Math.cos(yaw), sa = Math.sin(yaw);
     tx.set(ca * 2 * s, ground(x + ca * s, z - sa * s) - ground(x - ca * s, z + sa * s), -sa * 2 * s).normalize();

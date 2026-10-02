@@ -17,7 +17,10 @@ import { createElevator } from '../../props/elevator.js';
 import { createMovableRocks } from '../../props/movableRocks.js';
 import { buildSequoia } from '../../props/sequoia.js';
 import { carvePetroglyph } from '../../props/petroglyph.js';
+import { buildWalkway } from '../walkway.js';
 import { ROCK_TARGETS } from '../rockPuzzle.js';
+import { createTorBlast } from '../torBlast.js';
+import { createRockThrow } from '../rockThrow.js';
 
 // Layout (offsets from the stack centre). The tor stands west of the sequoia, in view of its door; its spring
 // spills down the south-east face into a pool, and the creek runs past the tree and east over the lip.
@@ -32,9 +35,11 @@ const SEQ_SINK_R = 4.3;   // ground sunk under the sequoia out to here: its car 
 // The petroglyph (a clue, props/petroglyph.js): on the big stone of the 205° pile, on the face looking out to the rim,
 // about 0.8 m up. at: a point on that face (x, z from the stack's centre, y absolute); normal: roughly out of it.
 const GLYPH = { pile: 1, at: [-41.409, 5.974, -16.657], normal: [-0.831, 0.01, 0.556], lift: 0.04 };
-// A sparse line of flat stones across the meadow, round the north side of that pile to the ground in front of the
-// carving (the last one about 2.2 m from it): there to be noticed, not a path. Offsets from the stack's centre.
-const CLUE_STONES = [[-27.5, -6.8], [-30.2, -8.1], [-33.1, -9.7], [-35.8, -11.1], [-38.2, -12.5], [-40.3, -13.6], [-42.0, -14.5]];
+// The way to it: limestone stepping stones (world/walkway.js, as round the Home stack's dome) from the creek's bank, where
+// it runs closest (about 3.5 m off its line), across the meadow and round the north side of that pile to the ground in
+// front of the carving, with a faint trodden line under them. (Seven pebbles 3 m apart, starting 14 m from the creek,
+// were too easy to miss: bug report 4d5c26b2.) Offsets from the stack's centre.
+const CLUE_PATH = [[-20.4, 1.6], [-23.6, -2.7], [-27.5, -6.8], [-30.2, -8.1], [-33.1, -9.7], [-35.8, -11.1], [-38.2, -12.5], [-40.3, -13.6], [-42.6, -15.3]];
 
 export function buildRocks(ctx) {
   const cfg = STACKS.rocks;
@@ -163,7 +168,12 @@ export function buildRocks(ctx) {
   carve = true;
   const gravel = new THREE.Color(0.1, 0.085, 0.065);
   const duff = new THREE.Color(0.12, 0.08, 0.05);
+  const cluePath = Path.smooth(CLUE_PATH.map(([lx, lz]) => [cx + lx, cz + lz]), 0.5, 1.0);
+  const qc = {};
   stack.colorFns.push((x, z, h, col) => {
+    // The trodden line along the stepping stones to the carving.
+    cluePath.closest(x, z, qc);
+    if (qc.d < 1.2) col.lerp(new THREE.Color(0.2, 0.16, 0.11), (1 - smoothstep(0.3, 1.2, qc.d)) * 0.38);
     stream.closest(x, z, q);
     const dp = Math.hypot(x - pool.x, z - pool.z);
     const wet = Math.max(q.d < 3.0 ? 1 - smoothstep(1.2, 3.0, q.d) : 0, 1 - smoothstep(POOL_R - 0.5, POOL_R + 1.6, dp));
@@ -178,8 +188,10 @@ export function buildRocks(ctx) {
   stack.build(collider);
 
   // ---- The tor (the creek's source) and the rock piles along the edge ----
-  // Climbing faces is stopped by vertical walls round each mound, not by the rock mesh.
-  const tor = buildTor(stack, { x: torC.x, z: torC.z, radius: TOR.radius, height: TOR.height, seed: cfg.seed * 3, spillAngle: TOR.spill, batcher });
+  // Climbing faces is stopped by vertical walls round each mound, not by the rock mesh. The tor is drawn on its own (not
+  // in the stack's props batch), as rocks.exe blows it apart (world/torBlast.js).
+  const torBatch = new Batcher();
+  const tor = buildTor(stack, { x: torC.x, z: torC.z, radius: TOR.radius, height: TOR.height, seed: cfg.seed * 3, spillAngle: TOR.spill, batcher: torBatch, sculpt: ctx.torSculpt });
   const piles = PILES.map((p) => {
     const th = THREE.MathUtils.degToRad(p.deg);
     const rr = stack.edgeR(th) - p.radius - 2.5;
@@ -241,17 +253,25 @@ export function buildRocks(ctx) {
     water.geometry.computeBoundingSphere();
     const c = water.geometry.boundingSphere.center.clone();
     const r = water.geometry.boundingSphere.radius;
+    // (Measured from what is being looked at: the player, or the hidden camera's subject during a cutscene.)
     ctx.updaters.push(() => {
-      const d = ctx.player ? ctx.player.feet.distanceTo(c) - r : 0;
+      const f = ctx.viewFocus ?? ctx.player?.feet;
+      const d = f ? f.distanceTo(c) - r : 0;
       water.material = d < 90 ? near : glossy;
     });
   }
+  // The tor's own water (the spring, its fall and the fall's splash, spray and mist) in groups the blast can switch off
+  // (world/torBlast.js: the LOD sets each mesh's own visibility).
+  const torWater = new THREE.Group(), spring = new THREE.Group();
+  torWater.name = 'tor-water'; spring.name = 'tor-spring';
+  torWater.add(spring);
+  ctx.surface.add(torWater);
   // The spring on top of the tor: only the telescope ever sees it, so the cheap surface will do.
   {
     const disc = new THREE.Mesh(new THREE.CircleGeometry(tor.poolRadius, 24).rotateX(-Math.PI / 2), glossy);
     disc.position.copy(tor.top);
     disc.renderOrder = 3;
-    ctx.surface.add(disc);
+    spring.add(disc);
     ctx.lod.add(disc, { out: [140, 180], fade: false, name: 'spring' });
   }
   // The cascade down the tor's face, and its splash, foam, spray and mist. The ribbon stops just under the pool's
@@ -266,7 +286,7 @@ export function buildRocks(ctx) {
     }
   }
   const cascade = cascadeMesh(casc, cascW, { outward: spill });
-  ctx.surface.add(cascade);
+  torWater.add(cascade);
   ctx.lod.add(cascade, { out: [220, 280], fade: false, name: 'cascade' });
   const splashAt = tor.splash.clone().setY(waterY);
   // The chute face stands about 0.5 m behind the impact point (the tor's foot is at radius + 0.2).
@@ -278,11 +298,17 @@ export function buildRocks(ctx) {
     hazeFX({ pos: pool.clone().setY(waterY + 0.5), radius: POOL_R + 1.4, height: 2.2, count: 18, wallNormal: spill, wallDist: 1.8, wallTop: tor.top.y + 0.5 - waterY }),
     poolFoamFX({ pos: pool.clone().setY(waterY), radius: POOL_R - 0.2, impact: splashAt, ...face }),
   ];
-  for (const m of fx) { ctx.surface.add(m); ctx.lod.add(m, { out: [110, 150], fade: false, name: 'cascade fx' }); }
+  for (const m of fx) { torWater.add(m); ctx.lod.add(m, { out: [110, 150], fade: false, name: 'cascade fx' }); }
   // Spray and mist all the way down the edge fall (a landmark from the other stacks, so never culled by distance).
   ctx.surface.add(fallSprayFX({ path: fall.userData.path, widths: fall.userData.widths, count: 400, normal: new THREE.Vector3(Math.cos(fallTheta), 0, Math.sin(fallTheta)) }));
 
-  ctx.audio?.registerEmitter?.('cascade', splashAt.clone().setY(waterY + 1.5), 'surface');
+  const cascadeSound = ctx.audio?.registerEmitter?.('cascade', splashAt.clone().setY(waterY + 1.5), 'surface');
+  // The blast: the tor's own meshes (intact; the stump and its debris), the explosion and the water stopping.
+  const blast = tor.sculpted ? ctx.torSculpt?.blast ?? null : null;
+  const torBlast = createTorBlast(ctx, stack, {
+    tor, batch: torBatch, blast, parent: stack.group,
+    water: { group: torWater, spring, cascade, fx, emitter: cascadeSound },
+  });
   ctx.audio?.registerEmitter?.('stream', pts[Math.floor(pts.length * 0.3)].clone(), 'surface');
   ctx.audio?.registerEmitter?.('stream', pts[Math.floor(pts.length * 0.75)].clone(), 'surface');
   ctx.audio?.registerEmitter?.('waterfall', fall.userData.path[Math.min(8, fall.userData.path.length - 1)].clone(), 'surface');
@@ -335,16 +361,12 @@ export function buildRocks(ctx) {
     if (!onRock(x, z)) ctx.pebbles.addAt(x, (stack.heightAt(x, z) ?? bedAt(t)) + 0.18, z, s, g);
   }
 
-  // The stones leading to the carving (CLUE_STONES), from their own stream, so nothing else moves.
-  {
-    const r2 = new Rng(cfg.seed * 31);
-    for (const [lx, lz] of CLUE_STONES) {
-      const x = cx + lx + r2.float(-0.3, 0.3), z = cz + lz + r2.float(-0.3, 0.3);
-      const s = r2.float(0.28, 0.4), geo = ctx.pebbles.geometries[r2.int(0, 1)], ry = r2.float(0, 6.28);
-      const y = stack.heightAt(x, z);
-      if (y !== null && !onRock(x, z)) ctx.pebbles.addAt(x, y + 0.05, z, s, geo, ry);
-    }
-  }
+  // The stepping stones to the carving (CLUE_PATH), their own random stream (so nothing else moves); none on the rock or
+  // in the creek.
+  const clueWalk = buildWalkway(stack, cluePath, batcher, ctx.walkstoneAsset, {
+    seed: 23, fade: 2.5,
+    skip: (x, z) => { stream.closest(x, z, qc); return qc.d < 2.6 || onRock(x, z); },
+  });
 
   // ---- The sequoia the elevator comes out of ----
   const doorDir = new THREE.Vector3(tree.x - cx, 0, tree.z - cz).normalize();
@@ -368,17 +390,18 @@ export function buildRocks(ctx) {
     { ...xz(L(-2, -14)), r: 1.15 }, { ...xz(L(14, 12)), r: 1.0 }, { ...xz(L(-22, -6)), r: 1.25 },
     { ...xz(L(-4, 24)), r: 0.95 }, { ...xz(L(24, -22)), r: 1.1 },
   ];
-  // One of them sits in the sequoia's doorway, 0.4 m out from the elevator's plate (too close to squeeze past along
-  // the plate): the first time you step out of the car you walk into it and shove it out of the way, and so learn that
-  // these boulders move. (From there it has a clear push onto the nearest target: tools/regress/out/rock_puzzle_test.mjs.)
+  // (The boulders now start dormant and are only ever seen where rocks.exe throws them; these spots, the old doorstop in
+  // the sequoia's doorway among them, are kept so the colliders and the world's random streams stay as they were.)
   const doorOut = new THREE.Vector3(Math.sin(seq.plateRot), 0, Math.cos(seq.plateRot));
   const DOORSTOP = 3, DOORSTOP_GAP = 0.3;
   const spots = spots0.map((s, i) => (i === DOORSTOP
     ? { x: seq.platePos.x + doorOut.x * (DOORSTOP_GAP + s.r), z: seq.platePos.z + doorOut.z * (DOORSTOP_GAP + s.r), r: s.r }
     : s));
+  // (They stay here, dormant, until rocks.exe throws them out of the tor: props/movableRocks.js, world/rockThrow.js.)
   createMovableRocks(ctx, stack, spots, {
     blockers: [tree, tor.blocker, ...piles.map((p) => p.blocker), { x: pool.x, z: pool.z, r: POOL_R }],
     targets: ROCK_TARGETS.map((t) => xz(L(t.x, t.z))),
+    geos: blast?.boulders.length === spots.length ? blast.boulders : null,
   });
 
   // ---- Vegetation, flowers & stones ----
@@ -393,19 +416,30 @@ export function buildRocks(ctx) {
   };
   // Trees keep their crowns (3-4 m out) off the tor and the piles too, not just their trunks.
   const treeOk = (x, z) => clear(x, z) && !rockWalls.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + 4);
+  const flora = { trees: [], shrubs: [] };   // (where the thrown boulders may land: world/rockThrow.js)
   for (const p of scatter(stack, 24, rng, treeOk, { margin: 4 })) {
     const sp = rng.next() < 0.7 ? 'broadleaf' : 'pine';
     const s = rng.float(0.8, 1.25);
     ctx.forest.add(sp, p.x, p.y, p.z, s);
     collider.addCylinder(p.x, p.y - 0.5, p.z, ctx.forest.radiusOf(sp) * s + 0.08, 4, 6);
+    flora.trees.push({ x: p.x, y: p.y, z: p.z, s });
   }
-  for (const p of scatter(stack, 30, rng, clear, { margin: 2 })) ctx.forest.add('shrub', p.x, p.y, p.z, rng.float(0.6, 1.2));
+  for (const p of scatter(stack, 30, rng, clear, { margin: 2 })) {
+    const s = rng.float(0.6, 1.2);
+    ctx.forest.add('shrub', p.x, p.y, p.z, s);
+    flora.shrubs.push({ x: p.x, y: p.y, z: p.z, s });
+  }
   const grassOk = (x, z) => {
     stream.closest(x, z, q);
     return q.d > 2.5 && Math.hypot(x - pool.x, z - pool.z) > POOL_R + 0.8 && !nearTree(x, z, 0.3) && !onRock(x, z);
   };
-  for (const p of scatter(stack, 3200, rng, grassOk, { margin: 1.2, tries: 3 })) ctx.meadow.add(p.x, p.y, p.z, rng.float(0.7, 1.2));
-  ctx.pebbles.scatter(stack, 170, rng, (x, z) => { stream.closest(x, z, q); return q.d > 2.4 && !nearTree(x, z, 0.3) && !onRock(x, z); });
+  // (Off the stepping stones after the draws, so nothing else moves: a tuft on a stone is added at scale 0, which keeps
+  // the meadow's per-tuft random draws in step on every stack.)
+  for (const p of scatter(stack, 3200, rng, grassOk, { margin: 1.2, tries: 3 })) {
+    const s = rng.float(0.7, 1.2);
+    ctx.meadow.add(p.x, p.y, p.z, clueWalk.on(p.x, p.z, -0.06) ? 0 : s);
+  }
+  ctx.pebbles.scatter(stack, 170, rng, (x, z) => { stream.closest(x, z, q); return q.d > 2.4 && !nearTree(x, z, 0.3) && !onRock(x, z); }, (x, z) => !clueWalk.on(x, z, 0.15));
   // Wildflowers in drifts: a few kinds per patch, thinning out from the middle.
   const flowers = new Flowers(cfg.seed * 7);
   const flowerOk = (x, z) => clear(x, z) && stack.edgeDist(x, z) > 2.5;
@@ -414,6 +448,8 @@ export function buildRocks(ctx) {
     const a = frng.float(0, Math.PI * 2), d = Math.sqrt(frng.next()) * (cfg.r - 6);
     flowers.patch(stack, cx + Math.cos(a) * d, cz + Math.sin(a) * d, frng.float(2.5, 6), frng.int(10, 34), [frng.int(0, 3), frng.int(0, 3)], flowerOk, frng);
   }
+  // (None on the stepping stones: dropped to scale 0 after the draws, as the grass.)
+  for (const list of flowers.items) for (let i = 0; i < list.length; i += 4) if (clueWalk.on(list[i], list[i + 2], 0.05)) list[i + 3] = 0;
   flowers.build(ctx.surface, ctx.lod);
 
   // Bridge (collision lives with this stack so it's active from both ends).
@@ -430,11 +466,23 @@ export function buildRocks(ctx) {
 
   createElevator(ctx, {
     id: 'rocks',
+    start: 'bottom',   // waiting on the cave floor (only the Home stack's waits up top, by the cabin)
     ends: {
       top: { pos: seq.platePos, rotY: seq.plateRot, zone: 'surface', parent: ctx.surface, collider: ctx.lateCollider('rocks-car') },
       bottom: ctx.tunnelStation('rocks'),
     },
   });
+
+  // Where the thrown boulders land, and their flights (props/movableRocks.js has the push).
+  createRockThrow(ctx, stack, {
+    flora, stream, bridgeA, platePos: seq.platePos, stones: clueWalk.stones, tree: { x: tree.x, y: treeY, z: tree.z }, torC,
+    stump: { footprint: tor.footprint, top: torBlast.stumpTop }, launch: torBlast.launch,
+    piles: piles.map((p) => ({ blocker: p.blocker, top: Math.max(...p.walls.map((w) => w.y1)) - 1 })),
+  });
+  // The hidden camera ("CAM 07", sequences/rocksExe.js) strapped to the sequoia's bark facing the tor, a little above
+  // its door. pos: the lens; look: where it points; mount: its bracket on the bark (the housing's own frame, the
+  // bunker kit's cctv layer, puts the bracket 0.476 m behind the lens and 0.05 m below it).
+  stack.hiddenCam = hiddenCam(seq, tree, treeY, torC.clone().setY(tor.frame.g0 + 6.1));
 
   stack.torTop = tor.top.clone();   // the spring on the tor (the observatory's rear hatch is keyed to it)
   ctx.stacks.rocks = stack;
@@ -443,3 +491,21 @@ export function buildRocks(ctx) {
 }
 
 const xz = ([x, z]) => ({ x, z });
+
+// The lens `up` m up the trunk on the side facing `look`, and the bracket on the bark behind it.
+function hiddenCam(seq, tree, treeY, look, { up = 12, fov = 72 } = {}) {
+  const MOUNT = new THREE.Vector3(0, -0.05, -0.476);   // bracket, in the lens's frame (+z out of the lens)
+  const d = new THREE.Vector3(look.x - tree.x, 0, look.z - tree.z).normalize();
+  let b = seq.barkAt(d.x, d.z, treeY + up);
+  const pos = b.pos.clone().addScaledVector(b.normal, 0.48).setY(treeY + up);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), w = new THREE.Vector3();
+  for (let i = 0; i < 4; i++) {
+    // Turn a +z-forward housing to look at `look`, then move the lens so its bracket sits on the bark.
+    m.lookAt(look, pos, new THREE.Vector3(0, 1, 0));
+    q.setFromRotationMatrix(m);
+    w.copy(MOUNT).applyQuaternion(q).add(pos);
+    b = seq.barkAt(w.x - tree.x, w.z - tree.z, w.y);
+    pos.add(b.pos.clone().addScaledVector(b.normal, 0.01).sub(w));
+  }
+  return { pos, look: look.clone(), fov, mount: { pos: b.pos.clone(), normal: b.normal.clone() } };
+}

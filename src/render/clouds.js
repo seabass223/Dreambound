@@ -137,6 +137,8 @@ varying float vAlpha;
 varying float vShade;
 varying vec3 vDir;
 varying float vSeed;
+varying vec3 vWorld;
+varying vec3 vStack;   // a collar's stack: its centre (xz) and wall radius; radius < 0 for other clouds
 void main() {
   vec3 c = instanceMatrix[3].xyz;
   float span = 9000.0;
@@ -157,6 +159,17 @@ void main() {
   vUv = uv;
   vSeed = aCloud.y;
   float a = 1.0;
+  vWorld = wp;
+  vStack = vec3(0.0, 0.0, -1.0);
+  if (collar) {
+    // A collar hugs its stack, so it can't be kept off it like the others: it's faded per pixel near the wall instead
+    // (see the fragment shader), or its billboard, turning with the view, slices the cliff in a line that moves.
+    float best = 1e9;
+    for (int i = 0; i < 5; i++) {
+      float d = length(c.xz - uStacks[i].xy);
+      if (d < best) { best = d; vStack = vec3(uStacks[i].xy, uStacks[i].z / 1.15); }
+    }
+  }
   // Never slice through a stack.
   if (!collar) {
     for (int i = 0; i < 5; i++) {
@@ -184,6 +197,8 @@ varying float vAlpha;
 varying float vShade;
 varying vec3 vDir;
 varying float vSeed;
+varying vec3 vWorld;
+varying vec3 vStack;
 ${NOISE_GLSL}
 ${SKY_FUNC_GLSL}
 void main() {
@@ -191,6 +206,8 @@ void main() {
   float tex = texture2D(uMap, uv).a;
   float n = fbm3o(uv * 3.0 + vSeed * 17.0);
   float a = smoothstep(0.05, 0.9, tex * (0.55 + n * 0.9)) * vAlpha * 0.8;
+  // A collar thins out over its last 40 m to its stack's wall (and is gone inside it): no hard line where it meets the rock.
+  if (vStack.z > 0.0) a *= smoothstep(-4.0, 40.0, length(vWorld.xz - vStack.xy) - vStack.z);
   if (a < 0.01) discard;
   float twilight = smoothstep(0.25, -0.02, uSunDir.y) * smoothstep(-0.22, -0.04, uSunDir.y);
   vec3 light = uSunLight * 0.1 + uHorizonSun * (0.12 + twilight * 0.7) + uSunGlow * 0.06;

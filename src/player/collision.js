@@ -133,6 +133,7 @@ export class Physics {
           const push = radius - dist;
           const wx = c * ox + s * oz, wz = -s * ox + c * oz;
           feet.x += wx * push; feet.z += wz * push;
+          if (contacts) contacts.push({ collider: d, nx: -wx, nz: -wz });
         }
       }
     }

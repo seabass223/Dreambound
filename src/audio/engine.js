@@ -62,7 +62,8 @@ export class AudioEngine {
     // the reverb. `near` carries the player's own footsteps and, while an elevator's doors are shut round them, the
     // car's own sounds (play(name, { car: true })). setEnclosed() fades `world` out, so a closed car hears only itself.
     this.world = this.gain(1);
-    this.world.connect(this.master);
+    this.worldDry = this.gain(1);   // setFeed() crossfades this with the camera-mic chain (buildFeed)
+    this.world.connect(this.worldDry).connect(this.master);
     this.enclosers = new Set();
     this.reverb = ac.createConvolver();
     this.reverb.buffer = P && P.rate === ac.sampleRate ? P.impulse : this.impulse(3.2, 2.6);   // a convolver needs the context's rate
@@ -91,6 +92,7 @@ export class AudioEngine {
     this.buildWind();
     this.buildInsects();
     this.buildCave();
+    this.buildFeed();
     for (const e of this.pending) this.startEmitter(e);
     this.pending.length = 0;
   }
@@ -270,6 +272,58 @@ export class AudioEngine {
     return this.ctx.createPeriodicWave(real, imag, { disableNormalization: true });
   }
 
+  // A filtered noise burst into o: buffer -> filter -> envelope, from a random point in the buffer (a source started at
+  // 0 every time would replay the same few samples, and every burst would sound alike).
+  burst(o, t, { buf = this.white, type = 'bandpass', f = 1000, q = 1, peak = 0.3, a = 0.002, d = 0.05, rate = 1 } = {}) {
+    const s = this.src(buf, false, rate); const fl = this.filter(type, f, q); const g = this.gain(0);
+    s.connect(fl).connect(g).connect(o); this.env(g, t, a, peak, d);
+    s.start(t, Math.random() * Math.max(0, buf.duration - a - d - 0.1)); s.stop(t + a + d + 0.03);
+    return g;
+  }
+
+  // An enveloped oscillator into o, gliding f0 -> f1 over its length.
+  tone(o, t, f0, f1, peak, a, d, type = 'sine') {
+    const osc = this.ctx.createOscillator(); osc.type = type;
+    osc.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + a + d);
+    const g = this.gain(0); osc.connect(g).connect(o); this.env(g, t, a, peak, d);
+    osc.start(t); osc.stop(t + a + d + 0.03);
+    return g;
+  }
+
+  // One slice of the fire's grain bank (fireGrainBank) as a hard little impact: gravel, a static tick, a pebble.
+  grain(o, t, type, rate = 1, level = 1) {
+    const { buf, grains } = this.fireGrains, list = grains[type], [off, dur] = list[Math.floor(Math.random() * list.length)];
+    const s = this.ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate;
+    const g = this.gain(level); s.connect(g).connect(o); s.start(t, off, dur);
+  }
+
+  // Waveshaper curves, made once: a soft-knee overdrive (tanh, clipping hard past full scale), and an 8-level
+  // quantiser (the glitch's bit-crush).
+  driveCurve() {
+    if (!this._drive) {
+      const n = 2048, c = new Float32Array(n), k = 2.4;
+      for (let i = 0; i < n; i++) c[i] = Math.tanh(k * (i / (n - 1) * 2 - 1)) / Math.tanh(k);
+      this._drive = c;
+    }
+    return this._drive;
+  }
+  // A WaveShaper on a curve (or a plain gain where the context has none: the headless tests' mock contexts).
+  shaper(curve) {
+    if (!this.ctx.createWaveShaper) return this.gain(1);
+    const sh = this.ctx.createWaveShaper();
+    sh.curve = curve; sh.oversample = '2x';
+    return sh;
+  }
+  crushCurve() {
+    if (!this._crush) {
+      const n = 1024, c = new Float32Array(n);
+      for (let i = 0; i < n; i++) c[i] = Math.round((i / (n - 1) * 2 - 1) * 4) / 4;
+      this._crush = c;
+    }
+    return this._crush;
+  }
+
   // ---------- ambience beds ----------
   buildWind() {
     const ac = this.ctx;
@@ -331,22 +385,78 @@ export class AudioEngine {
     s.start();
   }
 
+  // The hidden camera's microphone (setFeed): everything on the world bus heard down a long line through a cheap mic,
+  // band-limited and a little overdriven, with the line's hiss and a ground-loop hum. Built here once but left unplugged
+  // from the world bus (so none of it runs) until setFeed() turns it up, and unplugged again once it's back at 0
+  // (feedIdle). feedOut is where a sound already made for the feed (explosion { feed }) goes.
+  buildFeed() {
+    const ac = this.ctx;
+    this.feedWet = this.gain(0);
+    const drive = this.gain(2.2), sh = this.shaper(this.driveCurve());
+    this.feedIn = this.filter('highpass', 320, 0.8);
+    this.feedIn.connect(this.filter('highpass', 280, 0.6)).connect(drive).connect(sh)
+      .connect(this.filter('lowpass', 3600, 0.9)).connect(this.filter('lowpass', 4200, 0.6)).connect(this.feedWet).connect(this.master);
+    // (The hiss and hum go in at the world bus like every other bed, so they reach the chain and shut off with it. Their
+    // sources start the first time the feed comes up.)
+    this.feedHiss = this.gain(0);
+    this.feedHissSrc = this.src(this.white);
+    this.feedHissSrc.connect(this.filter('bandpass', 3800, 0.5)).connect(this.feedHiss);
+    this.feedHum = ac.createOscillator(); this.feedHum.type = 'sawtooth'; this.feedHum.frequency.value = 60;
+    this.feedHum.connect(this.filter('lowpass', 420, 1.2)).connect(this.gain(0.35)).connect(this.feedHiss);
+    this.feedK = 0; this.feedLive = false; this.feedStarted = false; this.feedIdleAt = 0;
+    this.feedOut = this.gain(1);
+    this.feedOut.connect(this.master);
+  }
+
+  // k (0..1): how much of the world is heard through the camera's mic instead of the listener's own ears; tau: the
+  // crossfade's time constant (s).
+  setFeed(k, tau = 0.03) {
+    if (!this.ctx) return;
+    const t = this.now();
+    k = clamp(+k || 0, 0, 1);
+    tau = Math.max(1e-4, +tau || 0.03);
+    this.feedK = k;
+    if (k > 0 && !this.feedLive) {
+      if (!this.feedStarted) { this.feedHissSrc.start(); this.feedHum.start(); this.feedStarted = true; }
+      this.world.connect(this.feedIn);
+      this.feedHiss.connect(this.world);
+      this.feedLive = true;
+    }
+    this.feedIdleAt = t + tau * 12 + 0.05;   // (back at 0: unplugged once the fade has run out)
+    this.worldDry.gain.setTargetAtTime(1 - k, t, tau);
+    this.feedWet.gain.setTargetAtTime(k * 0.35, t, tau);
+    this.feedHiss.gain.setTargetAtTime(k * 0.009, t, tau);
+  }
+
+  // Unplugs the feed's chain once it has faded out to nothing (every frame, from update()).
+  feedIdle() {
+    if (!this.feedLive || this.feedK > 0 || this.now() < this.feedIdleAt) return;
+    this.world.disconnect(this.feedIn);
+    this.feedHiss.disconnect(this.world);
+    this.feedLive = false;
+  }
+
   // ---------- emitters ----------
-  // extra carries per-emitter data the synthesis needs (e.g. the frogs' bank spots).
+  // extra carries per-emitter data the synthesis needs (e.g. the frogs' bank spots). Returns the emitter: set e.off =
+  // true at any time (before the sound starts too) to fade it out (~0.4 s), false to fade it back; e.mul (0..1, default
+  // 1) scales its level, for slower fades of your own.
   registerEmitter(name, pos, zone, extra = {}) {
-    const e = { name, pos: pos.clone(), zone, node: null, ...extra };
+    const e = { name, pos: pos.clone(), zone, node: null, off: false, mul: 1, ...extra };
     this.emitters.push(e);
     if (this.ctx) this.startEmitter(e); else this.pending.push(e);
+    return e;
   }
 
   startEmitter(e) {
     const ac = this.ctx;
     const g = this.gain(0);
-    const indoorSource = e.name === 'fire' || e.name === 'generator' || e.name === 'electronics' || e.name === 'roomtone';
+    const indoorSource = e.name === 'fire' || e.name === 'generator' || e.name === 'electronics' || e.name === 'roomtone'
+      || e.name === 'terminal' || e.name === 'hvac';
     // Frogs pan every call from its own bank spot, so their g is only the zone/range gate into the bus.
     if (e.name === 'frogs') g.connect(this.outdoor);
     else {
-      const ref = e.name === 'waterfall' ? 14 : e.name === 'cascade' ? 8 : e.name === 'generator' ? 5 : e.name === 'roomtone' ? 6 : 4;
+      const ref = e.name === 'waterfall' ? 14 : e.name === 'cascade' ? 8 : e.name === 'generator' ? 5 : e.name === 'roomtone' ? 6
+        : e.name === 'terminal' ? 2 : 4;
       const p = this.panner(e.pos, ref, 1.1);
       g.connect(p).connect(indoorSource ? this.world : this.outdoor);
       if (indoorSource) p.connect(this.reverbSend);
@@ -660,6 +770,62 @@ export class AudioEngine {
       air.start(); buzz.start();
       e.level = 0.05;
       e.range = 12;
+    } else if (e.name === 'terminal') {
+      // The bunker's CRT terminal: the flyback's 15.7 kHz whine (very faint: young ears only), the mains hum and its
+      // second harmonic, and a small cooling fan with a soft blade tone.
+      const whine = ac.createOscillator(); whine.frequency.value = 15734;
+      const vib = ac.createOscillator(); vib.frequency.value = 0.31;
+      vib.connect(this.gain(5)).connect(whine.frequency);
+      whine.connect(this.gain(0.012)).connect(g);
+      const hum = ac.createOscillator(); hum.type = 'sawtooth'; hum.frequency.value = 60;
+      hum.connect(this.filter('lowpass', 360, 1.5)).connect(this.gain(0.16)).connect(g);
+      const h2 = ac.createOscillator(); h2.frequency.value = 120;
+      h2.connect(this.gain(0.06)).connect(g);
+      const fan = this.src(this.pink), fanG = this.gain(0.7);
+      const wob = ac.createOscillator(); wob.frequency.value = 0.17 + Math.random() * 0.06;
+      wob.connect(this.gain(0.08)).connect(fanG.gain);
+      fan.connect(this.filter('bandpass', 950, 0.8)).connect(fanG).connect(g);
+      const blade = ac.createOscillator(); blade.type = 'triangle'; blade.frequency.value = 143;
+      blade.connect(this.filter('bandpass', 143, 7)).connect(this.gain(0.05)).connect(g);
+      fan.start(0, Math.random() * 3);
+      [whine, vib, hum, h2, wob, blade].forEach((n) => n.start());
+      e.level = 0.14;
+      e.range = 9;
+    } else if (e.name === 'hvac') {
+      // Air in the room's big round duct: a low rumble and the rush of air through it, surging slowly and never in a
+      // cycle (the fire's smoothed-noise modulation), a faint blower tone far up the line, and now and then the
+      // sheet metal ticking as it warms or cools.
+      const mod = (rate, depth, param) => {
+        const m = ac.createBufferSource();
+        m.buffer = this.fireMod; m.loop = true; m.playbackRate.value = rate * (0.9 + Math.random() * 0.2);
+        m.connect(this.gain(depth)).connect(param);
+        m.start(0, Math.random() * 60);
+      };
+      const rum = this.src(this.brown), rumG = this.gain(0.8);
+      rum.connect(this.filter('highpass', 28, 0.7)).connect(this.filter('lowpass', 170, 0.6)).connect(rumG).connect(g);
+      mod(0.2, 0.12, rumG.gain);
+      const rush = this.src(this.pink), rushBP = this.filter('bandpass', 520, 0.6), rushG = this.gain(0.3);
+      rush.connect(rushBP).connect(rushG).connect(g);
+      mod(0.35, 0.07, rushG.gain);
+      mod(0.27, 60, rushBP.frequency);
+      const blower = ac.createOscillator(); blower.type = 'triangle'; blower.frequency.value = 97;
+      blower.connect(this.filter('bandpass', 97, 6)).connect(this.gain(0.06)).connect(g);
+      [rum, rush].forEach((n) => n.start(0, Math.random() * 3));
+      blower.start();
+      e.level = 0.12;
+      e.range = 14;
+      let next = 3 + Math.random() * 8;
+      e.tick = (dt) => {
+        next -= dt;
+        if (next > 0) return;
+        next = 4 + Math.random() * 14;
+        const t = this.now() + 0.02;
+        for (let k = 1 + Math.floor(Math.random() * 3); k > 0; k--) {
+          const tk = t + k * (0.08 + Math.random() * 0.3);
+          this.tone(g, tk, 1900 + Math.random() * 1400, 1700, 0.035, 0.001, 0.05);
+          this.burst(g, tk, { type: 'bandpass', f: 3200, q: 2, peak: 0.05, a: 0.0005, d: 0.01 });
+        }
+      };
     }
     e.node = g;
   }
@@ -969,6 +1135,240 @@ export class AudioEngine {
     });
   }
 
+  // ---------- the bunker's terminal and the rocks.exe cutscene ----------
+  // A key on an old terminal keyboard, never twice the same: the switch's bright click, then a few ms later the cap
+  // bottoming out (a hollow thock and the plate's tick), and the key coming back up. space: the bar's deeper thock and
+  // its stabiliser wire's rattle. vel: how hard (0.5..1.3).
+  sfx_key({ pos, space = false, vel = 1 }, t) {
+    const o = this.gain(2.2);
+    o.connect(this.out(pos, 1.5));
+    const R = (a, b) => a + Math.random() * (b - a);
+    const v = Math.max(1e-3, +vel || 0) * R(0.7, 1.1), deep = space ? 0.68 : R(0.9, 1.12);   // (exponential ramps never reach 0)
+    t += Math.random() * 0.004;
+    this.burst(o, t, { f: R(2800, 5200), q: R(1.2, 2.6), peak: 0.16 * v, a: 0.0006, d: R(0.006, 0.013) });
+    const tb = t + R(0.005, 0.016);
+    this.burst(o, tb, { f: R(420, 640) * deep, q: R(3, 6), peak: 0.75 * v, a: 0.0008, d: R(0.028, 0.045) * (space ? 1.6 : 1) });
+    this.tone(o, tb, R(900, 1300) * deep, R(700, 900) * deep, 0.04 * v, 0.0008, R(0.012, 0.022));
+    this.burst(o, tb, { type: 'highpass', f: R(1800, 2800), q: 0.7, peak: 0.08 * v, a: 0.0004, d: 0.007 });
+    const tr = tb + R(0.06, 0.14);
+    this.burst(o, tr, { f: R(1500, 2800), q: 2, peak: 0.06 * v, a: 0.0008, d: 0.01 });
+    this.burst(o, tr + 0.002, { f: R(520, 820) * deep, q: 4, peak: 0.22 * v, a: 0.0008, d: 0.02 });
+    if (space) for (let k = 0; k < 3; k++) this.burst(o, tb + 0.004 + k * R(0.006, 0.011), { f: R(2200, 3400), q: 5, peak: 0.12 * v * (1 - k * 0.25), a: 0.0004, d: 0.008 });
+  }
+
+  // The Enter key: the big key's heavier thock, its stabiliser rattling, and a firmer return.
+  sfx_keyEnter({ pos, vel = 1 }, t) {
+    const o = this.gain(1.3);
+    o.connect(this.out(pos, 1.5));
+    const R = (a, b) => a + Math.random() * (b - a);
+    const v = Math.max(1e-3, +vel || 0) * R(0.9, 1.1);
+    this.burst(o, t, { f: R(2600, 3800), q: 1.6, peak: 0.2 * v, a: 0.0006, d: 0.012 });
+    const tb = t + R(0.008, 0.014);
+    this.burst(o, tb, { f: R(330, 420), q: 4, peak: 1.0 * v, a: 0.0008, d: 0.06 });
+    this.tone(o, tb, R(160, 190), 120, 0.12 * v, 0.001, 0.05);
+    this.burst(o, tb, { type: 'highpass', f: 2000, q: 0.7, peak: 0.1 * v, a: 0.0004, d: 0.01 });
+    for (let k = 0; k < 3; k++) this.burst(o, tb + 0.005 + k * R(0.007, 0.012), { f: R(2400, 3600), q: 5, peak: 0.14 * v * (1 - k * 0.25), a: 0.0004, d: 0.009 });
+    const tr = tb + R(0.1, 0.16);
+    this.burst(o, tr, { f: R(1800, 2600), q: 2, peak: 0.08 * v, a: 0.0008, d: 0.012 });
+    this.burst(o, tr + 0.003, { f: R(380, 520), q: 4, peak: 0.35 * v, a: 0.0008, d: 0.03 });
+  }
+
+  // A digital burst of a signal breaking up (~dur s): crushed noise through a band that jumps about, a warbling
+  // data tone, a mains buzz, all chopped by a gate that stutters on and off. amt: 0..1 level.
+  sfx_glitch({ pos, dur = 0.3, amt = 1 }, t) {
+    const ac = this.ctx;
+    amt = Math.max(1e-3, +amt || 0);   // (exponential ramps never reach 0)
+    dur = Math.max(0.06, +dur || 0.3);
+    const o = this.out(pos, 2);
+    const R = (a, b) => a + Math.random() * (b - a);
+    const out = this.gain(0);
+    out.connect(o);
+    out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.24 * amt, t + 0.006);
+    out.gain.setValueAtTime(0.22 * amt, t + dur - 0.04); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const gate = this.gain(1);
+    gate.connect(out);
+    const n = this.src(this.white), crush = this.shaper(this.crushCurve());
+    const bp = this.filter('bandpass', 2000, 1.4), ng = this.gain(1.4);
+    n.connect(this.gain(1.6)).connect(crush).connect(bp).connect(ng).connect(gate);
+    const sq = ac.createOscillator(); sq.type = 'square';
+    const sqg = this.gain(0.07);
+    sq.connect(this.filter('lowpass', 4000, 0.7)).connect(sqg).connect(gate);
+    const buzz = ac.createOscillator(); buzz.type = 'sawtooth'; buzz.frequency.value = 60 * (1 + Math.floor(Math.random() * 3));
+    buzz.connect(this.filter('lowpass', 1200, 0.8)).connect(this.gain(0.1)).connect(gate);
+    for (let tk = t; tk < t + dur; tk += R(0.012, 0.035)) {
+      bp.frequency.setValueAtTime(R(700, 6000), tk);
+      sq.frequency.setValueAtTime([220, 330, 440, 880, 1320, 1760, 2640][Math.floor(Math.random() * 7)] * R(0.98, 1.02), tk);
+      gate.gain.setTargetAtTime(Math.random() < 0.72 ? 1 : 0.06, tk, 0.002);
+      sqg.gain.setTargetAtTime(Math.random() < 0.5 ? 0.07 : 0, tk, 0.002);
+    }
+    n.start(t, Math.random() * 3); n.stop(t + dur + 0.05);
+    sq.start(t); sq.stop(t + dur + 0.05); buzz.start(t); buzz.stop(t + dur + 0.05);
+    for (let k = 0; k < 4; k++) this.grain(out, t + Math.random() * dur, 'tick', R(0.8, 1.4), 0.5);
+  }
+
+  // A CRT switched on: the power switch, the degauss coil's loud 60 Hz thunk and buzz dying away over a second with
+  // the shadow mask rattling, the high voltage coming up as a crackle of static, and the flyback's whine settling in.
+  sfx_crtOn({ pos }, t) {
+    const ac = this.ctx;
+    const o = this.gain(0.8);
+    o.connect(this.out(pos, 2));
+    this.burst(o, t, { f: 1600, q: 1.5, peak: 0.35, a: 0.0008, d: 0.03 });
+    this.tone(o, t, 140, 60, 0.25, 0.002, 0.07);
+    const t1 = t + 0.06;
+    const hum = ac.createOscillator(); hum.type = 'sawtooth'; hum.frequency.value = 60;
+    const hg = this.gain(0);
+    hum.connect(this.filter('lowpass', 700, 1)).connect(hg).connect(o);
+    this.env(hg, t1, 0.008, 0.32, 1.1);
+    const h2 = ac.createOscillator(); h2.frequency.value = 120;
+    const h2g = this.gain(0); h2.connect(h2g).connect(o); this.env(h2g, t1, 0.008, 0.16, 0.9);
+    const rat = this.src(this.white), ratG = this.gain(0), ratAm = this.gain(0.5);
+    const am = ac.createOscillator(); am.type = 'square'; am.frequency.value = 120;
+    am.connect(this.gain(0.5)).connect(ratAm.gain);
+    rat.connect(this.filter('bandpass', 2300, 3)).connect(ratAm).connect(ratG).connect(o);
+    this.env(ratG, t1, 0.01, 0.12, 0.75);
+    [hum, h2, am].forEach((n) => { n.start(t1); n.stop(t1 + 1.3); });
+    rat.start(t1, Math.random() * 3); rat.stop(t1 + 1.0);
+    this.thud(o, t1, 55, 0.45);
+    for (let k = 0; k < 12; k++) this.grain(o, t1 + 0.1 + Math.pow(Math.random(), 1.4) * 0.9, Math.random() < 0.7 ? 'tick' : 'crackle', 0.8 + Math.random() * 0.6, 0.35);
+    this.burst(o, t1 + 0.1, { type: 'highpass', f: 5000, q: 0.5, peak: 0.03, a: 0.15, d: 0.8 });
+    const wh = ac.createOscillator(); wh.frequency.value = 15734;
+    const wg = this.gain(0); wh.connect(wg).connect(o);
+    wg.gain.setValueAtTime(0.0001, t1 + 0.1); wg.gain.exponentialRampToValueAtTime(0.012, t1 + 0.5);
+    wg.gain.exponentialRampToValueAtTime(0.0001, t1 + 2.4);
+    wh.start(t1 + 0.1); wh.stop(t1 + 2.5);
+  }
+
+  // The switch to the camera's picture: a relay clacks over and the line comes up as a burst of static.
+  sfx_feedCut({ pos }, t) {
+    const o = this.gain(1.4);
+    o.connect(this.out(pos, 2));
+    const R = (a, b) => a + Math.random() * (b - a);
+    this.burst(o, t, { f: 3400, q: 2, peak: 0.3, a: 0.0005, d: 0.006 });
+    this.burst(o, t + 0.003, { f: 1500, q: 2.5, peak: 0.25, a: 0.0005, d: 0.012 });
+    this.tone(o, t + 0.003, 900, 380, 0.08, 0.001, 0.02);
+    const ts = t + 0.012, dur = 0.24;
+    const n = this.src(this.white), g = this.gain(0), chop = this.gain(1);
+    n.connect(this.filter('bandpass', 2600, 0.5)).connect(chop).connect(g).connect(o);
+    g.gain.setValueAtTime(0.0001, ts); g.gain.exponentialRampToValueAtTime(0.22, ts + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.06, ts + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, ts + dur);
+    for (let tk = ts; tk < ts + dur; tk += R(0.01, 0.03)) chop.gain.setTargetAtTime(Math.random() < 0.75 ? 1 : 0.15, tk, 0.002);
+    n.start(ts, Math.random() * 3); n.stop(ts + dur + 0.03);
+    this.tone(o, ts, 80, 40, 0.12, 0.004, 0.12);
+    for (let k = 0; k < 5; k++) this.grain(o, ts + Math.random() * dur * 0.8, 'tick', R(0.8, 1.3), 0.4);
+  }
+
+  // The Tor blown apart. A supersonic crack, a huge low boom, then a long rolling roar (~4 s) that lumbers about
+  // and echoes off the island, and stones and gravel coming down all through it.
+  //  - opt.pos: in the world, with a long reach; it arrives at the speed of sound and the air dulls it far away.
+  //  - opt.feed: heard through the hidden camera's microphone instead (not positional): band-limited, overdriven,
+  //    crackling, its auto-gain ducking after the blast and creeping back. It goes straight out (feedOut), so it is
+  //    not processed twice when setFeed() is on.
+  sfx_explosion({ pos, feed = false }, t) {
+    const ac = this.ctx;
+    const R = (a, b) => a + Math.random() * (b - a);
+    let o;
+    if (feed) {
+      o = this.gain(1);
+      const drive = this.gain(2.6), sh = this.shaper(this.driveCurve());
+      const agc = this.gain(0.5);
+      o.connect(this.filter('highpass', 260, 0.8)).connect(this.filter('highpass', 220, 0.6)).connect(drive).connect(sh)
+        .connect(this.filter('lowpass', 3400, 0.9)).connect(this.filter('lowpass', 4000, 0.6)).connect(agc).connect(this.feedOut);
+      agc.gain.setValueAtTime(0.5, t + 0.05);
+      agc.gain.linearRampToValueAtTime(0.3, t + 0.35);
+      agc.gain.linearRampToValueAtTime(0.5, t + 3.5);
+      // The mic and the line overloading: crackles and pops, thickest just after the blast.
+      for (let k = 0; k < 34; k++) {
+        const tk = t + Math.pow(Math.random(), 2.2) * 3;
+        this.grain(agc, tk, Math.random() < 0.6 ? 'crackle' : 'tick', R(0.6, 1.2), R(0.25, 0.7));
+      }
+    } else if (pos) {
+      const d = pos.distanceTo(this.listenerPos);
+      t += d / 343;
+      const p = this.panner(pos, 30, 0.7, 3000);
+      const air = this.filter('lowpass', Math.max(700, 20000 / (1 + d / 60)), 0.5);
+      air.connect(this.gain(0.6)).connect(p).connect(this.route);
+      o = air;
+    } else { o = this.gain(0.6); o.connect(this.route); }
+    // The crack: a sharp N-wave, its tail end a little later.
+    this.burst(o, t, { type: 'highpass', f: 1200, q: 0.7, peak: 0.9, a: 0.0004, d: 0.035 });
+    this.burst(o, t + 0.011, { type: 'highpass', f: 900, q: 0.7, peak: 0.5, a: 0.0004, d: 0.05 });
+    this.burst(o, t, { f: 2400, q: 0.6, peak: 0.6, a: 0.0006, d: 0.12 });
+    // The boom.
+    const tb = t + 0.008;
+    this.tone(o, tb, 96, 26, 0.9, 0.006, 1.7);
+    this.tone(o, tb, 52, 21, 0.55, 0.01, 2.2, 'triangle');
+    this.burst(o, tb, { buf: this.brown, type: 'lowpass', f: 180, q: 0.6, peak: 1.0, a: 0.01, d: 2.6 });
+    this.burst(o, tb, { buf: this.pink, type: 'lowpass', f: 1400, q: 0.5, peak: 0.7, a: 0.006, d: 0.5 });
+    // The roar: noise darkening over 4 s, lumbering with the fire's smoothed-noise modulation; a low tail under it.
+    const dur = 4.4;
+    const roar = this.src(this.pink), lp = this.filter('lowpass', 2600, 0.6), rg = this.gain(0), lum = this.gain(1);
+    roar.connect(lp).connect(lum).connect(rg).connect(o);
+    lp.frequency.setValueAtTime(2600, tb); lp.frequency.exponentialRampToValueAtTime(240, tb + dur);
+    rg.gain.setValueAtTime(0.0001, tb); rg.gain.exponentialRampToValueAtTime(0.6, tb + 0.12);
+    rg.gain.exponentialRampToValueAtTime(0.25, tb + 1.4); rg.gain.exponentialRampToValueAtTime(0.0001, tb + dur);
+    const m = ac.createBufferSource(); m.buffer = this.fireMod; m.loop = true; m.playbackRate.value = 1.6;
+    m.connect(this.gain(0.45)).connect(lum.gain);
+    const tail = this.src(this.brown), tg = this.gain(0);
+    tail.connect(this.filter('lowpass', 110, 0.6)).connect(tg).connect(o);
+    tg.gain.setValueAtTime(0.0001, tb); tg.gain.exponentialRampToValueAtTime(0.7, tb + 0.4);
+    tg.gain.exponentialRampToValueAtTime(0.0001, tb + dur + 0.8);
+    roar.start(tb, Math.random() * 3); roar.stop(tb + dur + 0.1);
+    m.start(tb, Math.random() * 60); m.stop(tb + dur + 0.1);
+    tail.start(tb, Math.random() * 3); tail.stop(tb + dur + 0.9);
+    // Echoes off the island's cliffs and the sea of cloud.
+    for (const [dt, a, f] of [[0.38, 0.4, 48], [0.86, 0.3, 42], [1.5, 0.22, 38], [2.3, 0.14, 34]]) {
+      this.thud(o, tb + dt * R(0.9, 1.1), f, a);
+      this.burst(o, tb + dt, { buf: this.pink, type: 'lowpass', f: 600, q: 0.5, peak: a * 0.5, a: 0.03, d: 0.6 });
+    }
+    // Stones landing all round: heavy thuds, and gravel raining down after them.
+    for (let k = 0; k < 14; k++) {
+      const tk = tb + R(0.9, 4.2);
+      this.thud(o, tk, R(55, 150), R(0.08, 0.3));
+      this.burst(o, tk, { f: R(700, 1600), q: 1, peak: R(0.05, 0.14), a: 0.001, d: 0.06 });
+    }
+    this.sfx_debris({ out: o, dur: 3.2, amt: 0.9 }, tb + 1.1);
+  }
+
+  // A big stone landing (size: its radius in metres, ~1): a deep thump through the ground, the crunch of the impact,
+  // and a scatter of pebbles kicked out.
+  sfx_rockLand({ pos, size = 1 }, t) {
+    const o = this.gain(0.8);
+    o.connect(this.out(pos, 6, 1));
+    const R = (a, b) => a + Math.random() * (b - a);
+    const s = clamp(size, 0.4, 2), k = Math.sqrt(s);
+    this.tone(o, t, 78 / k, 36 / k, 0.75 * k, 0.004, 0.45);
+    this.burst(o, t, { buf: this.brown, type: 'lowpass', f: 300, q: 0.6, peak: 0.85 * k, a: 0.003, d: 0.35 });
+    this.burst(o, t, { buf: this.brown, type: 'lowpass', f: 90, q: 0.6, peak: 0.5 * k, a: 0.01, d: 0.8 });
+    this.burst(o, t, { f: R(800, 1100) / k, q: 0.9, peak: 0.35, a: 0.001, d: 0.09 });
+    this.burst(o, t + 0.004, { type: 'highpass', f: 2400, q: 0.7, peak: 0.1, a: 0.0006, d: 0.04 });
+    for (let n = 3 + Math.floor(Math.random() * 6); n > 0; n--) {
+      this.grain(o, t + 0.04 + Math.pow(Math.random(), 1.5) * 0.6, Math.random() < 0.5 ? 'crackle' : 'tick', R(0.5, 1), R(0.2, 0.5));
+    }
+  }
+
+  // Gravel pattering down for ~dur s: a shower of little stone ticks thinning out, the odd pebble's clack, and a hiss
+  // of sand settling. opt.out: a node to play into instead of pos/the bus (the explosion's own chain).
+  sfx_debris({ pos, out = null, dur = 2, amt = 1 }, t) {
+    const o = out ?? this.out(pos, 5);
+    const R = (a, b) => a + Math.random() * (b - a);
+    const v = this.gain(0.6 * amt);
+    v.connect(this.filter('highpass', 300, 0.6)).connect(o);
+    let tk = t;
+    while (tk < t + dur) {
+      const u = (tk - t) / dur;
+      tk += -Math.log(1 - Math.random()) / (45 * Math.exp(-u * 2.6) + 3);
+      const r = Math.random();
+      if (r < 0.62) this.grain(v, tk, 'tick', R(0.5, 1.2), R(0.3, 0.8) * (1 - u * 0.6));
+      else if (r < 0.92) this.grain(v, tk, 'crackle', R(0.45, 0.9), R(0.3, 0.7) * (1 - u * 0.6));
+      else this.tone(v, tk, R(1500, 3200), R(1200, 2600), 0.08 * (1 - u * 0.5), 0.0008, R(0.015, 0.03));
+    }
+    const sand = this.src(this.white), sg = this.gain(0);
+    sand.connect(this.filter('bandpass', 3800, 0.6)).connect(sg).connect(v);
+    sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime(0.12, t + 0.15);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    sand.start(t, Math.random() * 3); sand.stop(t + dur + 0.05);
+  }
+
   loop_scrape({ pos }) {
     const o = this.out(pos, 3);
     const s = this.src(this.pink); const bp = this.filter('bandpass', 320, 1.8); const g = this.gain(0);
@@ -1021,12 +1421,18 @@ export class AudioEngine {
       L.forwardX.setValueAtTime(f.x, now); L.forwardY.setValueAtTime(f.y, now); L.forwardZ.setValueAtTime(f.z, now);
       L.upX.setValueAtTime(u.x, now); L.upY.setValueAtTime(u.y, now); L.upZ.setValueAtTime(u.z, now);
     } else { L.setPosition(p.x, p.y, p.z); L.setOrientation(f.x, f.y, f.z, u.x, u.y, u.z); }
+    this.feedIdle();
 
     const under = env.zone === 'tunnel';
     // Indoors: outdoor ambience drops and loses its highs, as if through walls and glass.
     const indoor = !!env.indoor;
-    this.outdoor.gain.setTargetAtTime(indoor ? 0.32 : 1, now, 0.35);
-    this.outdoorLP.frequency.setTargetAtTime(indoor ? 900 : 20000, now, 0.35);
+    // Sealed (env.sealed, 0..1 (or a flag): how far into a room deep under the ground, the Tower's bunker): the outside
+    // barely gets in at all. Graded, so going down from its open door the outside closes in step by step (evenly in
+    // loudness and in the cut-off's pitch).
+    const sealed = clamp(+env.sealed || 0, 0, 1);
+    const og = indoor ? 0.32 : 1, olp = indoor ? 900 : 20000;
+    this.outdoor.gain.setTargetAtTime(og * Math.pow(0.05 / og, sealed), now, 0.35);
+    this.outdoorLP.frequency.setTargetAtTime(olp * Math.pow(320 / olp, sealed), now, 0.35);
     const muted = env.muted ?? 0;
     this.altDeg = env.altDeg ?? 0;
     const surf = under ? 0 : 1 - muted;
@@ -1069,7 +1475,7 @@ export class AudioEngine {
     // Cave bed + drips + reverb amount. The lounge under the Tower (env.room) is a dry, quiet room: no drips.
     const room = under && !!env.room;
     this.caveGain.gain.setTargetAtTime(under ? (room ? 0.04 : 0.22) : 0, now, 0.5);
-    this.reverbSend.gain.setTargetAtTime(room ? 0.14 : under ? 0.75 : env.inCar ? 0.2 : indoor ? 0.16 : 0.1, now, 0.5);
+    this.reverbSend.gain.setTargetAtTime(room ? 0.14 : under ? 0.75 : env.inCar ? 0.2 : (indoor ? 0.16 : 0.1) * (1 - sealed) + 0.2 * sealed, now, 0.5);
     if (under && !room) {
       this.dripTimer -= dt;
       if (this.dripTimer <= 0) {
@@ -1082,8 +1488,8 @@ export class AudioEngine {
     for (const e of this.emitters) {
       if (!e.node) continue;
       const d = e.pos.distanceTo(p);
-      const on = e.zone === env.zone && d < (e.range ?? 140);
-      e.node.gain.setTargetAtTime(on ? e.level * (1 - muted) : 0, now, 0.4);
+      const on = !e.off && e.zone === env.zone && d < (e.range ?? 140);
+      e.node.gain.setTargetAtTime(on ? e.level * (e.mul ?? 1) * (1 - muted) : 0, now, e.off ? 0.12 : 0.4);
       if (on && e.tick) e.tick(dt);
     }
   }

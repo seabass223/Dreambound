@@ -6,7 +6,7 @@ import { PATH_TILE } from '../world/cliffPath.js';
 import { endWallGeometry } from '../world/features.js';
 
 // The lounge's secret (tools/blender/lounge_design.py secret_door; placed by props/lounge.js). The bookcase's two east
-// bays are a door: pressing the island on the globe (the one on the deck's postcard) turns you to face them as they
+// bays are a door: clicking the island on the globe (the one on the deck's postcard) turns you to face them as they
 // unlatch with a clunk and swing back on a pivot at their west back corner, rumbling, shedding dust from their seams,
 // into a short rock passage behind the wall. An old caged bulb flickers on in it, and at its end is another elevator
 // ('study'), up to a bunker hidden in the trees on the Tower stack (world/bunker.js).

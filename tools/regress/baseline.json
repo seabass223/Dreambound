@@ -3085,7 +3085,7 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     },
@@ -3121,7 +3121,7 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     }
@@ -3197,7 +3197,7 @@
     "sha": {
      "position": "d60df8a8da609f72c87cc6df888b261f",
      "index": "addbe4e5da150209fc4aff1b73c594dc",
-     "color": "79ccf371f0724f79c753c786c3c361a3",
+     "color": "2278c8a806c54c3204ce9fc233edb47c",
      "uv": "7f72519934b81ddbaa059a410677bfd8",
      "normal": "e910a8fdf075fba24b5b64bcffc72654"
     }
@@ -5578,7 +5578,7 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     },
@@ -5614,12 +5614,48 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     }
    },
    "group": [
+    {
+     "name": "tor",
+     "material": "cliff",
+     "verts": 64877,
+     "position": "c74b69f226eb742a94b7dc124a66675b"
+    },
+    {
+     "name": "tor:far",
+     "material": "far",
+     "verts": 16824,
+     "position": "ce00241283f1fdbd2c84a72bf37a04e8"
+    },
+    {
+     "name": "tor:stump",
+     "material": "cliff",
+     "verts": 48764,
+     "position": "24db9694b22a4a7b34e7c040a79e0649"
+    },
+    {
+     "name": "tor:stump:far",
+     "material": "far",
+     "verts": 7962,
+     "position": "c6903a7dc512a068e2759e63a93a5a3e"
+    },
+    {
+     "name": "tor:debris",
+     "material": "tor-debris",
+     "verts": 11023,
+     "position": "cc3904c9e8d5a6ca25968d54b5583887"
+    },
+    {
+     "name": "tor:chunks",
+     "material": "tor-debris",
+     "verts": 12333,
+     "position": "41f866841bd4e3fcecc6630cd4205a80"
+    },
     {
      "name": "bridge",
      "material": "wood",
@@ -5635,8 +5671,14 @@
     {
      "name": "rocks-props",
      "material": "cliff",
-     "verts": 109908,
-     "position": "a446b2d7687503543ba94f467330b40c"
+     "verts": 54624,
+     "position": "e052f167df00e92125f22786aabdc325"
+    },
+    {
+     "name": "rocks-props",
+     "material": "walkstone",
+     "verts": 7434,
+     "position": "39b41ad0fd3d119053d1cce0097c623c"
     },
     {
      "name": "rocks-props",
@@ -5653,8 +5695,8 @@
     {
      "name": "rocks-props",
      "material": "far",
-     "verts": 151716,
-     "position": "22842097a283c92a58ac36d2cba307a8"
+     "verts": 103866,
+     "position": "938069ecc39e7b58b6279018f20ba3c3"
     }
    ],
    "edgeR": "0dc39c668be872bdc779e16addc05fec",
@@ -6094,7 +6136,7 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     },
@@ -6130,7 +6172,7 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     }
@@ -6598,7 +6640,7 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     },
@@ -6634,7 +6676,7 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     }
@@ -6651,6 +6693,102 @@
      "material": "bunker_door",
      "verts": 252,
      "position": "7ff7c0c592cff4e35aaf760b0a334297"
+    },
+    {
+     "name": "",
+     "material": "darkMetal",
+     "verts": 552,
+     "position": "49f92912d0a5ea6d0e7389d8f2a4fb3c"
+    },
+    {
+     "name": "",
+     "material": "bunker_lamp_glass",
+     "verts": 231,
+     "position": "0e3debd9e196a172e7552975b9817d16"
+    },
+    {
+     "name": "bunker_alu",
+     "material": "bunker_alu",
+     "verts": 9580,
+     "position": "b41dbd275797130b093cb1db0d0c5c9d"
+    },
+    {
+     "name": "bunker_concrete",
+     "material": "bunker_concrete",
+     "verts": 323,
+     "position": "663637eae99535bc3ffa1756a942f498"
+    },
+    {
+     "name": "bunker_decal",
+     "material": "bunker_decal",
+     "verts": 456,
+     "position": "eeab11918a99bee1e1e93cc9b88df07a"
+    },
+    {
+     "name": "bunker_floor",
+     "material": "bunker_floor",
+     "verts": 281,
+     "position": "c3fd67a7b97a4a54dadf04712d5bdc34"
+    },
+    {
+     "name": "bunker_glow",
+     "material": "bunker_glow",
+     "verts": 664,
+     "position": "9e99788d4696ae9f3afdf6ea062b96c0"
+    },
+    {
+     "name": "bunker_glow@led",
+     "material": "bunker_led",
+     "verts": 680,
+     "position": "b1bb3edd64fc11dc082696d4dcf08772"
+    },
+    {
+     "name": "bunker_green",
+     "material": "bunker_green",
+     "verts": 8817,
+     "position": "7e3177cd59f6f5455e1e1c61732c0de3"
+    },
+    {
+     "name": "bunker_misc",
+     "material": "bunker_misc",
+     "verts": 35277,
+     "position": "ffc8ccf8142d0a7d2729d2327cf001e9"
+    },
+    {
+     "name": "bunker_orange",
+     "material": "bunker_orange",
+     "verts": 14050,
+     "position": "f6644280457ff2b0fc0ac221e779b7b3"
+    },
+    {
+     "name": "bunker_screen",
+     "material": "bunker_screen",
+     "verts": 420,
+     "position": "f1d22c2d779db61bec008d7475811869"
+    },
+    {
+     "name": "bunker_steel",
+     "material": "bunker_steel",
+     "verts": 40245,
+     "position": "a23338a9d55bcf93a50257190b2850bd"
+    },
+    {
+     "name": "bunker_wall",
+     "material": "bunker_wall",
+     "verts": 4186,
+     "position": "837670b8da70d09a4686c49d94fd6a1f"
+    },
+    {
+     "name": "bunker_terminal",
+     "material": "terminal",
+     "verts": 221,
+     "position": "6c4beeec887ead6d0f1a4c8134ebd92b"
+    },
+    {
+     "name": "bunker:keyboard",
+     "material": "MeshBasicMaterial",
+     "verts": 24,
+     "position": "20f657caab4055e10f5dfce70dda92c6"
     },
     {
      "name": "tower-props",
@@ -6679,8 +6817,8 @@
     {
      "name": "tower-props",
      "material": "darkMetal",
-     "verts": 15918,
-     "position": "370eefde187ced343143109ffa2fe2be"
+     "verts": 18609,
+     "position": "7090d47effe5feee874785078945fc0f"
     },
     {
      "name": "tower-props",
@@ -6691,14 +6829,14 @@
     {
      "name": "tower-props",
      "material": "concrete",
-     "verts": 516,
-     "position": "4c2f9539ec975c5dba76e16c70647f2a"
+     "verts": 432,
+     "position": "b786b23f441e381f0eaeeaaa6fd9aa9c"
     },
     {
      "name": "tower-props",
      "material": "far",
-     "verts": 31747,
-     "position": "2ac97e777f7644c0c342605433b16b25"
+     "verts": 34354,
+     "position": "27239b5e7807867aafe335e89e4f0f5c"
     }
    ],
    "edgeR": "808a9afba1e2a690fa2a24453436b057",
@@ -6717,14 +6855,14 @@
     "innerHole": 0
    },
    "cap": {
-    "verts": 23250,
-    "indices": 138000,
+    "verts": 23326,
+    "indices": 138042,
     "sha": {
-     "position": "d3a844d95ddfbeb55a04f517848ba8ec",
-     "index": "cdd43a9a9899a3fc63e88c54f13ac61a",
-     "color": "b4389b55a779332b85774e7ed313ca7f",
-     "uv": "ad407a5c63d7020a02aae6b70d164f0d",
-     "normal": "b7e7f9522ca178a855509a2f0e1d22cd"
+     "position": "a97ed3b50cc7bf95aaa8abfcbe1b3de9",
+     "index": "ba90b8d9062da66a6c86f479937b242c",
+     "color": "a25077d02049c99bffd34782ef6d24e9",
+     "uv": "70bfb9554ec00eec30295be0e8c0965a",
+     "normal": "7ff160eea0d03b0b088cffaa4a2566f5"
     }
    },
    "cliff": {
@@ -7064,7 +7202,7 @@
    "colliders": {
     "pieces": [
      {
-      "tris": 46000,
+      "tris": 46014,
       "min": [
        211.3981475830078,
        0.1596987098455429,
@@ -7094,15 +7232,15 @@
    },
    "relief": {
     "n": 4068,
-    "mean": 6.6692101975938884,
-    "sd": 10.281917210343924,
+    "mean": 6.664484323972642,
+    "sd": 10.28402167298646,
     "min": -1.8255562385404005,
     "p5": -0.926322217712908,
-    "p50": 0.4063387340679583,
+    "p50": 0.4063308233891689,
     "p95": 30.304269071220773,
     "max": 38.000239540028076,
     "belowTopMinus2p5": 0,
-    "grid": "e9037e532ecb35df1a20577d5464c054"
+    "grid": "f6af9538f5ed05c7b70511859738fce0"
    },
    "rimSlopeMaxDeg": 17.823218461072567,
    "materials": {
@@ -7138,7 +7276,7 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     },
@@ -7174,7 +7312,7 @@
       ]
      },
      "vs": "cdcda5070bb185ae69d583e073bc920d",
-     "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+     "fs": "19477686e544f450faee78065697cdfd",
      "discard": false,
      "fragDepth": false
     }
@@ -7194,9 +7332,27 @@
     },
     {
      "name": "mountain-props",
+     "material": "stone",
+     "verts": 449,
+     "position": "bac68baf655f9683afeeebc9fe1ce986"
+    },
+    {
+     "name": "mountain-props",
+     "material": "cap",
+     "verts": 260,
+     "position": "cce3b358b60c14f8f14adb476b89085e"
+    },
+    {
+     "name": "mountain-props",
+     "material": "cliff",
+     "verts": 1919,
+     "position": "d1adb6687e81f4baf2564989a8d70908"
+    },
+    {
+     "name": "mountain-props",
      "material": "far",
-     "verts": 84797,
-     "position": "b36afbdab5e656e458af3a85aecd40c9"
+     "verts": 87425,
+     "position": "956d824d1f1cfc1b3cb943dacfc7d452"
     }
    ],
    "edgeR": "fdbe7b5b5bdd65bde192ff026c9a5797",
@@ -7236,7 +7392,7 @@
     ]
    },
    "vs": "cdcda5070bb185ae69d583e073bc920d",
-   "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+   "fs": "19477686e544f450faee78065697cdfd",
    "discard": false,
    "fragDepth": false
   },
@@ -7272,7 +7428,7 @@
     ]
    },
    "vs": "cdcda5070bb185ae69d583e073bc920d",
-   "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+   "fs": "19477686e544f450faee78065697cdfd",
    "discard": false,
    "fragDepth": false
   },
@@ -7308,7 +7464,7 @@
     ]
    },
    "vs": "cdcda5070bb185ae69d583e073bc920d",
-   "fs": "cd6837cf702357b6d0c2e3dac0edaa78",
+   "fs": "19477686e544f450faee78065697cdfd",
    "discard": false,
    "fragDepth": false
   }
@@ -7378,7 +7534,7 @@
    {
     "name": "mountain",
     "zone": "surface",
-    "tris": 53840,
+    "tris": 53830,
     "min": [
      207.06883239746094,
      -46.335655212402344,
@@ -7470,14 +7626,14 @@
     "zone": "surface",
     "tris": 72,
     "min": [
-     111.7373275756836,
+     111.22049713134766,
      -0.5355355739593506,
-     -344.8324279785156
+     -345.0205383300781
     ],
     "max": [
-     123.30809020996094,
+     122.791259765625,
      10.364464282989502,
-     -333.015625
+     -333.2037353515625
     ]
    },
    {
@@ -7523,6 +7679,21 @@
      251.34046936035156,
      9.649999618530273,
      216.6912841796875
+    ]
+   },
+   {
+    "name": "mine",
+    "zone": "surface",
+    "tris": 4200,
+    "min": [
+     259.57427978515625,
+     -1.979952096939087,
+     272.6114501953125
+    ],
+    "max": [
+     277.8093566894531,
+     12.196794509887695,
+     295.5090637207031
     ]
    },
    {
@@ -8293,46 +8464,46 @@
     "zone": "surface"
    },
    {
-    "type": "circle",
+    "type": "obb",
     "x": -302,
     "z": 161,
-    "r": 1.058,
+    "r": null,
     "y0": 4.775117538017469,
     "y1": 7.6151175380174685,
     "zone": "surface"
    },
    {
-    "type": "circle",
+    "type": "obb",
     "x": -286,
     "z": 187,
-    "r": 0.92,
+    "r": null,
     "y0": 5.412135198473322,
     "y1": 8.012135198473322,
     "zone": "surface"
    },
    {
-    "type": "circle",
+    "type": "obb",
     "x": -322,
     "z": 169,
-    "r": 1.1500000000000001,
+    "r": null,
     "y0": 4.394453673307964,
     "y1": 7.394453673307964,
     "zone": "surface"
    },
    {
-    "type": "circle",
+    "type": "obb",
     "x": -316.24435659678034,
     "z": 188.74522481266033,
-    "r": 0.874,
+    "r": null,
     "y0": 5.143284830533645,
     "y1": 7.6632848305336445,
     "zone": "surface"
    },
    {
-    "type": "circle",
+    "type": "obb",
     "x": -276,
     "z": 153,
-    "r": 1.0120000000000002,
+    "r": null,
     "y0": 4.6064432122166465,
     "y1": 7.366443212216646,
     "zone": "surface"
@@ -8375,8 +8546,8 @@
    },
    {
     "type": "obb",
-    "x": 118.58925821966939,
-    "z": -338.775413519252,
+    "x": 118.07242727823714,
+    "z": -338.96352459808116,
     "r": null,
     "y0": 3.2644645089377304,
     "y1": 6.76446450893773,
@@ -8588,6 +8759,123 @@
     "y0": -2550.1789001703264,
     "y1": -2549.478900170326,
     "zone": "tunnel"
+   },
+   {
+    "type": "obb",
+    "x": 119.0430924837922,
+    "z": -336.4552712650696,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 5.06446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 120.29193365846074,
+    "z": -335.6761562122373,
+    "r": null,
+    "y0": 5.06446450893773,
+    "y1": 5.56446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 118.14003753669739,
+    "z": -336.45938234779203,
+    "r": null,
+    "y0": 5.114464508937731,
+    "y1": 5.614464508937731,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 119.30815812748718,
+    "z": -337.1835331357948,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 4.81446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 120.92377177338345,
+    "z": -340.1604932949206,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 6.06446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 119.80640137171086,
+    "z": -340.59910841822716,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 6.06446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 120.95168743324736,
+    "z": -336.3192929462349,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 6.06446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 122.1247992654665,
+    "z": -339.48391513994784,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 5.864464508937731,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 121.70285301169474,
+    "z": -339.84500561137213,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 4.51446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 122.02718546936615,
+    "z": -338.74791474576506,
+    "r": null,
+    "y0": 5.06446450893773,
+    "y1": 5.66446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 117.98319145152458,
+    "z": -337.6657815672398,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 4.76446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 121.90578558718097,
+    "z": -338.4728474083251,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 6.76446450893773,
+    "zone": "surface"
+   },
+   {
+    "type": "obb",
+    "x": 121.32435132721854,
+    "z": -336.875369908181,
+    "r": null,
+    "y0": 3.7644645089377304,
+    "y1": 6.76446450893773,
+    "zone": "surface"
    }
   ],
   "ladders": [
@@ -9934,13 +10222,13 @@
     "range": 1.8710518925295219
    },
    "buried": {
-    "vertices": 1611,
-    "minMargin": 2.7932181817738737,
+    "vertices": 953,
+    "minMargin": 2.8023201311148114,
     "under0p3": 0,
     "at": [
-     -334.3064270019531,
-     4.6654863357543945,
-     205.40316772460938
+     -334.31036376953125,
+     4.744997978210449,
+     205.4201202392578
     ]
    }
   },
@@ -10448,7 +10736,7 @@
    ]
   ],
   "steppingStones": 237,
-  "bedStones": 23,
+  "bedStones": 16,
   "bench": [
    6.164255593337316,
    5.661906022897568,
@@ -10542,7 +10830,7 @@
   }
  },
  "mountain": {
-  "meadow": 6222,
+  "meadow": 6139,
   "trail": {
    "n": 442,
    "total": 220.27379957845173,
@@ -10745,15 +11033,15 @@
      "tries": 3,
      "n": 5200,
      "xz": "660236be22b8b96a9887c1a780f504e2",
-     "y": "aea96d14c5c893bff2ffc0663208e21f"
+     "y": "9db3f8c7d1a2abd8a30ad88dc9709b0b"
     },
     {
      "count": 90,
      "margin": 1.5,
      "tries": null,
      "n": 90,
-     "xz": "217e2dd0a0968cb4b54f173f32429bc8",
-     "y": "d3fb416a4555e83d10cdccadddfd7ea7"
+     "xz": "13dd1cf85aba2d452851a54c18480679",
+     "y": "159a6d229bc7bcb2e0f5ca6a8dbaca80"
     }
    ]
   },
@@ -10807,22 +11095,22 @@
      "n": 3200,
      "xz": "060518e57e40c3cd345e0a1ed537a2b1",
      "y": "68f1042577190e83a5d3bf5e37c22bbf",
-     "s": "bf5dbfbffcbcb0ab6fb2fd349e759eb4",
+     "s": "8f1eb16d82a8fd1537f33dd6b4ba468c",
      "sp": "1af3063559beb30f1112e7ec1e8f494f"
     },
     "pebble": {
-     "n": 170,
-     "xz": "2a89500744eef1578623d46d06d6b37d",
-     "y": "fa71b38b8f43d2f21c5e53cdbb4a033a",
-     "s": "d33c3196beb891d99c69ac78f3ea896a",
-     "sp": "a868b63e07517bba830331a90f62bf0e"
+     "n": 168,
+     "xz": "050154006137759fa83efce03d121a28",
+     "y": "abf0bc880b2b08507fb6f7848f4d5f14",
+     "s": "ce123b42548ef26d508d61f3c67c8c4c",
+     "sp": "a121128402813ac6b116a5f4198b391a"
     },
     "stone": {
-     "n": 260,
-     "xz": "9ad0fdde10a535f272d6aa3ca00adf45",
-     "y": "3186285855e7bbfb3d2931e909f77546",
-     "s": "d2cb3bb14857e0647d4a50a2164d4675",
-     "sp": "1492ec41bc597e2e0b4486a13f3b1714"
+     "n": 253,
+     "xz": "4e6ca988740d95262f5fa8de43594301",
+     "y": "046aec08b5d5d0b8f9e74dfc3daf1c66",
+     "s": "fff01ec4c3085c908fe0f5c41254f498",
+     "sp": "06425129fdbb2e2cf2301403fbfa898c"
     },
     "flower": {
      "n": 681,
@@ -10880,31 +11168,31 @@
    },
    "mountain": {
     "tree": {
-     "n": 59,
-     "xz": "8102236043e3a126eaa409d38af73e15",
-     "y": "bde59395506d565f5d7815770dd4f748",
-     "s": "0929062b93adfed78c705b4f18899480",
-     "sp": "d7ed7e7b46e719f4270eeaf8f69fd431"
+     "n": 58,
+     "xz": "8b648e2c1f2ca2a36d8c961cb2c4a500",
+     "y": "c0158fbc6e1da75a1954bb628630230f",
+     "s": "42440b3d02d10e37d322e82f04057813",
+     "sp": "c71870cb867a43a6d240cf32d34c73f1"
     },
     "shrub": {
-     "n": 45,
-     "xz": "ff710436b54c1dbf14ddc5b5fc570f46",
-     "y": "a26fea213a3f100e0f53f25f76bdc0b6",
-     "s": "57bbd04f35e18a50bce6d138009a2d0b",
-     "sp": "a91c15c3375059db926e300d6bea4aed"
+     "n": 43,
+     "xz": "e1ebc1534a931a0dcb34297a5e509522",
+     "y": "9bd239664c5fc9b8c43dc8fff79e7d8f",
+     "s": "7646cfbc41b077b3975d50214d16673d",
+     "sp": "352c12389b521d117e7e21a5d9e98710"
     },
     "meadow": {
-     "n": 6222,
-     "xz": "0d05b3385e6a0ae7e359505d361869db",
-     "y": "128e1685b037b7917559fa2927786c25",
-     "s": "1404d25c72ad285afdc343cfeb30f34d",
-     "sp": "1332004b15057d36c80a5bd899f9daf0"
+     "n": 6139,
+     "xz": "ffc0c878e6192d6fddb0353a3c2dd9f5",
+     "y": "cd8334f91c4adc8ba350a035686a6e99",
+     "s": "1fcdf59a52309b677cb03ed0af387519",
+     "sp": "1fcd5eebce50133b7bfe06b394676329"
     },
     "pebble": {
      "n": 90,
-     "xz": "217e2dd0a0968cb4b54f173f32429bc8",
-     "y": "852d4d84e5893e5ef91f27b19d15707c",
-     "s": "7a940f25af11f4eb72fc5e982875178a",
+     "xz": "13dd1cf85aba2d452851a54c18480679",
+     "y": "b5aca05df774fe33ff31a1ca32511621",
+     "s": "ef3768bb92cc51b1fc892cd74912cf3f",
      "sp": "20b8c975fdf9035684089c897279b201"
     },
     "stone": {
@@ -11044,18 +11332,38 @@
    ],
    "zone": "tunnel",
    "spots": null
+  },
+  {
+   "name": "terminal",
+   "pos": [
+    119.02257132738079,
+    4.784464561389818,
+    -336.3988898512082
+   ],
+   "zone": "surface",
+   "spots": null
+  },
+  {
+   "name": "hvac",
+   "pos": [
+    119.92362174118537,
+    6.31446450893773,
+    -338.2897449157296
+   ],
+   "zone": "surface",
+   "spots": null
   }
  ],
  "lod": {
-  "entries": 134,
+  "entries": 146,
   "instanced": 19,
   "cliffRegistered": false,
-  "names": "7c3ef24a45ccca13a724c65df61da26d"
+  "names": "16dc7f7c69f98f3b8714489ddd48bca8"
  },
  "coverage": {
   "couplings": 77,
   "missing": [],
   "unrecordable": []
  },
- "tree": "955f1ba574f5e884"
+ "tree": "6cf3cc29401f24c2"
 }

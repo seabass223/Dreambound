@@ -18,6 +18,7 @@
 # The map, the card and its dots are painted only when their PNGs are missing (or REPAINT is set), so hand edits to
 # public/models/lounge_map.png, lounge_card.png and lounge_card_dots.png survive a rebuild.
 
+import contextlib
 from mathutils import noise as mnoise
 
 REPAINT = os.environ.get('LOUNGE_REPAINT') == '1'
@@ -42,6 +43,7 @@ HOLE_HW, HOLE_H = 0.68, 2.3                # elevator.js HOLE
 CALL = (1.12, 1.15)                        # the call button (plate coordinates)
 DX, DZ = 0.25, 0.35                        # desk centre
 DW, DD, DH = 1.76, 1.06, 0.78              # desk top size and the height of its surface
+DESK_DRAWER_TRAVEL = 0.3                  # how far the desk's opening drawer slides out (the chair side's left one)
 MAP_W, MAP_H = 0.92, 0.64
 MAPC = Vector((DX - 0.03, DH, DZ - 0.06))  # map centre
 # Desk lamp base: in the desk's roomiest corner (east of the map, toward the elevator), the red card in its pool.
@@ -648,14 +650,30 @@ def desk():
             turned_leg(DX + sx * lx, DZ + sz * lz, y_ap - 0.0)
     widths = [0.44, 0.5, 0.44]
     for side in (-1, 1):
-        zf = DZ + side * (DD / 2 - 0.05)
+        zf0 = DZ + side * (DD / 2 - 0.05)
         x = DX - 0.74 + 0.025
         for k, w in enumerate(widths):
             cx = x + w / 2
             cy = y_ap - ap_h / 2
-            BX('wood', w, 0.112, 0.016, cx, cy, zf + side * 0.008, tint=RICH, bevel=0.004, hide=(0, 0, -side))
-            BX('wood', w - 0.05, 0.07, 0.006, cx, cy, zf + side * 0.018, tint=WHITE, bevel=0.004, hide=(0, 0, -side))
-            bail_pull((cx, cy - 0.004, zf + side * 0.021), (0, 0, side), (-side, 0, 0))
+            # The chair side's left drawer opens (DESK_DRAWER; slid by src/props/lounge.js): its front, pull and a box
+            # behind them are in layer 'drawer', built (and baked) pulled out by DESK_DRAWER_TRAVEL so its inside is lit;
+            # the game starts it shut. A note lies in it (DESK_NOTE).
+            opens = side == 1 and k == 0
+            zf = zf0 + (DESK_DRAWER_TRAVEL if opens else 0.0)
+            with (layer('drawer') if opens else contextlib.nullcontext()):
+                BX('wood', w, 0.112, 0.016, cx, cy, zf + side * 0.008, tint=RICH, bevel=0.004, hide=(0, 0, -side))
+                BX('wood', w - 0.05, 0.07, 0.006, cx, cy, zf + side * 0.018, tint=WHITE, bevel=0.004, hide=(0, 0, -side))
+                bail_pull((cx, cy - 0.004, zf + side * 0.021), (0, 0, side), (-side, 0, 0))
+                if opens:
+                    iw, ih, idp, t_ = w - 0.04, 0.092, 0.38, 0.012
+                    yb = cy - 0.05
+                    BX('wood', iw, 0.008, idp, cx, yb + 0.004, zf - idp / 2, tint=WHITE)                              # bottom
+                    for sx in (-1, 1):
+                        BX('wood', t_, ih, idp, cx + sx * (iw / 2 - t_ / 2), yb + ih / 2, zf - idp / 2, tint=WHITE)   # sides
+                    BX('wood', iw, ih, t_, cx, yb + ih / 2, zf - idp + t_ / 2, tint=WHITE)                            # back
+            if opens:
+                empty('DESK_DRAWER', (cx, cy, zf), travel=DESK_DRAWER_TRAVEL, w=w)
+                empty('DESK_NOTE', (cx + 0.01, yb + 0.0092, zf - 0.19), ry=0.12, w=0.2, h=0.14)
             if k == 1:
                 BX('brass', 0.02, 0.03, 0.003, cx, cy + 0.03, zf + side * 0.0225, tint=BRASS)
                 BX('plain', 0.004, 0.011, 0.001, cx, cy + 0.028, zf + side * 0.0245, tint=INKGLASS)

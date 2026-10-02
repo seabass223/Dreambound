@@ -41,6 +41,12 @@ export function installBench({ THREE, ctx, player, camera, renderer, clock, capt
       ['cave: station', (() => { const p = elevatorEnd('mountain', 'bottom', 6); return p; })()],
     ];
     if (ctx.tunnels.lounge) list.push(['lounge: desk', elevatorEnd('tower', 'lounge', 2.2)]);
+    // The Tower's bunker room (props/bunkerRoom.js): beside the terminal's chair, and in front of the lift's doors.
+    if (ctx.bunker?.spawn) {
+      list.push(['tower: bunker room', ctx.bunker.spawn.pos.clone().setY(ctx.bunker.spawn.pos.y + 0.05)]);
+      const room = ctx.bunker.room?.group;
+      if (room) { room.updateWorldMatrix(true, false); list.push(['tower: bunker lift', room.localToWorld(V(0, 0.05, 2.9))]); }
+    }
     if (ctx.bridgeSpan) {
       const b = ctx.bridgeSpan;
       list.push(['bridge: middle', V(b.a.x + b.flat.x * b.L * 0.5, 0, b.a.z + b.flat.z * b.L * 0.5)]);
@@ -133,7 +139,7 @@ export function installBench({ THREE, ctx, player, camera, renderer, clock, capt
   // size, turning through `dirs` headings at each, with the monitor labelling everything by area, and returns
   // hitchReport(). Covers day and night, the eyepiece (and the constellation), the roof station with its iris open,
   // the tower catwalk, every elevator ride (incl. the lounge stop) and, with ending: true, the ending itself.
-  window.hitchTour = async ({ dirs = 4, frames = 3, ending = false, log = true } = {}) => {
+  window.hitchTour = async ({ dirs = 4, frames = 3, ending = false, rocksExe = true, log = true } = {}) => {
     const dt = 1 / 60;
     capture.begin({ width: 0 });
     const S = ctx.stacks, obs = ctx.observatory;
@@ -244,6 +250,24 @@ export function installBench({ THREE, ctx, player, camera, renderer, clock, capt
       window.hitchLabel = 'fall';
       player.place(d.cx + Math.cos(th) * (d.r + 6), edge.y, d.cz + Math.sin(th) * (d.r + 6), player.yaw);
       for (let t = 0; t < 12; t += 1 / 30) { capture.step(1 / 30); if (Math.round(t * 30) % 4 === 0) await frame(); }
+    }
+    // The bunker's terminal and rocks.exe (sequences/rocksExe.js): seated, typing, the cut to CAM 07, the blast, the
+    // boulders' flights and landings, the cut back; then the Rocks afterwards. (Once a game: it changes the world.)
+    const term = ctx.bunker?.terminal;
+    if (rocksExe && term && !term.state.ran) {
+      const s = ctx.bunker.seat, sp = ctx.bunker.spawn;
+      await visit('bunker terminal', sp.pos.clone().setY(sp.pos.y + 0.05), { look: s.eye, n: 1 });
+      window.hitchLabel = 'bunker terminal';
+      term.enter();
+      await run(1.2);
+      for (const line of ['ls', 'cat notes.txt', 'cd /opt/survey/bin']) { term.exec(line); await frame(); }
+      term.exec('./rocks.exe');
+      window.hitchLabel = 'rocks.exe';
+      for (let t = 0; t < 12 && (t < 3 || ctx.inSequence?.()); t += 1 / 30) { capture.step(1 / 30); if (Math.round(t * 30) % 3 === 0) await frame(); }
+      term.leave();
+      await run(1.2);
+      const r = S.rocks, tor = ctx.torBlast?.center;
+      if (tor) await visit('rocks: after the blast', ground(r, tor.x + 14, tor.z + 12), { look: tor, n: 2 });
     }
     if (ending && ctx.aperture) {
       const a = ctx.aperture.center;

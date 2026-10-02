@@ -21,7 +21,7 @@ as `0,+uv,+shader`. `default` means the flags as committed in `config.js`. `--ba
 `--routes-base <routes.json>` compare against another recording instead of the baseline. Scratch output goes to
 `tools/regress/out/`.
 
-Timings on the dev machine: world build 3 s, anchors 3.5-4 s per variant, routes 21-32 s (2413 cases), the default
+Timings on the dev machine: world build 3 s, anchors 3.5-4 s per variant, routes 21-32 s (2377 cases), the default
 check (determinism, two anchors and two routes processes in parallel, then `?walls=0` vs the baseline) about 56 s,
 `--compare` about 25 s, `--update-baseline` about 32 s, `--stages` (14 variants, 8 at a time) about 95 s.
 
@@ -29,7 +29,11 @@ check (determinism, two anchors and two routes processes in parallel, then `?wal
 
 - **world.mjs** calls the real `buildWorld` (`src/world/index.js`), so all five stacks are built by their real
   `stacks/*.js` functions in game order with the game's Rng streams. The GLB scenes are parsed from
-  `public/models` (they carry no images); textures are blank and a canvas stub stands in for the DOM.
+  `public/models` (they carry no images); textures are blank and a canvas stub stands in for the DOM. The optional
+  models load as they do in the game, when present: the Rocks tor's resculpt with its blast (`tor.glb`,
+  `tor_blast.glb`) and the Tower bunker's room (`bunker.glb`), so the headless world has the tor's own meshes, the
+  boulders' meshes, the room, its terminal and its furniture boxes. `buildHeadless({ torSculpt: false })` builds the
+  procedural tor instead (`tools/blender/export_tor.mjs` uses it).
 - **Flags** are read by `config.js` at module evaluation, so each variant runs in a fresh process with
   `globalThis.__WALLS` set before the first import (`run.mjs` spawns them; one world per process).
 - **Taps**: build-function locals (ledge samples, the creek bed, the fall path, tor and pile shells, the
@@ -79,11 +83,16 @@ to the wall, bench points. Tower: the same ladder/ledge (25 samples)/cave set, p
 Rocks: the creek water line (bed + 0.34 at every stream sample), stream path, waterY, lip, the fall path and
 widths, tor top/splash/walls/ground range, each pile's ground range and walls, the buried tor/pile shell vertices'
 margin inside the built wall, sequoia treeY/plate and the ground under the whole elevator car, bridgeA, movable
-rocks (spot, y, edge distance), frog spots, stepping stones, bench points. End: landing, aperture, flatness, the
-deck underside over both lips, the bridge posts' margin to the wall, the Rocks-End wall gap (above the cloud deck
-and overall). Mountain: meadow count, trail, observatory, shed. Every scatter call (count, margin, x/z hash and y
-hash separately), every forest/meadow/pebble/stone/flower placement per stack, trails, audio emitters, physics
-colliders/circles/ladders, LOD registrations (the wall must never be LOD-faded).
+rocks (the spots they are built at, dormant until rocks.exe: spot, y, edge distance; where rocks.exe throws them is
+random per game and isn't recorded), frog spots, stepping stones, bench points. End: landing, aperture, flatness,
+the deck underside over both lips, the bridge posts' margin to the wall, the Rocks-End wall gap (above the cloud
+deck and overall). Mountain: meadow count, trail, observatory, shed. Every scatter call (count, margin, x/z hash and
+y hash separately), every forest/meadow/pebble/stone/flower placement per stack, trails, audio emitters, physics
+colliders/circles/ladders, LOD registrations (the wall must never be LOD-faded). rocks.exe's pieces come in through
+these general records: the tor's own meshes (intact, far, stump, stump far, debris, the flying chunks) in the Rocks
+group, the bunker room's meshes in the Tower group, its 13 furniture OBBs in `physics.dynamic`, the `terminal` and
+`hvac` emitters, and the LOD entries `tor`, `tor:far`, `tor:stump`, `tor:stump:far`, `tor:debris`, `bunker-room` and
+`cam07`.
 
 ## Routes
 
@@ -102,18 +111,46 @@ colliders/circles/ladders, LOD registrations (the wall must never be LOD-faded).
   gets while the fade to black is still under half (`eyeMinVisible`, and per depth band `eyeBands`), what caught
   a landing (`landedBy`) and where the first breach started.
 
+## Scratch tests
+
+`tools/regress/out/` (git-ignored) also holds standalone headless tests that build the same world (`buildHeadless`)
+and drive the real controller, physics and props, printing a PASS or FAIL line per check; `run.mjs` doesn't run
+them. For rocks.exe and the Rocks boulders (from the repo root, e.g. `node tools/regress/out/rocks_exe_test.mjs`):
+
+- **rocks_exe_test.mjs**: rocks.exe end to end with the shipped flags, the real `Player`, the terminal, the cutscene,
+  the blast and the throw. The files lead to `/opt/survey/bin`; typed key by key, `./rocks.exe` marks itself run at
+  once, prints a dot every 0.35 s and starts the cutscene once, about 1.75 s after Enter, while the chair holds the
+  player and a save made during the dots doesn't count it as run. The cutscene cuts to CAM 07 at 0.25 s with the end
+  state written there, blows the tor at 2.2 s, zooms and shakes with the landings, cuts back at 8.3 s and is done by
+  8.9 s, leaving the player seated at the screen with the field of view, `viewFocus`, the feed and the glitch put
+  back, `[cam07] link lost` on the screen, and all five boulders landed and live with nothing solved. Running it again
+  does nothing; a save holds it all and restores it, and an old save without it restores none of it. Then 20 seeds
+  are released at once and every landing is checked against every rule (independently of the picker), the
+  cutscene's own landings too, and for 3 seeds every boulder is pushed onto a target with the real controller:
+  `solved` fires once, only at the last. At the 2.5 m tolerance, 2.3 m off counts and 2.7 m doesn't.
+- **rock_puzzle_test.mjs**: the boulders start dormant (hidden, colliders off); released where they are built
+  (`releaseInstant`), each is pushed by walking into it onto a target of `ROCK_TARGETS`, the solved hook fires exactly
+  once, no push runs a boulder through a tree, and the push rules refuse the rim, another boulder and the tor.
+- **rock_feel_test.mjs**: released the same way, a boulder walked straight into (no steering) at offsets from its
+  centre and at angles moves along the walk, not off to the side.
+
 ## Gate per stage
 
 Record the baseline once the tree is ready (`--update-baseline`, which refuses a nondeterministic run and a tree
 edited during the run, and stamps the tree hash into both files; compare prints it). The current baseline is from
-tree `8c598fb261b2a585` (2026-09-26, flags off, after the fall's drift learned to look along the wall; R6 gained
-the along-wall cases). The anchors have been the same since the first baseline (tree `0880ecbf4e426f11`); the
-two re-baselines since changed only the routes: fall traces and outcomes, and the new cases (see the R6 notes
-under Pre-existing failures). A flag whose
-stage has not landed yet fails its own positive gates (seam normals, `db:n|wall`, added spread, added relief) while
-every value stays exact, so `--stages` passes only once every stage is in; judge a stage by its own variants. Then
-every stage must pass `node tools/regress/run.mjs` (flags off: byte-identical to the baseline) and
-`--compare --variant 0,+<its flags>`, and `--stages` before it ships. The lead's frames and bench cover the look.
+tree `6cf3cc29401f24c2` (2026-10-01, flags off, 2377 route cases, 64 of them failing, all pre-existing), recorded
+for rocks.exe. It changed the anchors only, every diff accounted for: the fragment-shader hashes of every patched
+material (`bunkerDeep` in `materials.js`: `stacks.*.materials.*.fs` and `sharedMaterials.cap|cliff|stone.fs`);
+`stacks.tower.group` (the bunker room's meshes; `tower-props` without the room's bare shell, and the lower stair's
+colours); `stacks.rocks.group` (the tor's own meshes, intact, far, stump, stump far, debris and the flying chunks,
+out of `rocks-props` and its far stand-in); `physics.colliders.10` (the `bunker-car` collider's AABB: the wider,
+deeper room puts the plate 0.55 m further back) and `physics.dynamic.89` (the study elevator's top door); the
+room's 13 furniture OBBs, appended from `physics.dynamic.113` on; the `terminal` and `hvac` emitters; and
+`lod.entries` 139 → 146 with `lod.names`. The routes are identical. A flag whose stage has not landed yet fails its
+own positive gates (seam normals, `db:n|wall`, added spread, added relief) while every value stays exact, so
+`--stages` passes only once every stage is in; judge a stage by its own variants. Then every stage must pass
+`node tools/regress/run.mjs` (flags off: byte-identical to the baseline) and `--compare --variant 0,+<its flags>`,
+and `--stages` before it ships. The lead's frames and bench cover the look.
 
 | stage | flag | may change (else exact) | harness gates |
 |---|---|---|---|

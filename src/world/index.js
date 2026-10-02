@@ -94,6 +94,7 @@ export function buildWorld(base) {
   ctx.pebbles.build(surface, ctx.lod);
   for (const d of deferred) ctx.physics.addCollider(d.builder.build(), d.zone);
   ctx.observatory?.finish();     // the roof station's deck, last: it is switched on only while its ladders meet
-  ctx.updaters.push(() => { if (ctx.player) ctx.lightPool.update(ctx.player.feet); });
+  // The lit interior nearest what's in view: the player's feet, or a cutscene's focus far away (main.js ctx.viewFocus).
+  ctx.updaters.push(() => { if (ctx.player) ctx.lightPool.update(ctx.viewFocus ?? ctx.player.feet); });
   return ctx;
 }

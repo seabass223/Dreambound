@@ -242,8 +242,9 @@ export class Player {
 
   // ---- Sitting ----
   // A seat is { eye (the seated eye, world), stand (the feet when standing up, world), yaw (looking straight out),
-  // yawRange, pitchMin, pitchMax (the look limits around it), onSit, onStand }. While seated the feet already stand at
-  // `stand` (so a save made now stands the player up there: main.js counts 'sit' as a safe pose), the camera eases
+  // yawRange, pitchMin, pitchMax (the look limits around it), onSit, onStand }, and optionally pitch (what the view
+  // settles to, default -0.06) and dip (how far the eye sinks on the way, default 0.06 m). While seated the feet already
+  // stand at `stand` (so a save made now stands the player up there: main.js counts 'sit' as a safe pose), the camera eases
   // between the eye it had and the seat's over SIT_TIME, and the mouse looks round within the limits. Pressing again or
   // walking (once the keys have been let go after sitting down) stands up.
   sit(seat) {
@@ -279,7 +280,7 @@ export class Player {
       // Settling in: turn to face out, whatever way the chair was approached from.
       const e = smooth(this.sitT);
       this.yaw = s.yaw + this.sitYaw0 * (1 - e);
-      this.pitch = THREE.MathUtils.lerp(this.sitPitch0, -0.06, e);
+      this.pitch = THREE.MathUtils.lerp(this.sitPitch0, s.pitch ?? -0.06, e);
       return;
     }
     this.yaw -= m.x * this.sensitivity;
@@ -307,7 +308,7 @@ export class Player {
     const e = smooth(this.sitT);
     out.copy(this.sitFrom).lerp(this.seat.eye, e);
     // A little dip on the way, as the body folds into the chair.
-    out.y -= Math.sin(Math.PI * e) * 0.06;
+    out.y -= Math.sin(Math.PI * e) * (this.seat.dip ?? 0.06);
     return out;
   }
 

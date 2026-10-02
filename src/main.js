@@ -17,7 +17,11 @@ import { createIntro } from './sequences/intro.js';
 import { createFall } from './sequences/fall.js';
 import { createEnding, prepareEnding } from './sequences/ending.js';
 import { createResume } from './sequences/resume.js';
-import { createSettings } from './ui/settings.js';
+import { createRocksExe, prepareRocksExe } from './sequences/rocksExe.js';
+import { installTerminalKeys } from './ui/terminalKeys.js';
+import { createSettings, phaseToClock } from './ui/settings.js';
+import { createProfiler } from './ui/profiler.js';
+import { isDialogOpen } from './ui/kit/index.js';
 import { createSaveSystem, readSnapshot, clearSaves, SAVE_KEY } from './core/save.js';
 import { createReticle } from './ui/reticle.js';
 import { createDebugReport } from './ui/debugReport.js';
@@ -30,6 +34,9 @@ import { loadTowerKit } from './props/powertower.js';
 import { loadDeck } from './props/deck.js';
 import { loadShed } from './props/shed.js';
 import { loadWalkstones } from './world/walkway.js';
+import { loadTorSculpt } from './world/rockpiles.js';
+import { loadMine } from './props/mine.js';
+import { loadBunker } from './props/bunkerRoom.js';
 import { loadIris } from './props/aperture.js';
 import { preload } from './render/preload.js';
 import { TRAIL } from './world/mountainPath.js';
@@ -108,13 +115,14 @@ const setProgress = (f) => loader.progress(f);
 
 // ---------- World ----------
 let loaded = 0;
-const counted = (p) => p.then((a) => { setProgress((++loaded / 9) * 0.1); return a; });
-const [cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset, , walkstoneAsset] = await Promise.all([loadCabin(), loadObservatory(), loadCave(), loadLounge(), loadElevator(), loadTowerKit(), loadDeck(), loadShed(), loadIris(), loadWalkstones()].map(counted));
+const counted = (p) => p.then((a) => { setProgress((++loaded / 13) * 0.1); return a; });
+const [cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset, , walkstoneAsset, torSculpt, mineAsset, bunkerAsset] = await Promise.all([loadCabin(), loadObservatory(), loadCave(), loadLounge(), loadElevator(), loadTowerKit(), loadDeck(), loadShed(), loadIris(), loadWalkstones(), loadTorSculpt(), loadMine(), loadBunker()].map(counted));
 const loadedT = performance.now();
 loader.glide(0.55);                             // the build blocks the page: the fill glides on meanwhile
 await new Promise((r) => setTimeout(r, 20));   // let the line show it before the (synchronous) build
-const ctx = buildWorld({ renderer, scene, camera, physics, interact, audio, input, fx, later, updaters: [], cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset, walkstoneAsset });
+const ctx = buildWorld({ renderer, scene, camera, physics, interact, audio, input, fx, later, updaters: [], cabinAsset, observatoryAsset, caveAsset, loungeAsset, elevatorAsset, towerKitAsset, deckAsset, shedAsset, walkstoneAsset, torSculpt, mineAsset, bunkerAsset });
 prepareEnding(ctx);   // the ending's clock and steam, hidden until then, so the preload warms them too
+prepareRocksExe(ctx, { clock });   // rocks.exe's CCTV overlay (hidden) and its landing picker, warm
 setProgress(0.55);
 const player = new Player(camera, input, physics);
 ctx.player = player;
@@ -142,17 +150,28 @@ function restart() {
   removeEventListener('beforeunload', onBeforeUnload);
   location.reload();
 }
-// Travel (the Escape panel's buttons): straight to a place, standing, facing somewhere worth facing.
-const PLACES = [['home', 'Home'], ['rocks', 'Rocks'], ['tower', 'Tower'], ['observatory', 'Observatory'], ['end', 'End']];
+// Travel (Menu > Game > Travel): straight to a place, standing, facing somewhere worth facing.
+const PLACES = [['home', 'Home'], ['generator', 'Generator'], ['rocks', 'Rocks'], ['tower', 'Tower'], ['observatory', 'Observatory'], ['end', 'End']];
 function travel(key) {
   if (!started || ended || (sequence && !sequence.done)) return;
+  if (ctx.bunker?.terminal?.shell.busy) return;   // rocks.exe running: the player stays at the terminal for it
   if (fx.scope > 0.5) ctx.exitScope?.();
+  ctx.exitTerminal?.();
   if (player.mode === 'sit') player.standUp();
   player.zone = 'surface';
   const face = (from, to) => Math.atan2(-(to.x - from.x), -(to.z - from.z));
   if (key === 'home') {
     const w = ctx.house.wake;
     player.place(w.stand.x, w.stand.y, w.stand.z, w.standYaw);
+  } else if (key === 'generator' && ctx.tunnels?.cave) {
+    // Down in the cave hub, 1.7 m in front of the generator's row of switches, facing them.
+    const sw = ctx.interact.items.filter((it) => /^generator-switch:/.test(it.name)).map((it) => it.meshes[0].getWorldPosition(new THREE.Vector3()));
+    if (!sw.length) return;
+    const mid = sw.reduce((a, b) => a.add(b), new THREE.Vector3()).divideScalar(sw.length);
+    const c = ctx.tunnels.cave.center;
+    const at = mid.clone().addScaledVector(new THREE.Vector3(c.x - mid.x, 0, c.z - mid.z).normalize(), 1.7);
+    player.zone = 'tunnel';
+    player.place(at.x, mid.y - 0.95, at.z, face(at, mid));   // (the floor is about 1 m under the switches)
   } else if (key === 'observatory' && ctx.observatory) {
     // Outside its door, facing it.
     const R = ctx.observatory.root, p = R.localToWorld(new THREE.Vector3(0, 0, -9)), door = R.localToWorld(new THREE.Vector3(0, 0, -5));
@@ -192,8 +211,18 @@ function freeSpot(st, x0, z0) {
   }
   return { x: x0, y: (st.heightAt(x0, z0) ?? st.top) + 0.1, z: z0 };
 }
+// The profiler overlay (Menu > Debug > Profiler): the stack you're on (or nearest), for its position readout.
+const nearestStack = (p) => {
+  let best = null, bestD = Infinity;
+  for (const [name, st] of Object.entries(ctx.stacks)) {
+    const d = Math.hypot(p.x - st.cx, p.z - st.cz) - st.r;
+    if (d < bestD) { bestD = d; best = { name, x: st.cx, z: st.cz }; }
+  }
+  return best;
+};
+const profiler = createProfiler({ renderer, fx, player, clock, stackOf: (p) => (player.zone === 'surface' ? nearestStack(p) : null), timeText: () => phaseToClock(clock.phase) });
 const settings = createSettings({
-  player, clock, fx, input, canvas: renderer.domElement, baseSpeed: clock.speed,
+  player, clock, fx, input, canvas: renderer.domElement, baseSpeed: clock.speed, profiler,
   game: {
     save: () => saves.save(),
     restart,
@@ -207,6 +236,25 @@ const settings = createSettings({
   },
 });
 ctx.onRide = (riding) => { ctx.riding = riding; };
+// Cutscenes a prop starts (the bunker terminal's rocks.exe): one at a time, never over the ending. A sequence holds
+// presses and travel, isn't a safe pose to save, hides the dot and pauses with the menu.
+ctx.startSequence = (s) => { if ((sequence && !sequence.done) || ended || !s) return false; sequence = s; return true; };
+ctx.inSequence = () => !!(sequence && !sequence.done);
+ctx.uiOpen = () => settings.open || isDialogOpen();
+// What the view is on, when it isn't where the player stands (a cutscene's camera far away): the sun's shadows, the
+// light pool (world/index.js) and the sound's ground follow it. null: the player's feet.
+ctx.viewFocus = null;
+// The bunker's terminal (props/terminal.js): every key to its shell while seated (ui/terminalKeys.js), and rocks.exe
+// cutting to the hidden camera on the Rocks (sequences/rocksExe.js).
+installTerminalKeys({ ctx, uiOpen: ctx.uiOpen });
+if (ctx.bunker?.terminal) {
+  // (If it can't start, nothing was fired: rocks.exe may be run again, and the shell comes back by itself.)
+  ctx.bunker.terminal.onRun = (term) => {
+    if (ctx.startSequence(createRocksExe(ctx, { term, clock }))) return true;
+    term.state.ran = false;
+    return false;
+  };
+}
 const reticle = createReticle();
 // Where the hitch monitor says a hitch happened: a label the dev tour sets, or zone + nearest stack.
 if (hitch) {
@@ -244,6 +292,14 @@ if (hitch) {
     player.zone = 'tunnel';
     player.place(s.pos.x + f.x * 1.2, s.pos.y + 0.1, s.pos.z + f.z * 1.2, s.rotY + Math.PI);
   }
+  if (dev === 'bunker' && ctx.bunker) {
+    // In the Tower's bunker, beside the terminal's chair, facing it.
+    const s = ctx.bunker.spawn;
+    const c = ctx.bunker.room?.center;
+    player.zone = 'surface';
+    if (s) player.place(s.pos.x, s.pos.y + 0.02, s.pos.z, s.yaw);
+    else if (c) player.place(c.x, c.y - 1.5 + 0.02, c.z, 0);
+  }
   // ?at=x,y,z[,yawDeg[,pitchDeg]]: exactly where a debug report's player.feet (and yawDeg / pitchDeg) say.
   const at = params.get('at')?.split(',').map(Number);
   if (at && at.length >= 3 && at.slice(0, 3).every(Number.isFinite)) {
@@ -259,6 +315,7 @@ function surfaceAt(feet) {
   if (player.zone === 'tunnel') return ctx.riding ? 'metal' : ctx.tunnels.lounge?.inside(feet) ? 'wood' : 'cave';
   if (ctx.house.inside(feet)) return 'wood';
   if (ctx.bunker?.inside(feet)) return 'rock';   // its concrete
+  if (ctx.mine?.inside(feet)) return 'gravel';   // the adit's rubble floor
   if (ctx.deck?.on(feet)) return 'wood';
   if (ctx.walkway?.on(feet.x, feet.z)) return 'rock';   // the Home stack's limestone walkway
   if (ctx.shed?.on(feet)) return 'rock';   // the Mountain shed's flagstones
@@ -315,9 +372,13 @@ function apertureAhead() {
 const pressableAhead = () => interact.enabled && player.mode !== 'sit' && (!!interact.held || apertureAhead() || !!interact.pick());
 
 input.on('press', () => {
-  if (!started || ended || settings.open) return;
+  if (!started || ended || settings.open || isDialogOpen()) return;
   if (sequence && !sequence.done) return;
-  if (player.mode === 'sit') { player.standUp(); return; }   // seated in a deck chair (props/deck.js)
+  if (player.mode === 'sit') {   // seated in a deck chair (props/deck.js), or at the bunker's terminal (it may hold you)
+    const term = ctx.bunker?.terminal;
+    if (term && player.seat === term.seat) term.leave(); else player.standUp();
+    return;
+  }
   if (fx.scope > 0.5 && ctx.exitScope) { ctx.exitScope(); return; }   // at the telescope: any click leaves (ui/scopeExit.js)
   if (apertureAhead()) {
     ended = true;
@@ -419,6 +480,7 @@ function frame(now) {
 }
 
 function step(dt) {
+  const cpu0 = performance.now();
   if (hitch) { if (!hitch.armed) hitch.arm(); hitch.frameStart(); }
   elapsed += dt;
   // Count the whole frame (every post pass), not just the last render call: the dev log and debug reports read it.
@@ -432,8 +494,8 @@ function step(dt) {
   renderer.toneMappingExposure = atmoState.exposure * fx.brightness;
   settings.tick();
 
-  // The world holds still while the settings panel is open (the sky keeps turning unless paused).
-  if (!settings.open) {
+  // The world holds still while the menu or a dialog (a bug report) is open (the sky keeps turning unless paused).
+  if (!settings.open && !isDialogOpen()) {
     if (sequence) { sequence.update(dt); if (sequence.done && !ended) sequence = null; }
     player.update(dt);
     for (const u of ctx.updaters) u(dt);
@@ -452,8 +514,8 @@ function step(dt) {
 
   sky.update(camera);
   clouds.update(camera);
-  lighting.update(dt, clock, player.feet, under);
-  ground.copy(player.feet);
+  lighting.update(dt, clock, ctx.viewFocus ?? player.feet, under);
+  ground.copy(ctx.viewFocus ?? player.feet);
   // Under the Dome stack's geodesic glass (house + garden, anywhere inside its footprint): a little hysteresis on
   // the radius keeps the wind's muffling from flickering right at the boundary or the dome door.
   {
@@ -463,20 +525,24 @@ function step(dt) {
     const inside = player.zone === 'surface' && (domeIn == null ? d < R : domeIn ? d < R + margin : d < R - margin);
     domeIn = inside;
   }
-  audio.update(dt, camera, { zone: player.zone, altDeg: clock.altDeg, ground, inCar: !!ctx.riding, indoor: ctx.house.inside(player.feet), room: !!ctx.tunnels.lounge?.inside(player.feet), muted: 0, underDome: domeIn });
+  audio.update(dt, camera, { zone: player.zone, altDeg: clock.altDeg, ground, inCar: !!ctx.riding, indoor: ctx.house.inside(player.feet), room: !!ctx.tunnels.lounge?.inside(player.feet), muted: 0, underDome: domeIn,
+    sealed: ctx.viewFocus ? 0 : (ctx.bunker?.sealed?.(player.feet) ?? 0) });   // deep in the bunker the outside barely gets in
   // Wind direction breathes slowly.
   atmo.uWind.value.set(Math.cos(elapsed * 0.013) * 1.0, Math.sin(elapsed * 0.017) * 0.5 + 0.3);
 
   ctx.lod.update();   // distance culling + LOD, after everything that moves the camera
   atmo.uPxH.value = renderer.getDrawingBufferSize(pxSize).y;
   fx.render(elapsed);
+  debugReport.afterRender();   // a bug report's screenshot, while this frame is still in the drawing buffer
   if (!manual) adapt(dt);
   debugReport.tick(dt);
+  profiler.tick(dt, performance.now() - cpu0, fx.scope > 0.5);
   if (hitch) hitch.frameEnd(shownAt);
 
   // The centre dot: only while you're free to look and press (not in the intro fade, a cutscene, the eyepiece,
-  // which has its own reticle, or the Escape panel).
-  const showDot = settings.values.pointer && !ended && !settings.open && !(sequence && !sequence.done) && fx.fade < 0.3 && fx.scope < 0.01 && player.cameraControlled;
+  // which has its own reticle, the bunker's terminal, whose screen has its cursor, or the menu).
+  const showDot = settings.values.pointer && !ended && !settings.open && !isDialogOpen() && !(sequence && !sequence.done) && fx.fade < 0.3 && fx.scope < 0.01 && player.cameraControlled
+    && !ctx.bunker?.terminal?.active();
   reticle.set(showDot, showDot && pressableAhead());
 
   if (DEV) {
@@ -497,8 +563,11 @@ requestAnimationFrame(frame);
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const eye = (p) => p.clone().setY(p.y + PLAYER.eye);
   const saved = { phase: clock.phase, pos: camera.position.clone(), quat: camera.quaternion.clone(), fov: camera.fov, scope: fx.scope, fogMul: ctx.scopeFogMul };
-  // One real frame (every pass, to the screen, still black under fx.fade) from `from` towards `to`.
-  const view = (from, to, { phase = saved.phase, under = false, scope = false } = {}) => () => {
+  // One real frame (every pass, to the screen, still black under fx.fade) from `from` towards `to`. fov: the camera's
+  // (else the player's); feed: through the CCTV look (rocks.exe's hidden camera).
+  const view = (from, to, { phase = saved.phase, under = false, scope = false, aa = null, fov = null, feed = false } = {}) => () => {
+    const aa0 = fx.aa;
+    if (aa) fx.setAA(aa);
     clock.phase = phase; clock.update(0);
     updateAtmosphere(clock, 0);
     renderer.toneMappingExposure = atmoState.exposure * fx.brightness;
@@ -506,7 +575,7 @@ requestAnimationFrame(frame);
     fx.scope = scope ? 1 : 0;
     ctx.scopeFogMul = scope ? 0.3 : 1;
     applyAir(under);
-    camera.fov = scope ? 3.2 : saved.fov;
+    camera.fov = scope ? 3.2 : fov ?? saved.fov;
     camera.updateProjectionMatrix();
     camera.position.copy(from);
     camera.lookAt(to);
@@ -516,11 +585,21 @@ requestAnimationFrame(frame);
     lighting.update(0, clock, from, under);
     ctx.lod.update();
     atmo.uPxH.value = renderer.getDrawingBufferSize(pxSize).y;
+    fx.feed = feed ? 1 : 0;
     fx.render(0);
+    fx.feed = 0;
+    if (aa) fx.setAA(aa0);
   };
   const S = ctx.stacks, w = ctx.house.wake, hub = ctx.tunnels.center, lounge = ctx.tunnels.stations.lounge;
   const rim = (a, b) => { const th = Math.atan2(b.cz - a.cz, b.cx - a.cx); return V(a.cx + Math.cos(th) * (a.r - 5), a.top + PLAYER.eye, a.cz + Math.sin(th) * (a.r - 5)); };
   const obs = ctx.observatory?.root.position;
+  const cam07 = S.rocks.hiddenCam;
+  // The bunker room's own points (room-local metres, props/bunkerRoom.js) in the world; its glass, from the seat's angles.
+  const room = ctx.bunker?.room?.group;
+  room?.updateWorldMatrix(true, false);
+  const bunkerAt = (x, y, z) => (room ? room.localToWorld(V(x, y, z)) : null);
+  const bunkerView = (from, to) => from && to && view(from, to);
+  const bunkerGlass = () => { const s = ctx.bunker.seat; return s.eye.clone().add(V(-Math.sin(s.yaw) * Math.cos(s.pitch), Math.sin(s.pitch), -Math.cos(s.yaw) * Math.cos(s.pitch))); };
   const skyDir = V(Math.cos(SKY_TARGET.yaw) * Math.cos(SKY_TARGET.pitch - VIEW_DROP), Math.sin(SKY_TARGET.pitch - VIEW_DROP), Math.sin(SKY_TARGET.yaw) * Math.cos(SKY_TARGET.pitch - VIEW_DROP));
   const states = [
     view(eye(w.stand), w.bed),                                                           // the cabin, where you wake
@@ -530,6 +609,13 @@ requestAnimationFrame(frame);
     lounge && view(eye(lounge.pos), eye(lounge.pos).add(V(Math.sin(lounge.rotY), 0, Math.cos(lounge.rotY))), { under: true }),
     obs && S.rocks.torTop && view(obs.clone().setY(obs.y + 3), S.rocks.torTop, { phase: 0.3, scope: true }),   // the eyepiece, day
     obs && view(obs.clone().setY(obs.y + 3), obs.clone().setY(obs.y + 3).add(skyDir), { phase: 0.8, scope: true }),  // and night
+    // The Tower's bunker: from the lift's doorway toward the stair, and seated at the terminal (props/bunkerRoom.js).
+    bunkerView(bunkerAt(0, 1.66, 3.3), bunkerAt(0, 1.2, 0)),
+    ctx.bunker?.seat && view(ctx.bunker.seat.eye, bunkerGlass(), { fov: ctx.bunker.seat.fov }),
+    // rocks.exe's hidden camera (sequences/rocksExe.js): CAM 07 on the tor, through the CCTV look, by day and night.
+    cam07 && view(cam07.pos, cam07.look, { phase: 0.3, fov: cam07.fov, feed: true }),
+    cam07 && view(cam07.pos, cam07.look, { phase: 0.8, fov: cam07.fov, feed: true }),
+    view(eye(w.stand), w.bed, { aa: 'fxaa' }),                                           // the FXAA pass's program
     view(eye(w.stand), w.bed),                                                           // and the first view again
   ].filter(Boolean);
   const hooks = [

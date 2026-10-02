@@ -14,7 +14,9 @@ export class LightPool {
     this.active = null;
   }
 
-  // site: { center: Vector3, radius, lights: [{ pos: Vector3, color: Color, distance, intensity: () => number }] }
+  // site: { center: Vector3, radius, lights: [{ pos: Vector3, color: Color, distance, intensity: () => number }], claim? }
+  // Sites are picked by distance from their edge. A site with claim(focus) is never picked that way: it takes the pool
+  // outright while claim says so (a room that must be lit exactly while you're in it, however near another site is).
   add(site) {
     this.sites.push(site);
     return site;
@@ -23,6 +25,7 @@ export class LightPool {
   update(focus) {
     let best = null, bd = Infinity;
     for (const s of this.sites) {
+      if (s.claim) { if (s.claim(focus)) { best = s; break; } continue; }
       const d = s.center.distanceTo(focus) - s.radius;
       if (d < bd) { bd = d; best = s; }
     }

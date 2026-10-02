@@ -12,6 +12,9 @@ const VERSION = 1;
 
 const R = (v, d = 4) => (Number.isFinite(v) ? Math.round(v * 10 ** d) / 10 ** d : 0);
 const num = (v, fallback) => (Number.isFinite(v) ? v : fallback);
+// Whether rocks.exe has run, in a state or a snapshot: only once the tor has gone up. It's marked run at its first dot,
+// two seconds before the cutscene blows the tor; a save from in between would otherwise never get to blow it at all.
+const ranOf = (s) => !!s.terminal?.ran && !!s.tor?.exploded;
 
 export function readSnapshot(key) {
   try {
@@ -60,12 +63,16 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
         positions: s.rocks.positions.map((q) => ({ x: R(q.x), z: R(q.z) })),
         pushes: [...s.rocks.pushes],
         solved: !!s.rocks.solved,
+        released: !!s.rocks.released,
+        seed: Number.isFinite(s.rocks.seed) ? s.rocks.seed : null,
       } : null,
       towerSwitches: s.towerSwitches ? s.towerSwitches.map((b) => [...b]) : null,
       towerLEDs: ctx.towerLEDs ? ctx.towerLEDs.map((l) => R(l.level)) : null,
       observatory: obs ? { yaw: R(obs.yaw, 5), pitch: R(obs.pitch, 5), hatch: R(obs.hatch), stationOpen: !!obs.stationOpen } : null,
       lounge: s.lounge ? { secretOpen: !!s.lounge.secretOpen } : null,
       bunker: s.bunker ? { open: !!s.bunker.open } : null,
+      terminal: s.terminal ? { ran: ranOf(s), cwd: typeof s.terminal.cwd === 'string' ? s.terminal.cwd : null } : null,
+      tor: s.tor ? { exploded: !!s.tor.exploded } : null,
       elevators: lifts,
     };
   };
@@ -73,10 +80,13 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
   // What counts as progress: everything but the clock and small shuffles of the pose (under 1.5 m, or turning).
   const progressKey = (snap) => JSON.stringify({
     switches: snap.switches, power: snap.power, towerSwitches: snap.towerSwitches, towerLEDs: snap.towerLEDs,
-    rocks: snap.rocks && { positions: snap.rocks.positions.map((q) => [Math.round(q.x * 5), Math.round(q.z * 5)]), solved: snap.rocks.solved },
+    // (The boulders count once rocks.exe has thrown them: before that they don't exist, whatever an old save says.)
+    rocks: snap.rocks?.released ? { positions: snap.rocks.positions.map((q) => [Math.round(q.x * 5), Math.round(q.z * 5)]), solved: snap.rocks.solved, seed: snap.rocks.seed ?? null } : null,
     observatory: snap.observatory && { yaw: Math.round(snap.observatory.yaw * 50), pitch: Math.round(snap.observatory.pitch * 50), open: snap.observatory.stationOpen },
     lounge: snap.lounge,
     bunker: snap.bunker,
+    terminal: ranOf(snap),   // (only whether rocks.exe has run: wandering its directories isn't progress)
+    tor: !!snap.tor?.exploded,
     elevators: snap.elevators,
   });
   const dirty = () => {
@@ -125,13 +135,24 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
         if (Array.isArray(snap.switches) && s.switches) snap.switches.forEach((on, i) => { if (i < s.switches.length) s.switches[i] = !!on; });
         if (snap.power && ctx.power) for (const k of Object.keys(ctx.power)) if (k in snap.power) ctx.power[k] = !!snap.power[k];
 
-        // The Rocks boulders (props/movableRocks.js): only the ones that have been pushed. One never touched stays where
-        // the world now starts it (a save from before the doorstop was set in the sequoia's doorway gets it there too).
-        if (snap.rocks && s.rocks && ctx.boulders?.place) {
-          const pushed = Array.isArray(snap.rocks.pushes) ? new Set(snap.rocks.pushes) : null;
-          snap.rocks.positions.forEach((q, i) => { if (!pushed || pushed.has(i)) ctx.boulders.place(i, q.x, q.z); });
-          s.rocks.pushes = Array.isArray(snap.rocks.pushes) ? [...snap.rocks.pushes] : [];
-          if (snap.rocks.solved && !s.rocks.solved) { s.rocks.solved = true; ctx.onRocksSolved?.(); }
+        // The bunker terminal's shell (props/terminal.js): whether rocks.exe has run, and where it was left.
+        if (snap.terminal && s.terminal) {
+          s.terminal.ran = ranOf(snap);
+          if (typeof snap.terminal.cwd === 'string') s.terminal.cwd = snap.terminal.cwd;
+        }
+        // The tor blown up by rocks.exe (world/torBlast.js): the stump and its settled debris, the water off, at once;
+        // and the five boulders it threw (world/rockThrow.js), all of them where they were left (or, missing, where
+        // their seed landed them). Before that there are no boulders at all: a save that isn't exploded (one from
+        // before rocks.exe existed among them) has its rocks ignored, and the world's dormant five stay asleep.
+        if (snap.tor?.exploded && ctx.torBlast) {
+          ctx.torBlast.applyExploded();
+          if (s.rocks && ctx.boulders?.releaseInstant) {
+            const r = snap.rocks;
+            const seed = Number.isFinite(r?.seed) ? r.seed : null;
+            ctx.boulders.releaseInstant(Array.isArray(r?.positions) ? r.positions : null, seed ?? undefined);
+            s.rocks.pushes = Array.isArray(r?.pushes) ? r.pushes.filter((i) => Number.isInteger(i)) : [];
+            if (r?.solved && !s.rocks.solved) { s.rocks.solved = true; ctx.onRocksSolved?.(); }
+          }
         }
 
         // The Tower's catwalk switch boxes and LEDs (props/powertower.js).

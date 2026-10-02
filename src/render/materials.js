@@ -21,6 +21,7 @@ uniform vec4 uIntB;
 uniform vec4 uObsA;
 uniform vec4 uObsB;
 uniform vec4 uBunA, uBunB, uBunC, uBunD;
+uniform vec4 uMineA, uMineB;
 // 1 inside the Tower bunker's hood, stairwell and room (world/bunker.js), 0 outside: its frame at (uBunA.z, uBunB.x,
 // uBunA.w) turned so local +x is (cos, -sin) of uBunA.xy; uBunB = (y, landing ceiling, slope start z, slope);
 // uBunC = (stairwell half width, room start z, room half width, room ceiling); uBunD = (far end z, on).
@@ -33,7 +34,23 @@ float bunkerMask(vec3 p) {
   float ceil = mix(uBunB.y - max(0.0, lz - uBunB.z) * uBunB.w, uBunC.w, room) + 0.05;
   return step(abs(lx), hw) * step(0.12, lz) * step(lz, uBunD.x) * step(ly, ceil);
 }
-// 1 inside an interior (under the cabin's roof, inside the observatory's drum and dome, in the bunker), 0 outside.
+// How deep down the bunker p is: 0 by its door, rising to 1 between frame z = uBunD.z and uBunD.w (down the stair), where
+// no daylight reaches even through the open door (0 everywhere while uBunD.w <= uBunD.z).
+float bunkerDeep(vec3 p) {
+  if (uBunD.w <= uBunD.z) return 0.0;
+  vec2 d = p.xz - uBunA.zw;
+  return bunkerMask(p) * smoothstep(uBunD.z, uBunD.w, d.x * uBunA.y + d.y * uBunA.x);
+}
+// The mine adit's drive: uMineA = (cos, sin of its yaw, portal x, z), local +z out of the portal; uMineB = (floor y,
+// crown above it, depth, on). Fades in over the first metres behind the portal, where the daylight still reaches.
+float mineMask(vec3 p) {
+  if (uMineB.w < 0.5) return 0.0;
+  vec2 d = p.xz - uMineA.zw;
+  float lx = d.x * uMineA.x - d.y * uMineA.y, lz = d.x * uMineA.y + d.y * uMineA.x, ly = p.y - uMineB.x;
+  return step(abs(lx), 1.75) * smoothstep(0.3, -1.6, lz) * step(-uMineB.z, lz) * step(-0.4, ly) * step(ly, uMineB.y);
+}
+// 1 inside an interior (under the cabin's roof, inside the observatory's drum and dome, in the bunker, down the mine
+// adit), 0 outside.
 float interiorMask(vec3 p) {
   float m = 0.0;
   if (uIntA.z > uIntA.x) {
@@ -50,7 +67,7 @@ float interiorMask(vec3 p) {
     float dome = smoothstep(uObsB.z - 0.035, uObsB.z - 0.045, distance(p, vec3(uObsA.x, uObsB.y, uObsA.y))) * step(uObsB.x - 0.2, p.y);
     m = max(m, max(drum, dome));
   }
-  return max(m, bunkerMask(p));
+  return max(max(m, bunkerMask(p)), mineMask(p));
 }
 varying vec3 vFogWorld;
 float dbHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -146,7 +163,7 @@ export function patchMaterial(mat, { wind = null, fadeDist = 0, indoorEnv = fals
       uHorizonSun: atmo.uHorizonSun, uSunGlow: atmo.uSunGlow, uUnderground: atmo.uUnderground,
       uFogDensity: atmo.uFogDensity, uTime: atmo.uTime, uWind: atmo.uWind, uCloudColor: atmo.uCloudColor,
       uFogLow: atmo.uFogLow, uFogTint: atmo.uFogTint, uIntA: atmo.uIntA, uIntB: atmo.uIntB, uObsA: atmo.uObsA, uObsB: atmo.uObsB,
-      uBunA: atmo.uBunA, uBunB: atmo.uBunB, uBunC: atmo.uBunC, uBunD: atmo.uBunD,
+      uBunA: atmo.uBunA, uBunB: atmo.uBunB, uBunC: atmo.uBunC, uBunD: atmo.uBunD, uMineA: atmo.uMineA, uMineB: atmo.uMineB,
     });
     let vs = shader.vertexShader;
     vs = vs.replace('#include <common>', '#include <common>\nvarying vec3 vFogWorld;\nuniform float uTime;\nuniform vec2 uWind;\nuniform float uSwayAmount;\nuniform float uFlutter;');
@@ -164,9 +181,9 @@ export function patchMaterial(mat, { wind = null, fadeDist = 0, indoorEnv = fals
       .replace('#include <fog_fragment>', FOG_FRAG)
       // Indoors, the open sky only reaches in through the windows: cut ambient/IBL light.
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-        { float im = interiorMask(vFogWorld);
-          reflectedLight.indirectDiffuse *= mix(1.0, 0.22, im);
-          reflectedLight.indirectSpecular *= mix(1.0, ${indoorEnv ? '1.0' : '0.3'}, im); }`);
+        { float im = interiorMask(vFogWorld), bd = 1.0 - 0.94 * bunkerDeep(vFogWorld);
+          reflectedLight.indirectDiffuse *= mix(1.0, 0.22, im) * bd;
+          reflectedLight.indirectSpecular *= mix(1.0, ${indoorEnv ? '1.0' : '0.3'}, im) * bd; }`);
     if (fadeDist) {
       fs = fs.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
         { float gd = distance(vFogWorld, cameraPosition);

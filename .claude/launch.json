@@ -23,6 +23,15 @@
         "--strictPort"
       ],
       "port": 5175
+    },
+    {
+      "name": "bug-review",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/bugqueue/review.mjs"
+      ],
+      "port": 5197,
+      "url": "http://127.0.0.1:5197"
     }
   ]
 }

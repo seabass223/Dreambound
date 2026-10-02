@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 import { AZ_SCALE, ALT_SCALE } from '../world/skyTarget.js';
 
 const f = (v) => v.toFixed(6);   // a JS number as a GLSL float
@@ -30,6 +31,10 @@ const DreamShader = {
     uGH: { value: new THREE.Color(0.5, 0.5, 0.5) },
     uGBlend: { value: 1 },
     uGBalance: { value: 0 },
+    uFeed: { value: 0 },
+    uFeedNight: { value: 0 },
+    uGlitch: { value: 0 },
+    uRoll: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -38,6 +43,7 @@ const DreamShader = {
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform float uAspect, uTime, uVignette, uBlur, uEdgeBlur, uFade, uWhite, uScope, uScopeAz, uScopeAlt, uGrain, uGamma, uGBlend, uGBalance;
+    uniform float uFeed, uFeedNight, uGlitch, uRoll;
     uniform vec3 uGS, uGM, uGH;
     // Three-way color grade: tints shadows, midtones and highlights; grey means no change.
     vec3 grade(vec3 c) {
@@ -179,13 +185,134 @@ const DreamShader = {
       }
       return mix(outer, inner, field);
     }
+
+    // ---- A CCTV camera's picture (uFeed, uFeedNight) and a failing video signal (uGlitch). Every bit of it sits
+    // behind a uniform branch, so at 0 none of it runs and the frame is exactly as before.
+    float gBlank = 0.0;   // glitchUV() -> glitchColor(): this pixel's line is torn past the picture (blanking, black)
+    float gBlock = 0.0;   // ... and its block is corrupt (0 clean, else 0..1 picks how)
+    // The glitch's state changes in steps (~14 a second), so it reads as a signal breaking up, not as shimmer.
+    float glitchStep() { return floor(mod(uTime, 997.0) * 14.0); }
+    vec2 glitchUV(vec2 uv, float g, float tq) {
+      // Vertical hold slipping (uRoll is integrated in JS from fx.glitch, 0 below ~0.55). Wrapped only while it slips:
+      // a shaken picture's edge (uShake) would otherwise come round from the far side.
+      if (uRoll > 0.0) uv.y = fract(uv.y + uRoll);
+      // Band tearing: bands of random height slide sideways, more and further as g rises; one wider slip now and then.
+      float nb = mix(6.0, 42.0, hash(vec2(tq, 1.7)));
+      float band = floor(uv.y * nb);
+      float tear = step(1.0 - 0.5 * g, hash(vec2(band, tq))) * (hash(vec2(band, tq + 3.1)) - 0.5) * (0.03 + 0.2 * g * g);
+      float y0 = hash(vec2(tq, 2.9)), slip = step(abs(uv.y - y0), 0.02 + 0.1 * g) * step(0.55, hash(vec2(tq, 4.4)));
+      tear += slip * (0.05 + 0.25 * g) * sign(hash(vec2(tq, 6.2)) - 0.5);
+      // Line jitter (the horizontal sync wavering), at about 540 lines whatever the resolution.
+      float line = floor(uv.y * 540.0);
+      uv.x += tear + (hash(vec2(line, tq)) - 0.5) * 0.006 * g;
+      gBlank = step(1.0, abs(uv.x - uShake.x - 0.5) * 2.0);   // (torn past the edge: the shake alone isn't blanking)
+      // Block corruption: a coarse grid, some cells frozen into flat colour, shifted, or smeared down from their top.
+      float s = mix(0.035, 0.1, hash(vec2(tq, 5.3)));
+      vec2 cell = floor(vec2(uv.x * uAspect, uv.y) / s);
+      float hc = hash(cell + vec2(tq * 0.37, tq * 0.11));
+      if (hc > 1.0 - 0.3 * g * g * g) {
+        float m = hash(cell + vec2(9.1, tq));
+        gBlock = 0.01 + 0.99 * fract(m * 7.0);
+        vec2 c0 = vec2((cell.x + 0.5) * s / uAspect, (cell.y + 0.5) * s);
+        if (m < 0.3) uv = c0;                                                         // one flat colour
+        else if (m < 0.65) uv += (vec2(hash(cell + 1.3), hash(cell + 2.7)) - 0.5) * vec2(0.25, 0.12);   // misplaced
+        else uv.y = (cell.y + 1.0) * s;                                               // smeared down from the top
+      }
+      return uv;
+    }
+    vec3 glitchColor(vec3 col, vec2 q, float g, float tq) {
+      // Corrupt blocks: swapped and crushed channels, the odd hot green or magenta block.
+      if (gBlock > 0.0) {
+        if (gBlock < 0.12) col = col.gbr;
+        else if (gBlock < 0.2) col = floor(col * 3.0 + 0.5) / 3.0;
+        else if (gBlock < 0.24) col = mix(col, vec3(0.15, 0.85, 0.4) * dot(col, vec3(0.33)) * 1.6, 0.6);
+        else if (gBlock < 0.27) col = mix(col, vec3(0.85, 0.2, 0.75) * dot(col, vec3(0.33)) * 1.5, 0.6);
+      }
+      float px = floor(q.y * uRes.y);
+      float st = hash(floor(gl_FragCoord.xy * (720.0 / uRes.y) / vec2(2.0, 1.0)) * 0.731 + tq * 13.7);   // snow, a little streaky
+      // Bars of static: two at random heights per step, and a soft one rolling down the picture.
+      float b1 = step(abs(q.y - hash(vec2(tq, 9.1))), 0.01 + 0.08 * g * hash(vec2(tq, 9.7)));
+      float b2 = step(abs(q.y - hash(vec2(tq, 8.3))), 0.004 + 0.03 * g) * step(0.4, g);
+      float b3 = smoothstep(0.75, 1.0, sin(q.y * 7.0 - mod(uTime, 997.0) * 4.1) * 0.5 + 0.5) * smoothstep(0.2, 0.8, g);
+      float bars = clamp(max(max(b1, b2) * (0.45 + 0.55 * g), b3 * 0.55), 0.0, 1.0);
+      col = mix(col, vec3(st) * (0.4 + 0.6 * hash(vec2(px, tq))), bars);
+      // Dropouts: bright streaks part-way across a line.
+      float hl = hash(vec2(px, tq + 0.5));
+      float x0 = hash(vec2(px, tq + 1.5));
+      col = mix(col, vec3(0.92), step(1.0 - 0.012 * g, hl) * step(x0, q.x) * step(q.x, x0 + 0.08 + 0.4 * hash(vec2(px, tq + 2.5))));
+      // Torn lines run into the black of the blanking; the slipping roll shows its black bar.
+      col = mix(col, vec3(0.012) + st * 0.03, gBlank);
+      float seam = abs(fract(q.y + uRoll + 0.5) - 0.5);
+      col = mix(col, vec3(0.008), (1.0 - smoothstep(0.022, 0.03, seam)) * step(0.001, uRoll));
+      // The whole picture jumps in brightness, and the colour washes out as the signal goes.
+      col *= 1.0 + (hash(vec2(tq, 11.3)) - 0.5) * 0.35 * g;
+      col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))), 0.45 * g * g);
+      col += (st - 0.5) * 0.18 * g;
+      return col;
+    }
+    // The camera's lens and video: a slight barrel (the corners stay on the corners), lateral colour toward the edge
+    // and the chroma signal lagging the luma a little, the video's limited bandwidth smearing it sideways, and the
+    // camera's edge enhancement ringing light and dark round every edge. split: the glitch's RGB split.
+    vec3 feedSample(vec2 uv, float split) {
+      vec2 d = uv - 0.5, da = vec2(d.x * uAspect, d.y);
+      float rc2 = 0.25 * (uAspect * uAspect + 1.0);
+      float k = 0.12 * uFeed;
+      vec2 base = 0.5 + d * (1.0 + k * dot(da, da)) / (1.0 + k * rc2);
+      float e = dot(da, da) / rc2;
+      vec2 ca = d * 0.014 * e * uFeed + vec2(0.0008 * uFeed + split, 0.0);
+      float h = 0.0009 * uFeed;
+      vec3 c0 = vec3(texture2D(tDiffuse, base + ca).r, texture2D(tDiffuse, base).g, texture2D(tDiffuse, base - ca).b);
+      vec3 soft = (c0 * 2.0 + texture2D(tDiffuse, base - vec2(h, 0.0)).rgb + texture2D(tDiffuse, base + vec2(h, 0.0)).rgb) * 0.25;
+      vec3 wide = (texture2D(tDiffuse, base - vec2(3.2 * h, 0.0)).rgb + texture2D(tDiffuse, base + vec2(3.2 * h, 0.0)).rgb) * 0.5;
+      return max(soft + (soft - wide) * 0.7 * uFeed, 0.0);
+    }
+    // The camera's grade: by day a cheap colour tube (washed out, cool, contrasty, lifted blacks, soft whites); by night
+    // (uFeedNight) the IR lamp's monochrome at high gain, brightest in the middle where the lamp points. Then its noise
+    // (at the sensor's resolution, heavier at night), scanlines, the hum bar rolling up the picture, a hard lens vignette.
+    vec3 cctv(vec3 col, vec2 q, float r, float hum) {
+      float L = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      vec3 day = mix(vec3(L), col, 0.4) * vec3(0.9, 1.0, 1.1);
+      day = 0.035 + 0.94 * mix(day, smoothstep(0.0, 1.0, day), 0.45);
+      day = 1.0 - exp(-day * 1.9) * 0.97;
+      float Li = dot(col, vec3(0.38, 0.52, 0.1));
+      float n = (1.0 - exp(-Li * 3.0)) * mix(0.5, 1.15, smoothstep(0.95, 0.08, r));
+      n = mix(n, smoothstep(0.0, 1.0, n), 0.5);
+      vec3 night = 0.025 + n * vec3(0.9, 1.0, 0.97);
+      col = mix(day, night, uFeedNight);
+      float cell = max(1.0, uRes.y / 480.0);
+      float nz = hash(floor(gl_FragCoord.xy / cell) + fract(uTime * 7.31) * 113.0) - 0.5;
+      float ln = hash(vec2(floor(gl_FragCoord.y / cell), fract(uTime * 3.7) * 71.0)) - 0.5;
+      col += nz * mix(0.045, 0.12, uFeedNight) * (1.0 + hum) + ln * mix(0.012, 0.03, uFeedNight);
+      float pitch = max(2.0, floor(uRes.y / 240.0));
+      float field = mod(floor(mod(uTime, 997.0) * 30.0), 2.0);
+      col *= 1.0 - 0.2 * step(pitch - 1.0, mod(gl_FragCoord.y, pitch)) - 0.035 * step(pitch - 1.0, mod(gl_FragCoord.y + field, pitch));
+      col *= 1.0 + 0.07 * hum;
+      col *= 1.0 - 0.92 * smoothstep(0.62, 1.12, r);
+      return col;
+    }
     void main() {
       vec2 uv = vUv + uShake;
       vec2 c = uv - 0.5; c.x *= uAspect;
       float r = length(c);
       float b = uBlur + uEdgeBlur * smoothstep(0.35, 0.95, r) * (1.0 - uScope);
+      float tq = 0.0, gk = 0.0, split = 0.0, hum = 0.0;
+      if (uGlitch > 0.0) {
+        tq = glitchStep();
+        gk = min(1.0, uGlitch * (0.65 + 0.5 * hash(vec2(tq, 12.9))));   // it comes and goes in bursts
+        uv = glitchUV(uv, gk, tq);
+        split = gk * (0.002 + 0.014 * hash(vec2(floor(uv.y * 9.0), tq))) * (hash(vec2(tq, 3.3)) < 0.5 ? -1.0 : 1.0);
+      }
+      if (uFeed > 0.0) {
+        // The hum bar: a soft band rolling slowly up the picture, the lines in it wavering.
+        float tm = mod(uTime, 997.0);
+        float hy = fract(vUv.y - tm * 0.071);
+        hum = exp(-pow((hy - 0.5) / 0.085, 2.0)) * uFeed;
+        uv.x += (sin(vUv.y * 340.0 + tm * 23.0) * hum * 0.0007 + sin(vUv.y * 2.3 + tm * 0.9) * 0.0003) * uFeed;
+      }
       vec3 col;
-      if (uScope > 0.5) {
+      if (uFeed > 0.0) {
+        col = feedSample(uv, split);
+      } else if (uScope > 0.5) {
         // Through the eyepiece: gentle barrel distortion and a hint of colour fringing toward the edge.
         vec2 d = uv - 0.5;
         float e = dot(vec2(d.x * uAspect, d.y), vec2(d.x * uAspect, d.y)) / (FIELD * FIELD);
@@ -205,11 +332,17 @@ const DreamShader = {
       } else {
         col = texture2D(tDiffuse, uv).rgb;
       }
+      if (uGlitch > 0.0 && uFeed <= 0.0) {
+        col.r = texture2D(tDiffuse, uv + vec2(split, 0.0)).r;
+        col.b = texture2D(tDiffuse, uv - vec2(split, 0.0)).b;
+      }
       col = pow(max(col, 0.0), vec3(1.0 / uGamma));
       col = grade(col);
+      if (uFeed > 0.0) col = mix(col, cctv(col, vUv, r, hum), uFeed);
       float vig = smoothstep(1.05, 0.2, r);
       col *= mix(1.0, vig, uVignette);
       col += (hash(gl_FragCoord.xy + fract(uTime) * 91.7) - 0.5) * uGrain;
+      if (uGlitch > 0.0) col = glitchColor(col, vUv, gk, tq);
       if (uScope > 0.0) col = mix(col, eyepiece(col, vUv), uScope);
       col = mix(col, vec3(0.0), uFade);
       col = mix(col, vec3(1.0), uWhite);
@@ -218,6 +351,8 @@ const DreamShader = {
   `,
 };
 
+export const AA_MODES = ['off', 'fxaa', 'msaa'];
+
 export function createPostFX(renderer, scene, camera) {
   const size = renderer.getSize(new THREE.Vector2());
   const composer = new EffectComposer(renderer);
@@ -225,18 +360,41 @@ export function createPostFX(renderer, scene, camera) {
   const bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.35, 0.55, 1.35);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
+  // Anti-aliasing (the Menu's Graphics > Anti-aliasing), off by default. FXAA: a pass on the finished image, before the
+  // grain and the eyepiece's marks so it never softens them. MSAA: the composer's targets multisampled 4x, so the scene
+  // pass resolves smooth geometry edges (switching it reallocates them once).
+  const fxaa = new FXAAPass();
+  fxaa.enabled = false;
+  composer.addPass(fxaa);
   const dream = new ShaderPass(DreamShader);
   composer.addPass(dream);
 
   const u = dream.uniforms;
+  let roll = 0, lastT = 0;
   const fx = {
     composer, bloom, dream,
     vignette: 0.35, blur: 0, edgeBlur: 0.1, fade: 1, white: 0, scope: 0, scopeAz: 0, scopeAlt: 0,
     bloomStrength: 0.35,
     shake: 0,
+    // The hidden camera's picture (0..1): feed the CCTV look, feedNight its IR night grade (on top of feed). glitch
+    // (0..1): the video signal breaking up (tears, corrupt blocks, RGB split, static bars; the picture rolls from ~0.6).
+    feed: 0, feedNight: 0, glitch: 0,
     gamma: 1,
     brightness: 1,
     grade: { shadows: u.uGS.value, mids: u.uGM.value, highs: u.uGH.value, blend: 1, balance: 0 },
+    aa: 'off',
+    // 'off' | 'fxaa' | 'msaa'
+    setAA(mode) {
+      if (!AA_MODES.includes(mode)) mode = 'off';
+      fxaa.enabled = mode === 'fxaa';
+      const samples = mode === 'msaa' ? 4 : 0;
+      for (const rt of [composer.renderTarget1, composer.renderTarget2]) {
+        if (rt.samples === samples) continue;
+        rt.samples = samples;
+        rt.dispose();   // re-created with the new sample count on its next use
+      }
+      fx.aa = mode;
+    },
     setSize(w, h) {
       composer.setSize(w, h);
       bloom.resolution.set(w / 2, h / 2);
@@ -256,6 +414,14 @@ export function createPostFX(renderer, scene, camera) {
       u.uGamma.value = fx.gamma;
       u.uGBlend.value = fx.grade.blend;
       u.uGBalance.value = fx.grade.balance;
+      u.uFeed.value = fx.feed;
+      u.uFeedNight.value = fx.feedNight;
+      u.uGlitch.value = fx.glitch;
+      // The glitch's vertical roll: the picture slips faster the worse the signal, and snaps back into lock below ~0.55.
+      const rollK = THREE.MathUtils.smoothstep(fx.glitch, 0.55, 0.95);
+      roll = rollK > 0 ? (roll + Math.min(0.1, Math.max(0, t - lastT)) * (0.5 + 1.7 * rollK)) % 1 : 0;
+      lastT = t;
+      u.uRoll.value = roll;
       const s = fx.shake * 0.006;
       u.uShake.value.set((Math.sin(t * 47.3) + Math.sin(t * 71.9)) * s, (Math.sin(t * 53.1 + 1.3) + Math.sin(t * 89.7)) * s);
       bloom.strength = fx.bloomStrength;

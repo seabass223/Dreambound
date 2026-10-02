@@ -5,16 +5,18 @@
 // Offsets from the Rocks stack's centre, like the boulder spots in world/stacks/rocks.js: a ring of five, a regular
 // pentagon 27 m round the island's centre (a stone circle, which the creek runs through), turned so every stone
 // stands clear of the trees, the creek, the tor, the piles and the rim. Order doesn't matter: any boulder may fill any
-// target. Each boulder has a clear straight push of 6-13 m onto one of them (proved with the real controller, physics
-// and push rules by tools/regress/out/rock_puzzle_test.mjs; the scattered trees stay out of every path).
+// target. The boulders only arrive when rocks.exe blows the tor (world/rockThrow.js picks where they land, at random but
+// always 6-14 m from a target of their own with a clear straight push onto it, proved with the real controller,
+// physics and push rules by tools/regress/out/rocks_exe_test.mjs; the scattered trees stay out of every path).
 export const RING = { x: 0, z: 0, r: 27, phase: 49.5 };   // phase: degrees from +Z (north) towards +X
 export const ROCK_TARGETS = [0, 1, 2, 3, 4].map((k) => {
   const a = ((RING.phase + k * 72) * Math.PI) / 180;
   return { x: RING.x + Math.sin(a) * RING.r, z: RING.z + Math.cos(a) * RING.r };
 });
 
-// A boulder counts as in place within this distance (m) of a target's centre.
-export const TARGET_TOL = 1.2;
+// A boulder counts as in place within this distance (m) of a target's centre (a forgiving catch: none lands within
+// r + 4 of one, so nothing starts in place).
+export const TARGET_TOL = 2.5;
 
 // Whether every target has its own boulder within tol (positions and targets in the same frame). Five of each: try
 // every assignment (120), cheap enough to run on each push.

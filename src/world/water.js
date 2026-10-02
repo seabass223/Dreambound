@@ -105,6 +105,7 @@ uniform vec4 uWall;    // rock column behind the water: centre xz, radius, top y
 uniform vec4 uFade;    // world y fully visible, world y gone; drop (m) fully visible, drop gone
 uniform vec4 uShape;   // glassy tongue length (m), break-up start and end (m of drop), wind drift
 uniform vec2 uFreq;    // streaks per metre across, per second of travel along
+uniform float uDry;    // seconds since the source stopped (< 0: running): water that left the top since then is gone
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec4 vFall;
@@ -181,6 +182,8 @@ void main() {
   float fade = smoothstep(uFade.y, uFade.x, vWorld.y + jit * 20.0);
   fade *= 1.0 - smoothstep(uFade.z, uFade.w, s + jit * 2.0);
   fade *= mix(0.3, 1.0, smoothstep(0.0, 0.3, tau));
+  // The last of the water running off down the face: a ragged trailing edge, thinning as it goes.
+  fade *= smoothstep(uDry, uDry + 0.25, tau + jit * 0.35) * mix(1.0, 0.55, smoothstep(0.0, 1.2, uDry) * smoothstep(uDry + 0.6, uDry, tau));
   float a = body * edge * fade;
 
   vec3 V = vWorld - cameraPosition;
@@ -259,7 +262,7 @@ void main() {
 function fallMaterial(name, { out, wall, fade, shape, freq = new THREE.Vector2(1.6, 0.9), veil = false }) {
   return new THREE.ShaderMaterial({
     name,
-    uniforms: { ...atmo, uOut: { value: out }, uWall: { value: wall }, uFade: { value: fade }, uShape: { value: shape }, uFreq: { value: freq } },
+    uniforms: { ...atmo, uOut: { value: out }, uWall: { value: wall }, uFade: { value: fade }, uShape: { value: shape }, uFreq: { value: freq }, uDry: { value: -1 } },
     defines: veil ? { VEIL: '' } : {},
     vertexShader: fallVert,
     fragmentShader: veil ? veilFrag : sheetFrag,
@@ -472,6 +475,8 @@ export function edgeWaterfall(stack, { theta, lip, width = 3.2, speed = 2.2, dro
 // A short white-water cascade down a rock face into a pool. points run top to bottom; the ribbon spans the
 // horizontal perpendicular of `outward` (the unit direction away from the rock; by default the way the
 // cascade runs, top to bottom).
+// Its material's uDry stops it from the top (world/torBlast.js): set it to the seconds since the spring dried up and
+// the water drains off down the face; userData.tau is how long the last of it takes to reach the bottom.
 export function cascadeMesh(points, widths, { outward = null } = {}) {
   const top = points[0];
   const dir = outward ?? points[points.length - 1].clone().sub(top);
@@ -502,6 +507,7 @@ export function cascadeMesh(points, widths, { outward = null } = {}) {
   const m = new THREE.Mesh(sheetGeometry([{ rows }], side, 5, 0.5), mat);
   m.name = 'cascade';
   m.renderOrder = 4;
+  m.userData.tau = rows[rows.length - 1].tau;
   return m;
 }
 

@@ -65,11 +65,21 @@ function outsideMaterial(T, U, { minRough = 0 } = {}) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform vec3 uElevFill;')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>${minRough ? `
-        roughnessFactor = max(roughnessFactor, ${minRough.toFixed(2)});` : ''}`)
+        roughnessFactor = max(roughnessFactor, ${minRough.toFixed(2)});` : ''}`)      // (and the same undefined tangent frame bends the normal map's normal into NaN there: keep the unbumped one)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        if (!(abs(dot(normal, normal) - 1.0) < 0.1)) normal = nonPerturbedNormal;`)
       .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
         #ifdef USE_ANISOTROPY
           material.anisotropy *= metalnessFactor;
           material.alphaT = mix(pow2(material.roughness), 1.0, pow2(material.anisotropy));
+          // The grain direction comes from the UVs' screen derivatives; on parts packed as flat projections (the bolt
+          // heads' sides, whose faces all map to one line) it's undefined, and NaN there made each bolt a white-hot,
+          // blooming speck that flickered as you walked up. Where it isn't a unit vector, use any tangent of the normal
+          // (the anisotropy is 0 on those parts anyway, so the choice doesn't show).
+          if (!(abs(dot(material.anisotropyT, material.anisotropyT) - 1.0) < 0.1) || !(abs(dot(material.anisotropyB, material.anisotropyB) - 1.0) < 0.1)) {
+            material.anisotropyT = normalize(cross(abs(normal.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), normal));
+            material.anisotropyB = cross(normal, material.anisotropyT);
+          }
         #endif`)
       .replace('#include <lights_fragment_end>', 'irradiance += uElevFill * PI; radiance += uElevFill;\n#include <lights_fragment_end>');
   };
@@ -177,10 +187,11 @@ function sharedAssets(asset) {
 
 // A two-ended elevator. Each end is a static car behind sliding doors; riding teleports the player
 // between identical cars after an 8 second descent/ascent. The Tower's has a secret third stop: `ends.lounge`, below
-// its cave station, reached by pressing Down again there (see props/lounge.js).
-export function createElevator(ctx, { id, ends }) {
+// its cave station, reached by pressing Down again there (see props/lounge.js). start: the stop the car waits at in a
+// new game (a saved game puts it back where it was).
+export function createElevator(ctx, { id, ends, start = 'top' }) {
   const S = sharedAssets(ctx.elevatorAsset);
-  const el = { id, at: 'top', busy: false, ends: {}, enclosed: false };
+  const el = { id, at: start, busy: false, ends: {}, enclosed: false };
   // Each elevator runs off its power line from the generator in the hub; without power the car is dark and
   // its buttons click uselessly.
   const live = () => !ctx.power || ctx.power[id] !== false;

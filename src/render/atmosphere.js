@@ -56,6 +56,9 @@ export const atmo = {
   uBunB: { value: new THREE.Vector4(0, 0, 0, 0) },
   uBunC: { value: new THREE.Vector4(0, 0, 0, 0) },
   uBunD: { value: new THREE.Vector4(0, 0, 0, 0) },
+  // The Mountain's mine adit (props/mine.js): its frame and its drive, for materials.js mineMask().
+  uMineA: { value: new THREE.Vector4(0, 0, 0, 0) },
+  uMineB: { value: new THREE.Vector4(0, 0, 0, 0) },
 };
 
 export const atmoState = {

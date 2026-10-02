@@ -713,11 +713,29 @@ export function buildSequoia(ctx, { x, y, z, doorDir, batcher, collider }) {
 
   let footprintR = 0;
   for (let i = 0; i < 360; i++) footprintR = Math.max(footprintR, shape.at((i / 360) * TAU, 0, s).r);
+  // The bark's surface where it faces the horizontal world direction (dx, dz) at world height wy: the point on it and
+  // its outward normal, smoothed over a hand's breadth of the furrows (for strapping something to the trunk: the
+  // Rocks' hidden camera, world/stacks/rocks.js).
+  const sb = {};
+  const rSmooth = (phi, yy) => {
+    let r = 0;
+    for (const dp of [-0.06, 0, 0.06]) for (const dy of [-0.15, 0, 0.15]) r += shape.at(phi + dp, yy + dy, sb).r;
+    return r / 9;
+  };
+  const surf = (phi, yy, out) => { const r = rSmooth(phi, yy), a = phi + rot; return out.set(x + r * Math.sin(a), y + yy, z + r * Math.cos(a)); };
+  const barkAt = (dx, dz, wy) => {
+    const phi = Math.atan2(dx, dz) - rot, yy = wy - y;
+    const pos = surf(phi, yy, new THREE.Vector3());
+    const tu = surf(phi + 0.1, yy, new THREE.Vector3()).sub(surf(phi - 0.1, yy, new THREE.Vector3()));
+    const tv = surf(phi, yy + 0.3, new THREE.Vector3()).sub(surf(phi, yy - 0.3, new THREE.Vector3()));
+    return { pos, normal: tu.cross(tv).normalize(), r: pos.clone().sub(new THREE.Vector3(x, pos.y, z)).length() };
+  };
   return {
     platePos: plate(0, 0).setY(y + PLATE_Y),
     plateRot: rot,
     height: canopy.geometry.boundingBox.max.y,
     footprintR,
     canopy: [canopy, far],
+    barkAt,
   };
 }

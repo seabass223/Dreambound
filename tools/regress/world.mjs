@@ -168,7 +168,7 @@ class Recorder {
       case 'buildTor':
         Object.assign(info, { x: o.x, z: o.z, radius: o.radius, height: o.height });
         info.top = v3(ret.top); info.splash = v3(ret.splash); info.poolRadius = ret.poolRadius;
-        info.walls = ret.walls; info.cascade = ret.cascade?.map(v3) ?? null; info.blocker = ret.blocker;
+        info.walls = ret.walls; info.cascade = ret.cascade?.map(v3) ?? null; info.blocker = ret.blocker; info.frame = ret.frame;
         break;
       case 'buildRockPile':
         Object.assign(info, { x: o.x, z: o.z, radius: o.radius, height: o.height });
@@ -196,7 +196,8 @@ const parseGlb = (GLTFLoader, file) => new Promise((res, rej) => {
 });
 
 // Builds the world once. walls: the ?walls= string (undefined = config defaults).
-export async function buildHeadless({ walls } = {}) {
+// torSculpt: false builds the procedural tor even when public/models/tor.glb exists (export_tor.mjs).
+export async function buildHeadless({ walls, torSculpt: withSculpt = true } = {}) {
   if (globalThis.__REGRESS_TAP) throw new Error('buildHeadless: one world per process (flags are read at module evaluation)');
   if (walls !== undefined) globalThis.__WALLS = walls;
   installDom();
@@ -208,8 +209,13 @@ export async function buildHeadless({ walls } = {}) {
   const imp = (p) => import(SRC + p);
   const config = await imp('config.js');
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const [cabin, observatory, cave, lounge, elevator, towerKit, deck, shed, iris, walkstone] = await Promise.all(['cabin.glb', 'observatory.glb', 'cave.glb', 'lounge.glb', 'elevator.glb', 'tower_kit.glb', 'deck.glb', 'shed.glb', 'iris.glb', 'walkstone.glb'].map((f) => parseGlb(GLTFLoader, f)));
+  const [cabin, observatory, cave, lounge, elevator, towerKit, deck, shed, iris, walkstone, mine] = await Promise.all(['cabin.glb', 'observatory.glb', 'cave.glb', 'lounge.glb', 'elevator.glb', 'tower_kit.glb', 'deck.glb', 'shed.glb', 'iris.glb', 'walkstone.glb', 'mine.glb'].map((f) => parseGlb(GLTFLoader, f)));
+  // The bunker room's model (props/bunkerRoom.js) and the tor's blast (world/rockpiles.js): optional, as in the game.
+  const has = (f) => fs.existsSync(path.join(ROOT, 'public/models', f));
+  const bunker = has('bunker.glb') ? await parseGlb(GLTFLoader, 'bunker.glb') : null;
   (await import(SRC + 'props/aperture.js')).setIrisAsset(iris);   // the iris diaphragm (End door, roof station)
+  const torSculpt = withSculpt && fs.existsSync(path.join(ROOT, 'public/models/tor.glb'))
+    ? (await imp('world/rockpiles.js')).torSculpt(await parseGlb(GLTFLoader, 'tor.glb'), has('tor_blast.glb') ? await parseGlb(GLTFLoader, 'tor_blast.glb') : null) : null;
   const { Physics } = await imp('player/collision.js');
   const { Stack } = await imp('world/terrain.js');
   const { Flowers } = await imp('world/flowers.js');
@@ -247,6 +253,9 @@ export async function buildHeadless({ walls } = {}) {
     deckAsset: { gltf: deck, ao: tex(), wood: tex(), normal: tex() },
     shedAsset: { gltf: shed, atlas: tex(), wood: tex(), woodN: tex(), metal: tex(), metalN: tex(), stone: tex(), stoneN: tex() },
     walkstoneAsset: { gltf: walkstone, albedo: tex(), normal: tex(), rough: tex() },
+    mineAsset: { gltf: mine, ao: tex(), wood: tex(), woodN: tex(), rust: tex(), rustN: tex(), paint: tex(), paintN: tex() },
+    bunkerAsset: bunker && { gltf: bunker, lm: tex(), env: tex(), wall: tex(), wallN: tex(), floor: tex(), floorR: tex(), floorN: tex(), concrete: tex(), orange: tex(), orangeN: tex(), green: tex(), greenN: tex(), steel: tex(), alu: tex(), decal: tex() },
+    torSculpt,
   });
   const buildMs = performance.now() - t0;
   Stack.prototype.build = build;

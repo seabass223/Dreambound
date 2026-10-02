@@ -8,6 +8,74 @@ import { materials } from '../render/materials.js';
 // None of it goes into the BVH collider (the capsule climbs any face that is not vertical); the returned
 // vertical circle walls are the collision.
 
+// The Rocks tor's Blender resculpt (public/models/tor.glb, tools/blender/tor_design.py), for buildTor: its pieces
+// (relative to the tor's centre on the ground plane, y as in the world) and the layout it was made from. Null when
+// there is none (the procedural tor is drawn). With it, its blast (public/models/tor_blast.glb,
+// tools/blender/tor_blast_design.py: the stump, the far stand-ins, the debris chunks and their clip, the five boulders
+// and the charges) as `blast` (world/torBlast.js), or null.
+export async function loadTorSculpt() {
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const load = (f) => new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/' + f).catch(() => null);
+  const [tor, blast] = await Promise.all([load('tor.glb'), load('tor_blast.glb')]);
+  try { return tor ? torSculpt(tor, blast) : null; } catch { return null; }
+}
+export function torSculpt(gltf, blastGltf = null) {
+  const geos = [];
+  let frame = null;
+  gltf.scene.updateMatrixWorld(true);
+  gltf.scene.traverse((o) => {
+    if (o.userData?.tor_frame) frame = JSON.parse(o.userData.tor_frame);
+    if (o.isMesh) geos.push(o.geometry.clone().applyMatrix4(o.matrixWorld));
+  });
+  if (!frame || !geos.length) return null;
+  let blast = null;
+  try { blast = blastGltf ? torBlastParts(blastGltf, frame) : null; } catch (e) { console.warn('tor blast: unreadable', e); }
+  return { geos, frame, blast };
+}
+
+// tor_blast.glb's parts, all relative to the tor's frame (as the sculpt): `stump`, `stumpFar`, `far` (the intact tor's
+// stand-in), `chunks` [{ name, geo (centred on its pivot), pos (rest pivot), r, settle, lost }], the `clip` that throws
+// them, `boulders` [{ geo, r }] (in metres, centred) and `info` (the BLAST empty: center, charges, launch). Null unless
+// it was made for the same layout as tor.glb.
+function torBlastParts(gltf, frame) {
+  const named = {};
+  let info = null;
+  gltf.scene.traverse((o) => {
+    if (o.userData?.charges) info = o.userData;
+    if (o.isMesh) named[o.name] = o;
+  });
+  const f = info?.tor_frame && JSON.parse(info.tor_frame);
+  const same = !!f && ['x', 'z', 'g0', 'yRim', 'spill', 'yW'].every((k) => Math.abs(f[k] - frame[k]) < 0.01) && f.nBody === frame.nBody;
+  const clip = gltf.animations.find((a) => a.name === 'blast');
+  if (!same || !clip || !named.tor_stump) { console.warn('tor blast: made for another layout (re-run tools/blender/tor_blast_design.py)'); return null; }
+  const geo = (o) => { o.updateMatrixWorld(true); return tidy(o.geometry.clone().applyMatrix4(o.matrixWorld)); };
+  const chunks = [];
+  for (let i = 0; named['tor_chunk_' + i]; i++) {
+    const o = named['tor_chunk_' + i];
+    chunks.push({ name: o.name, geo: tidy(o.geometry.clone()), pos: o.position.clone(), r: o.userData.r ?? 0.5, settle: o.userData.settle ?? clip.duration, lost: !!o.userData.lost });
+  }
+  const boulders = [];
+  for (let k = 0; named['tor_boulder_' + k]; k++) boulders.push({ geo: geo(named['tor_boulder_' + k]), r: named['tor_boulder_' + k].userData.r });
+  return {
+    stump: geo(named.tor_stump), stumpFar: named.tor_stump_far ? geo(named.tor_stump_far) : null, far: named.tor_far ? geo(named.tor_far) : null,
+    chunks, clip, boulders, info: { center: info.center, charges: info.charges, launch: info.launch },
+  };
+}
+// As the batcher has them (so they share the tor's shader): float rgb colour (glTF's is rgba), position, normal, uv,
+// a 32-bit index.
+function tidy(g) {
+  for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
+  const src = g.attributes.color, n = g.attributes.position.count;
+  if (src && (src.itemSize !== 3 || !(src.array instanceof Float32Array))) {
+    const c = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { c[i * 3] = src.getX(i); c[i * 3 + 1] = src.getY(i); c[i * 3 + 2] = src.getZ(i); }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  }
+  if (!g.attributes.normal) g.computeVertexNormals();
+  if (g.index && !(g.index.array instanceof Uint32Array)) g.setIndex(new THREE.BufferAttribute(Uint32Array.from(g.index.array), 1));
+  return g;
+}
+
 const TILE = 4;              // metres per rock-texture tile, as on the stack cliffs
 const TAU = Math.PI * 2;
 const BAND = [-0.3, 3];      // heights above the ground whose silhouette the walls and footprint cover
@@ -17,7 +85,12 @@ const LICHEN = [0.7, 0.7, 0.62], LICHEN_Y = [0.64, 0.6, 0.4], MOSS = [0.2, 0.24,
 // ---------------------------------------------------------------------------------------------------------
 // The tor: 4 tiers of jointed blocks shrinking upward, flush on the spill side where a leaning chute face
 // carries the spring's overflow from a notch in the top basin down to the ground.
-export function buildTor(stack, { x, z, radius = 8.5, height = 12.5, seed = 1, spillAngle, batcher }) {
+//
+// sculpt (optional): the Blender resculpt of this same tor (loadTorSculpt: tools/blender/tor_design.py, made from these
+// blocks by tools/blender/export_tor.mjs). It replaces the drawn blocks and boulders only; the walls, footprint,
+// blocker and the cascade are still worked out from the blocks here, so nothing you walk on or the water follows
+// moves. It is used only while it was made from this layout (sculptFits), else the blocks are drawn as before.
+export function buildTor(stack, { x, z, radius = 8.5, height = 12.5, seed = 1, spillAngle, batcher, sculpt = null }) {
   const rng = new Rng(seed);
   const R = radius;
   const spill = spillAngle ?? rng.float(0, TAU);
@@ -216,8 +289,15 @@ export function buildTor(stack, { x, z, radius = 8.5, height = 12.5, seed = 1, s
     },
   };
   const M = materials();
-  for (const b of body) batcher.add(finish(b, env), M.cliff);
-  for (const b of boulders) batcher.add(finish(b, env), M.cliff);
+  const frame = { x, z, g0, yRim, spill, uFoot, lean, pool: [pcx, pcz], rp, yW, lipY, seed, nBody: body.length };
+  const sculpted = !!sculpt && sculptFits(sculpt, frame);
+  if (sculpted) {
+    const at0 = new THREE.Matrix4().makeTranslation(x, 0, z);
+    for (const g of sculpt.geos) batcher.add(g, M.cliff, at0);
+  } else {
+    for (const b of body) batcher.add(finish(b, env), M.cliff);
+    for (const b of boulders) batcher.add(finish(b, env), M.cliff);
+  }
 
   // ---- Collision, footprint and blocker.
   let yTop = -Infinity;
@@ -231,7 +311,17 @@ export function buildTor(stack, { x, z, radius = 8.5, height = 12.5, seed = 1, s
   }
   const { footprint, blocker } = footprintOf(shapes, x, z);
 
-  return { top: new THREE.Vector3(pcx, yW, pcz), poolRadius: rp, cascade, cascadeWidths, splash, footprint, blocker, walls };
+  return { top: new THREE.Vector3(pcx, yW, pcz), poolRadius: rp, cascade, cascadeWidths, splash, footprint, blocker, walls, frame, sculpted };
+}
+
+// Whether a tor sculpt was made from the layout being built now (its frame, stored in the GLB, matches to a centimetre).
+// A changed seed, radius, height or stack ground makes a new layout; the sculpt is then stale until it is re-exported
+// and rebuilt, and the blocks are drawn instead.
+function sculptFits(sculpt, f) {
+  const s = sculpt.frame;
+  const ok = !!s && ['x', 'z', 'g0', 'yRim', 'spill', 'yW'].every((k) => Math.abs(s[k] - f[k]) < 0.01) && s.nBody === f.nBody;
+  if (!ok) console.warn('tor sculpt: made for another layout; drawing the procedural tor (re-run tools/blender/export_tor.mjs and build_tor.py)');
+  return ok;
 }
 
 // ---------------------------------------------------------------------------------------------------------

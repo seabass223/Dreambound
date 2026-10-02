@@ -148,15 +148,25 @@ export class Forest {
       const map = Textures[g.map]();
       const folMat = foliageMaterial(map, sp.sway, sp.flutter, sp.tint);
       folMat.alphaToCoverage = true;
-      // No leaves inside the Tower bunker: the stand grows close round its hood, and crowns reach in (materials.js
-      // bunkerMask; outside, over its roof, they're left alone).
+      // No leaves indoors: crowns growing close round a building reach through its walls and roof (the Tower stand
+      // round the bunker's hood; the dome garden's broadleaf at the cabin's bedroom corner). Inside the cabin, the
+      // observatory and the bunker (materials.js interiorMask) they're discarded; outside, over the roofs, they're
+      // left alone.
       const fol0 = folMat.onBeforeCompile, key0 = folMat.customProgramCacheKey;
       folMat.onBeforeCompile = (sh, r) => {
         fol0(sh, r);
         sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-          if (bunkerMask(vFogWorld) > 0.5) discard;`);
+          if (interiorMask(vFogWorld) > 0.001) discard;   // (anywhere past the wall line: the mask fades in over its last 12 cm)
+          // and inside the cabin's walls and roof too (0.25 m into their ~0.5 m): leaves there glint through the
+          // hairline seams between wall and ceiling.
+          if (uIntA.z > uIntA.x) {
+            vec3 q = vFogWorld;
+            float hd = (uIntA.w - uIntA.y) * 0.5;
+            float roofY = mix(uIntB.z, uIntB.y, clamp(abs(q.z - uIntB.w) / hd, 0.0, 1.0));
+            if (q.x > uIntA.x - 0.25 && q.x < uIntA.z + 0.25 && q.z > uIntA.y - 0.25 && q.z < uIntA.w + 0.25 && q.y > uIntB.x - 0.3 && q.y < roofY + 0.25) discard;
+          }`);
       };
-      folMat.customProgramCacheKey = () => key0() + '|bunker';
+      folMat.customProgramCacheKey = () => key0() + '|indoors';
       const depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map, alphaTest: 0.45 });
       const matrices = new Float32Array(list.length * 16), colors = new Float32Array(list.length * 3);
       list.forEach((t, i) => {

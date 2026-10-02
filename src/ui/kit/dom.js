@@ -18,9 +18,9 @@ export function h(tag, props = {}, ...children) {
   return el;
 }
 
-// ---- button: variant default | secondary | outline | destructive | ghost; size default | sm
+// ---- button: variant default | secondary | outline | destructive | ghost; size default | sm | icon
 export function button({ label, variant = 'default', size = 'default', onClick, title, disabled = false, ...rest }) {
-  const el = h('button', { type: 'button', class: `ui-btn ui-btn-${variant}${size === 'sm' ? ' ui-btn-sm' : ''}`, title, disabled, ...rest }, label);
+  const el = h('button', { type: 'button', class: `ui-btn ui-btn-${variant}${size === 'sm' ? ' ui-btn-sm' : size === 'icon' ? ' ui-btn-icon' : ''}`, title, disabled, ...rest }, label);
   if (onClick) el.addEventListener('click', onClick);
   return el;
 }
