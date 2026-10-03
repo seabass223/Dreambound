@@ -17,6 +17,8 @@ const ICONS = {
   send: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   bug: '<rect x="7" y="7" width="10" height="14" rx="5"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/><path d="M12 12v9"/><path d="M3 13h4"/><path d="M17 13h4"/><path d="M4 7l3 2"/><path d="M20 7l-3 2"/><path d="M4 20l3-2"/><path d="M20 20l-3-2"/>',
+  // A battery all but flat: the outline, its terminal, and one sliver of charge (filled; class "charge" to colour it).
+  batteryLow: '<rect x="2" y="7" width="17" height="10" rx="2.5"/><path d="M22 10.5v3"/><rect class="charge" x="4.5" y="9.5" width="2.6" height="5" rx="0.7" fill="currentColor" stroke="none"/>',
 };
 export function icon(name, size = 18) {
   const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

@@ -12,7 +12,6 @@ import { streamGeometry, createStreamMaterial, edgeWaterfall, cascadeMesh } from
 import { splashFX, mistFX, hazeFX, poolFoamFX, fallSprayFX } from '../waterfx.js';
 import { buildTor, buildRockPile } from '../rockpiles.js';
 import { Flowers } from '../flowers.js';
-import { buildBridge } from '../bridge.js';
 import { createElevator } from '../../props/elevator.js';
 import { createMovableRocks } from '../../props/movableRocks.js';
 import { buildSequoia } from '../../props/sequoia.js';
@@ -21,6 +20,8 @@ import { buildWalkway } from '../walkway.js';
 import { ROCK_TARGETS } from '../rockPuzzle.js';
 import { createTorBlast } from '../torBlast.js';
 import { createRockThrow } from '../rockThrow.js';
+import { createTargetMarks } from '../rockTargets.js';
+import { placeGatehouse } from '../../props/gatehouse.js';
 
 // Layout (offsets from the stack centre). The tor stands west of the sequoia, in view of its door; its spring
 // spills down the south-east face into a pool, and the creek runs past the tree and east over the lip.
@@ -32,9 +33,16 @@ const PILES = [
 ];
 const POOL_R = 3.4;
 const SEQ_SINK_R = 4.3;   // ground sunk under the sequoia out to here: its car and sill reach 3.5 m, plus a cap triangle
-// The petroglyph (a clue, props/petroglyph.js): on the big stone of the 205° pile, on the face looking out to the rim,
-// about 0.8 m up. at: a point on that face (x, z from the stack's centre, y absolute); normal: roughly out of it.
-const GLYPH = { pile: 1, at: [-41.409, 5.974, -16.657], normal: [-0.831, 0.01, 0.556], lift: 0.04 };
+// The carvings (props/petroglyph.js), a trail across the stack like a maze of sign posts, each pecked into a pile's
+// stone and glowing a little: an arrow on the 205° pile (where the stepping stones lead) points across the stack to the
+// 45° pile; an arrow there points on, across again, to the 305° pile; and there is the clue itself, the Tower and its
+// elevator down to the lounge, with the Down button held for three counts. at: a point on the face (x, z from the
+// stack's centre, y absolute); normal: roughly out of it; to: the carving its arrow points at.
+const GLYPHS = [
+  { name: 'petroglyph:arrow:1', kind: 'arrow', pile: 1, at: [-41.409, 5.974, -16.657], normal: [-0.831, 0.01, 0.556], lift: 0.04, to: 1 },
+  { name: 'petroglyph:arrow:2', kind: 'arrow', pile: 0, at: [31.124, 6.94, 28.68], normal: [0.931, 0.104, -0.349], lift: 0, to: 2 },
+  { name: 'petroglyph', kind: 'tower', pile: 3, at: [26.052, 5.946, -38.004], normal: [0.472, 0.195, -0.86], lift: 0.05 },
+];
 // The way to it: limestone stepping stones (world/walkway.js, as round the Home stack's dome) from the creek's bank, where
 // it runs closest (about 3.5 m off its line), across the meadow and round the north side of that pile to the ground in
 // front of the carving, with a faint trodden line under them. (Seven pebbles 3 m apart, starting 14 m from the creek,
@@ -200,12 +208,13 @@ export function buildRocks(ctx) {
   const rockWalls = [tor, ...piles].flatMap((m) => m.walls);
   for (const w of rockWalls) ctx.physics.addCircle({ ...w, zone: 'surface' });
   const onRock = (x, z) => tor.footprint(x, z) || piles.some((p) => p.footprint(x, z));
-  // The Tower stack and its elevator's two stops below, pecked into a pile's stone (a fixed one: the boulders are
-  // kept off the piles).
-  carvePetroglyph(ctx, {
-    geos: piles[GLYPH.pile].geos, at: new THREE.Vector3(cx + GLYPH.at[0], GLYPH.at[1], cz + GLYPH.at[2]),
-    normal: new THREE.Vector3(...GLYPH.normal), lift: GLYPH.lift,
-  });
+  // The carvings, pecked into piles' stones (fixed ones: the boulders are kept off the piles); each arrow aims at the
+  // next one's place.
+  const glyphAt = (g) => new THREE.Vector3(cx + g.at[0], g.at[1], cz + g.at[2]);
+  ctx.glyphs = GLYPHS.map((g) => carvePetroglyph(ctx, {
+    geos: piles[g.pile].geos, at: glyphAt(g), normal: new THREE.Vector3(...g.normal), lift: g.lift,
+    name: g.name, kind: g.kind, toward: g.to != null ? glyphAt(GLYPHS[g.to]) : null,
+  }));
 
   // ---- Water ----
   // Creek surface just above the bed; wide across the pool.
@@ -374,7 +383,8 @@ export function buildRocks(ctx) {
   tree.r = seq.footprintR + 0.5;
   const nearTree = (x, z, pad) => Math.hypot(x - tree.x, z - tree.z) < seq.footprintR + pad;
 
-  // ---- Bridge to End ----
+  // ---- Where the bridge to End used to start: the gatehouse's anchor (props/gatehouse.js), and a point other code
+  // keeps things off (the boulders' landings, the scatter below) ----
   const e = STACKS.end;
   const bdir = new THREE.Vector3(e.bridgeDir.x, 0, e.bridgeDir.z);
   const thB = Math.atan2(bdir.z, bdir.x);
@@ -452,16 +462,18 @@ export function buildRocks(ctx) {
   for (const list of flowers.items) for (let i = 0; i < list.length; i += 4) if (clueWalk.on(list[i], list[i + 2], 0.05)) list[i + 3] = 0;
   flowers.build(ctx.surface, ctx.lod);
 
-  // Bridge (collision lives with this stack so it's active from both ends).
+  // Finished once End knows its landing (end.js): this stack's collider, its props and their far stand-in, and the
+  // gatehouse at the rim on the heading to that landing, with the staircase it lets down to it (there is no bridge: the
+  // gap is uncrossable until the Rocks puzzle opens it; sequences/stairsReveal.js). The gatehouse is its own prop with
+  // its own colliders, so this stack's collider is as it was without the bridge.
   ctx.buildBridgeLater = (bridgeB) => {
-    const bb = new Batcher();
-    buildBridge(ctx, { a: bridgeA, b: bridgeB, batcher: bb, collider });
-    const bridge = bb.build(stack.group, { name: 'bridge' });
+    ctx.bridgeB = bridgeB;
     ctx.physics.addCollider(collider.build(), 'surface');
     const props = batcher.build(stack.group, { name: 'rocks-props' });
-    // From other stacks the props and the bridge are one merged stand-in (see render/lod.js).
-    ctx.lod.addFarProxy([...props, ...bridge].filter(mergeable), { parent: stack.group, band: FAR_BAND, material: farMaterial(), name: 'rocks-props' });
+    // From other stacks the props are one merged stand-in (see render/lod.js).
+    ctx.lod.addFarProxy(props.filter(mergeable), { parent: stack.group, band: FAR_BAND, material: farMaterial(), name: 'rocks-props' });
     ctx.surface.add(stack.group);
+    if (ctx.gatehouseAsset) placeGatehouse(ctx, ctx.gatehouseAsset, { a: bridgeA, b: bridgeB, stack });
   };
 
   createElevator(ctx, {
@@ -479,6 +491,13 @@ export function buildRocks(ctx) {
     stump: { footprint: tor.footprint, top: torBlast.stumpTop }, launch: torBlast.launch,
     piles: piles.map((p) => ({ blocker: p.blocker, top: Math.max(...p.walls.map((w) => w.y1)) - 1 })),
   });
+  // Bare earth on each target once the blast has thrown the boulders out (world/rockTargets.js): fading in as the dust
+  // settles after a throw, there at once when a saved game puts them out.
+  const marks = createTargetMarks(ctx, stack, ctx.boulders.targets);
+  const { launch: throwRocks, releaseInstant } = ctx.boulders;
+  ctx.boulders.launch = (o = {}) => { const f = throwRocks(o); marks.reveal({ delay: (o.t0 ?? 0) + 1.2 }); return f; };
+  ctx.boulders.releaseInstant = (...a) => { const r = releaseInstant(...a); marks.reveal({ instant: true }); return r; };
+  ctx.boulders.marks = marks;
   // The hidden camera ("CAM 07", sequences/rocksExe.js) strapped to the sequoia's bark facing the tor, a little above
   // its door. pos: the lens; look: where it points; mount: its bracket on the bark (the housing's own frame, the
   // bunker kit's cctv layer, puts the bracket 0.476 m behind the lens and 0.05 m below it).

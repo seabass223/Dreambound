@@ -3,19 +3,10 @@ import { atmo } from './atmosphere.js';
 import { Textures } from './textures.js';
 import { CLOUD_DECK_Y } from '../config.js';
 
-// Aerial-perspective fog: color follows the sky gradient by view azimuth and thickens toward the cloud deck.
-const FOG_PARS_FRAG = /* glsl */ `
-uniform vec3 uSunDir;
-uniform vec3 uZenith;
-uniform vec3 uHorizonAway;
-uniform vec3 uHorizonSun;
-uniform vec3 uSunGlow;
-uniform float uUnderground;
-uniform float uFogDensity;
-uniform vec3 uCloudColor;
-uniform float uTime;
-uniform float uFogLow;
-uniform vec3 uFogTint;
+// The interiors (the cabin, the observatory, the Tower bunker, the mine adit) as masks of a world point, from their
+// atmo uniforms: interiorMask(p) is 1 inside, 0 outside. Shared by the fog below and the storm's rain (render/storm.js),
+// which keeps out of them.
+export const INTERIOR_GLSL = /* glsl */ `
 uniform vec4 uIntA;
 uniform vec4 uIntB;
 uniform vec4 uObsA;
@@ -69,6 +60,22 @@ float interiorMask(vec3 p) {
   }
   return max(max(m, bunkerMask(p)), mineMask(p));
 }
+`;
+
+// Aerial-perspective fog: color follows the sky gradient by view azimuth and thickens toward the cloud deck.
+const FOG_PARS_FRAG = /* glsl */ `
+uniform vec3 uSunDir;
+uniform vec3 uZenith;
+uniform vec3 uHorizonAway;
+uniform vec3 uHorizonSun;
+uniform vec3 uSunGlow;
+uniform float uUnderground;
+uniform float uFogDensity;
+uniform vec3 uCloudColor;
+uniform float uTime;
+uniform float uFogLow;
+uniform vec3 uFogTint;
+${INTERIOR_GLSL}
 varying vec3 vFogWorld;
 float dbHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float dbNoise(vec2 p) {
@@ -138,7 +145,7 @@ const WIND_VERT = /* glsl */ `
   g = g * g * g;
   vec2 w = uWind * (0.15 + g * 0.85);
   vec2 jitter = vec2(sin(t * (1.1 + ph * 0.6) + ph * 20.0), cos(t * (0.9 + ph * 0.5) + ph * 13.0)) * (0.18 + g * 0.35);
-  vec2 push = w + jitter * 0.35;
+  vec2 push = (w + jitter * 0.35) * uWindAmp;   // uWindAmp: the storm's harder sway (render/storm.js)
   float hgt = max(position.y, 0.0);
   float bend = hgt * hgt * uSwayAmount;
   vec3 worldPush = vec3(push.x, 0.0, push.y) * bend;
@@ -147,7 +154,7 @@ const WIND_VERT = /* glsl */ `
   transformed += localPush;
   transformed.y -= dot(push, push) * bend * 0.08;
   #ifdef FLUTTER
-  float fl = sin(t * (5.0 + ph * 3.0) + dot(position, vec3(3.1, 2.3, 4.7))) * (0.3 + g);
+  float fl = sin(t * (5.0 + ph * 3.0) + dot(position, vec3(3.1, 2.3, 4.7))) * (0.3 + g) * (0.5 + 0.5 * uWindAmp);
   transformed += normal * fl * uFlutter * hgt;
   #endif
 }
@@ -161,12 +168,12 @@ export function patchMaterial(mat, { wind = null, fadeDist = 0, indoorEnv = fals
     Object.assign(shader.uniforms, {
       uSunDir: atmo.uSunDir, uZenith: atmo.uZenith, uHorizonAway: atmo.uHorizonAway,
       uHorizonSun: atmo.uHorizonSun, uSunGlow: atmo.uSunGlow, uUnderground: atmo.uUnderground,
-      uFogDensity: atmo.uFogDensity, uTime: atmo.uTime, uWind: atmo.uWind, uCloudColor: atmo.uCloudColor,
+      uFogDensity: atmo.uFogDensity, uTime: atmo.uTime, uWind: atmo.uWind, uWindAmp: atmo.uWindAmp, uCloudColor: atmo.uCloudColor,
       uFogLow: atmo.uFogLow, uFogTint: atmo.uFogTint, uIntA: atmo.uIntA, uIntB: atmo.uIntB, uObsA: atmo.uObsA, uObsB: atmo.uObsB,
       uBunA: atmo.uBunA, uBunB: atmo.uBunB, uBunC: atmo.uBunC, uBunD: atmo.uBunD, uMineA: atmo.uMineA, uMineB: atmo.uMineB,
     });
     let vs = shader.vertexShader;
-    vs = vs.replace('#include <common>', '#include <common>\nvarying vec3 vFogWorld;\nuniform float uTime;\nuniform vec2 uWind;\nuniform float uSwayAmount;\nuniform float uFlutter;');
+    vs = vs.replace('#include <common>', '#include <common>\nvarying vec3 vFogWorld;\nuniform float uTime;\nuniform vec2 uWind;\nuniform float uWindAmp;\nuniform float uSwayAmount;\nuniform float uFlutter;');
     // (uTime is also declared for the fragment shader in FOG_PARS_FRAG.)
     if (wind) {
       shader.uniforms.uSwayAmount = { value: wind.sway };

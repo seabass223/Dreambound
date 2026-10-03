@@ -2,12 +2,18 @@
 //   R1  Dome ladder grab from above and from below, and the whole ledge walk to the cave plate
 //   R2  the same on the Tower
 //   R4  creek escape every 3 m along the Rocks creek (walk out of the water sideways)
-//   R6  walk-offs: every stack rim at 72 headings, the Dome and Tower ledges, and beside both bridge ends, at
-//       0.5 / 1.5 / 3.4 / 6.2 m/s; and along the wall: every rim at 42 headings (dense before the θ=0 seam),
-//       walking off 55° either side of the outward normal or straight out then strafing either way, at 1.2 m/s.
-//       After the controller's fall trigger (9 m of drop) createFall's kinematics run for 4.5 s. Must fall, must not land anywhere after leaving the edge (a designed ledge or the bridge
-//       deck excepted), and the eye must stay >= 0.4 m outside the built cliff mesh throughout.
-//   node tools/regress/routes.mjs [--walls <spec>] [--out <file>] [--only R1,R2,R4,R6] [--stacks dome,rocks] [--quiet]
+//   R6  walk-offs: every stack rim at 72 headings and the Dome and Tower ledges, at 0.5 / 1.5 / 3.4 / 6.2 m/s; and
+//       along the wall: every rim at 42 headings (dense before the θ=0 seam), walking off 55° either side of the
+//       outward normal or straight out then strafing either way, at 1.2 m/s. After the controller's fall trigger
+//       (9 m of drop) createFall's kinematics run for 4.5 s. Must fall, must not land anywhere after leaving the edge
+//       (a designed ledge or the gatehouse's let-down stairs excepted), and the eye must stay >= 0.4 m outside the
+//       built cliff mesh throughout. A start in the gatehouse's corridor (props/gatehouse.js, on the Rocks rim) starts
+//       on its floor and must be held by the shut doors; one inside its walls has no rim to walk off and is left out.
+//   R7  the gatehouse and its stairs, in each state the game puts them in (setState), put back afterwards: sealed (as
+//       built, and shut again after the descent) the corridor walks up to the doors and no further; the doors open with
+//       the stairs not out (or fallen) the doorway is a walk-off into the gap; let down, a walk from the corridor down
+//       every section reaches End without a fall, and walking sideways off them at four points the side walls hold.
+//   node tools/regress/routes.mjs [--walls <spec>] [--out <file>] [--only R1,R2,R4,R6,R7] [--stacks dome,rocks] [--quiet]
 // Each case records pass/fail, the reason and a trace hash (positions every 6th frame) so an unchanged
 // geometry must reproduce the walk exactly.
 import fs from 'node:fs';
@@ -23,7 +29,7 @@ export const EYE_MARGIN = 0.4;
 export const EYE_BANDS = [0, 30, 80];   // eye depth bands (m below the top) for eyeBands: 0-30, 30-80, 80+
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
-export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6'], stacks = null } = {}) {
+export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6', 'R7'], stacks = null } = {}) {
   const { THREE, ctx, physics, rec, config } = W;
   const { MeshBVH } = await import('three-mesh-bvh');
   const { Player } = await W.imp('player/controller.js');
@@ -70,13 +76,33 @@ export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6'], stacks = n
     }
     return m;
   };
-  // What caught a player who left the edge: a ledge band, the bridge deck (both designed), or a cave hood.
-  const caughtBy = (n, x, y, z) => {
-    const b = ctx.bridgeSpan;
-    if (b) {
-      const rx = x - b.a.x, rz = z - b.a.z, along = rx * b.flat.x + rz * b.flat.z, side = rx * b.side.x + rz * b.side.z;
-      if (along > -0.5 && along < b.L + 0.5 && Math.abs(side) < b.width) return 'bridge deck';
+  // The gatehouse on the Rocks rim (props/gatehouse.js, ctx.gatehouse) and its stairs to End, in its frame: along its
+  // outward heading from the sill, across to its right. housing / doorway: a collider's extent in that frame.
+  const gh = ctx.gatehouse ?? null;
+  const ghAlong = (p) => (p.x - gh.frame.sill.x) * gh.frame.out.x + (p.z - gh.frame.sill.z) * gh.frame.out.z;
+  const ghAcross = (p) => (p.x - gh.frame.sill.x) * gh.frame.side.x + (p.z - gh.frame.sill.z) * gh.frame.side.z;
+  const frameBox = (name) => {
+    const c = gh && physics.colliders.find((k) => k.name === name);
+    if (!c) return null;
+    const a = c.geometry.attributes.position.array, b = { al0: Infinity, al1: -Infinity, ac0: Infinity, ac1: -Infinity };
+    for (let i = 0; i < a.length; i += 3) {
+      const p = { x: a[i], z: a[i + 2] }, al = ghAlong(p), ac = ghAcross(p);
+      b.al0 = Math.min(b.al0, al); b.al1 = Math.max(b.al1, al); b.ac0 = Math.min(b.ac0, ac); b.ac1 = Math.max(b.ac1, ac);
     }
+    return b;
+  };
+  const housing = frameBox('gatehouse'), doorway = frameBox('gatehouse:doors');
+  const inHousing = (p) => !!housing && ghAlong(p) > housing.al0 && ghAlong(p) < housing.al1 && ghAcross(p) > housing.ac0 && ghAcross(p) < housing.ac1;
+  // In the corridor with room for the capsule (on its floor, at the sill's level: the cap under it drops a metre to the rim).
+  const inCorridor = (p) => {
+    if (!gh) return false;
+    const f = gh.frame, y = f.sill.y + 0.05;
+    return [-1, 0, 1].every((s) => gh.inside({ x: p.x + f.side.x * s * PLAYER.radius, y, z: p.z + f.side.z * s * PLAYER.radius }));
+  };
+  // What caught a player who left the edge: a ledge band or the gatehouse's let-down stairs (both designed), a cave
+  // hood, or the gatehouse itself (its roof, buttresses or apron).
+  const caughtBy = (n, x, y, z) => {
+    if (gh?.onStairs({ x, y, z })) return 'stairs';
     const st = S[n], th = Math.atan2(z - st.cz, x - st.cx), d = Math.hypot(x - st.cx, z - st.cz);
     for (const s of ledges[n] ?? []) {
       const dth = Math.abs(Math.atan2(Math.sin(th - s.theta), Math.cos(th - s.theta)));
@@ -85,6 +111,7 @@ export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6'], stacks = n
     }
     const c = caves[n];
     if (c && Math.hypot(x - c.mouth[0], z - c.mouth[2]) < 8 && y > c.mouth[1] - 1) return 'cave hood';
+    if (inHousing({ x, z })) return 'gatehouse';
     return null;
   };
 
@@ -201,11 +228,15 @@ export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6'], stacks = n
   const fx = {}, audio = { loop: () => null };
   // `strafe` (-1 left, 1 right): strafe instead of walking on once a metre past the rim, so the fall runs along the
   // wall without the capsule sliding down its face first (that slide is the controller's, and R6 has it already).
-  const walkOff = (id, n, start, dir, speed, strafe = 0) => {
+  // `edge`: where the ground the walk starts on ends, from the stack's centre, when it runs on past the rim (the
+  // gatehouse's floor to its sill).
+  const walkOff = (id, n, start, dir, speed, strafe = 0, group = 'R6', edge = 0) => {
     const st = S[n];
     const tr = trace();
     Object.assign(fx, { fade: 0, blur: 0, vignette: 0 });
     const y0 = groundY(st, start.x, start.z) ?? start.y;
+    // From the gatehouse's corridor with its doors shut, the only right outcome is to be held there.
+    const sealed = !!gh && gh.doors() < 0.95 && inCorridor(start);
     const p = newPlayer(start.x, (start.y ?? y0) + 0.05, start.z, yawTo(dir.x, dir.z), 0, speed);
     walk(p, 0.25, () => true);    // settle
     let left = false, clear = false, landed = null, worst = Infinity, worstAt = null, visible = Infinity, breach = null;
@@ -232,8 +263,9 @@ export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6'], stacks = n
       p.update(DT);
       tr.add(p, i);
       const th = Math.atan2(p.feet.z - st.cz, p.feet.x - st.cx);
-      if (!left && Math.hypot(p.feet.x - st.cx, p.feet.z - st.cz) > samplers[n].rim(th).r + PLAYER.radius + 0.05) left = true;
-      if (strafe && Math.hypot(p.feet.x - st.cx, p.feet.z - st.cz) > samplers[n].rim(th).r + PLAYER.radius + 1) clear = true;
+      const rimR = Math.max(samplers[n].rim(th).r, edge);
+      if (!left && Math.hypot(p.feet.x - st.cx, p.feet.z - st.cz) > rimR + PLAYER.radius + 0.05) left = true;
+      if (strafe && Math.hypot(p.feet.x - st.cx, p.feet.z - st.cz) > rimR + PLAYER.radius + 1) clear = true;
       if (left && p.onGround && !landed) landed = { at: [p.feet.x, p.feet.y, p.feet.z], by: caughtBy(n, p.feet.x, p.feet.y, p.feet.z) };
       if (landed) break;
       eye(p, 'walk', t);
@@ -250,22 +282,29 @@ export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6'], stacks = n
       }
     }
     let outcome, pass;
-    if (landed) { outcome = landed.by ? `caught by ${landed.by}` : `landed after leaving the edge at depth ${(st.top - landed.at[1]).toFixed(1)} m`; pass = landed.by === 'ledge' || landed.by === 'bridge deck'; }
+    if (landed) { outcome = landed.by ? `caught by ${landed.by}` : `landed after leaving the edge at depth ${(st.top - landed.at[1]).toFixed(1)} m`; pass = landed.by === 'ledge' || landed.by === 'stairs'; }
+    else if (!left && sealed && gh.inside(p.feet)) { outcome = `held by the shut gatehouse doors (${(doorway.al0 - ghAlong(p.feet)).toFixed(2)} m short of them)`; pass = true; }
     else if (!left) { outcome = `never left the edge (stopped at ${[p.feet.x, p.feet.y, p.feet.z].map((v) => v.toFixed(1))})`; pass = false; }
     else if (!p.falls) { outcome = 'left the edge but the fall never triggered'; pass = false; }
     else if (breach) { outcome = `eye within ${EYE_MARGIN} m of the wall from ${breach.depth} m down (${breach.phase} t=${breach.t}s, fade ${breach.fade}); worst ${worst.toFixed(2)} m at ${worstAt.depth} m down`; pass = false; }
     else { outcome = 'fell'; pass = true; }
+    if (sealed && left) { outcome = `got out past the shut gatehouse doors: ${outcome}`; pass = false; }
     const fin = (v) => (v === Infinity ? null : r3(v));
-    add({ id, group: 'R6', stack: n, speed, pass, reason: outcome, landedAt: landed?.at.map(r3) ?? null, landedBy: landed?.by ?? null, eyeMin: fin(worst), eyeMinVisible: fin(visible), eyeBands: bands.map(fin), breach, worstAt, trace: sha(tr.t) });
+    add({ id, group, stack: n, speed, pass, reason: outcome, landedAt: landed?.at.map(r3) ?? null, landedBy: landed?.by ?? null, eyeMin: fin(worst), eyeMinVisible: fin(visible), eyeBands: bands.map(fin), breach, worstAt, trace: sha(tr.t) });
   };
 
+  // A walk-off's start, or null where it is inside the gatehouse's walls (no rim to walk off there); in its corridor
+  // the walk starts on the corridor's floor.
+  const startAt = (x, z) => (inCorridor({ x, z }) ? { x, y: gh.frame.sill.y, z } : inHousing({ x, z }) ? null : { x, z });
   const rims = () => {
     for (const n of names) {
       if (stacks && !stacks.includes(n)) continue;
       const st = S[n];
       for (let k = 0; k < 72; k++) {
         const th = (k / 72) * TAU, c = Math.cos(th), s = Math.sin(th), r = st.edgeR(th) - 1.5;
-        for (const v of SPEEDS) walkOff(`R6:${n}:rim:${k * 5}deg:${v}`, n, { x: st.cx + c * r, z: st.cz + s * r }, { x: c, z: s }, v);
+        const start = startAt(st.cx + c * r, st.cz + s * r);
+        if (!start) continue;
+        for (const v of SPEEDS) walkOff(`R6:${n}:rim:${k * 5}deg:${v}`, n, start, { x: c, z: s }, v);
       }
     }
   };
@@ -278,7 +317,8 @@ export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6'], stacks = n
       const st = S[n];
       for (const deg of degs) {
         const th = deg * Math.PI / 180, c = Math.cos(th), s = Math.sin(th), r = st.edgeR(th) - 1.5;
-        const start = { x: st.cx + c * r, z: st.cz + s * r };
+        const start = startAt(st.cx + c * r, st.cz + s * r);
+        if (!start) continue;
         for (const off of [-55, 55]) {
           const h = th + off * Math.PI / 180;
           walkOff(`R6:${n}:oblique:${deg}deg:${off}`, n, start, { x: Math.cos(h), z: Math.sin(h) }, ALONG_SPEED);
@@ -298,26 +338,95 @@ export async function runRoutes(W, { only = ['R1', 'R2', 'R4', 'R6'], stacks = n
       });
     }
   };
-  const bridgeOffs = () => {
+  // ---------------------------------------------------------------- R7: the gatehouse and its stairs
+  const stairs = () => {
     if (stacks && !stacks.includes('rocks') && !stacks.includes('end')) return;
-    const b = rec.calls.find((c) => c.name === 'buildBridge')?.info;
-    if (!b) { add({ id: 'R6:bridge', group: 'R6', pass: false, reason: 'no bridge recorded' }); return; }
-    const A = new THREE.Vector3(...b.a), B = new THREE.Vector3(...b.b);
-    const flat = B.clone().sub(A).setY(0).normalize(), side = new THREE.Vector3(-flat.z, 0, flat.x);
-    // Beside each end of the deck, past the posts, heading into the gap along the bridge.
-    for (const [n, end, sgn] of [['rocks', A, 1], ['end', B, -1]]) {
-      for (const sd of [-1, 1]) {
-        const p = end.clone().addScaledVector(side, sd * (b.width / 2 + 0.7)).addScaledVector(flat, -sgn * 1.0);
-        for (const v of SPEEDS) walkOff(`R6:bridge:${n}:${sd > 0 ? 'left' : 'right'}:${v}`, n, { x: p.x, z: p.z }, { x: flat.x * sgn, z: flat.z * sgn }, v);
+    if (!gh || !housing || !doorway) { add({ id: 'R7', group: 'R7', pass: false, reason: 'no gatehouse built (public/models/gatehouse.glb missing?)' }); return; }
+    const f = gh.frame, n = f.n, total = gh.length, LS = total / n, HS = (f.sill.y - f.landing.y) / n;
+    const at = (al, ac = 0) => ({ x: f.sill.x + f.out.x * al + f.side.x * ac, z: f.sill.z + f.out.z * al + f.side.z * ac });
+    const saved = { doors: gh.doors() >= 0.5 ? 1 : 0, extended: gh.extended(0) >= 1, fallen: gh.fallen(0) };
+    const outward = yawTo(f.out.x, f.out.z);
+    const sillR = Math.hypot(f.sill.x - S.rocks.cx, f.sill.z - S.rocks.cz);
+    const feet = (p) => [r3(p.feet.x), r3(p.feet.y), r3(p.feet.z)];
+
+    // Shut (as built; and after the descent, all fallen and the doors closed again): from the island 1.5 m behind the
+    // corridor's open back, through it to the doors, at a walk and a run. Held on its floor just short of them.
+    for (const [state, label] of [[{ doors: 0 }, 'sealed'], [{ doors: 0, fallen: true }, 'shut-fallen']]) {
+      gh.setState(state);
+      for (const v of [PLAYER.walk, PLAYER.run]) {
+        const tr = trace(), s0 = at(housing.al0 - 1.5);
+        const p = newPlayer(s0.x, groundY(S.rocks, s0.x, s0.z) + 0.05, s0.z, outward, 0, v);
+        walk(p, 0.25, () => true);
+        let reach = -Infinity;
+        walk(p, 6, (pp) => { input.axisV = { x: 0, y: 1, run: false }; reach = Math.max(reach, ghAlong(pp.feet)); }, tr);
+        input.axisV = { x: 0, y: 0, run: false };
+        walk(p, 0.5, () => true, tr);
+        const short = doorway.al0 - reach, floor = p.feet.y - f.sill.y;
+        const ok = !p.falls && gh.inside(p.feet) && short > 0 && short < PLAYER.radius + 0.15 && Math.abs(floor) < 0.05;
+        add({ id: `R7:${label}:corridor:${v}`, group: 'R7', pass: ok, reason: ok ? 'ok' : p.falls ? 'fell' : short <= 0 ? `got ${(-short).toFixed(2)} m into the doors` : !gh.inside(p.feet) ? `not in the corridor at the end (stopped at ${feet(p)})` : short >= PLAYER.radius + 0.15 ? `stuck ${short.toFixed(2)} m short of the doors` : `not on the corridor floor (${floor.toFixed(2)} m off it)`, short: r3(short), floor: r3(floor), end: feet(p), trace: sha(tr.t) });
       }
     }
+
+    // The doors open with nothing beyond (the stairs not out yet, or fallen): from 2 m inside the corridor straight out
+    // of the doorway, an R6 walk-off into the gap.
+    for (const [state, label, speeds] of [[{ doors: 1 }, 'gap-retracted', SPEEDS], [{ doors: 1, fallen: true }, 'gap-fallen', [PLAYER.walk, PLAYER.run]]]) {
+      gh.setState(state);
+      for (const v of speeds) walkOff(`R7:${label}:${v}`, 'rocks', { ...at(-2), y: f.sill.y }, f.out, v, 0, 'R7', sillR);
+    }
+
+    // Let down: from 2 m inside the corridor down the middle of every section to 1.5 m onto End, at a walk and a run.
+    // dy: the feet against the straight line from the sill to the landing (the landings and flights swing about it).
+    gh.setState({ doors: 1, extended: true });
+    for (const v of [PLAYER.walk, PLAYER.run]) {
+      const tr = trace(), s0 = at(-2), goal = at(total + 1.5);
+      const p = newPlayer(s0.x, f.sill.y + 0.05, s0.z, outward, 0, v);
+      let reached = false, off = 0, reach = -Infinity, minDy = Infinity, maxDy = -Infinity;
+      const t = walk(p, 60, (pp) => {
+        const al = ghAlong(pp.feet);
+        reach = Math.max(reach, al);
+        if (al > 0.3 && al < total) {
+          if (!gh.onStairs(pp.feet)) off++;
+          const dy = pp.feet.y - (f.sill.y + (f.landing.y - f.sill.y) * al / total);
+          minDy = Math.min(minDy, dy); maxDy = Math.max(maxDy, dy);
+        }
+        if (Math.hypot(goal.x - pp.feet.x, goal.z - pp.feet.z) < 0.6) { reached = true; return false; }
+        pp.yaw = yawTo(goal.x - pp.feet.x, goal.z - pp.feet.z);
+        input.axisV = { x: 0, y: 1, run: false };
+      }, tr);
+      input.axisV = { x: 0, y: 0, run: false };
+      const h = S.end.heightAt(p.feet.x, p.feet.z);
+      const onEnd = reached && h !== null && Math.abs(p.feet.y - h) < 0.3 && p.onGround;
+      const ok = onEnd && !p.falls && off === 0;
+      add({ id: `R7:descent:${v}`, group: 'R7', pass: ok, reason: ok ? 'ok' : p.falls ? `fell at ${reach.toFixed(1)} m along (section ${Math.floor(reach / LS)})` : !reached ? `stuck at ${reach.toFixed(1)} m along (section ${Math.floor(reach / LS)})` : off ? `off the stairs' surface for ${off} frames on the way down` : `not standing on End at the end (${feet(p)})`, seconds: r3(t), dy: [r3(minDy), r3(maxDy)], trace: sha(tr.t) });
+    }
+
+    // Let down, walking sideways off them (either way, at a walk and a run) on the first section's landing and partway
+    // down the flights of sections n/3, 2n/3 and the last: the side walls hold.
+    for (const i of [0, Math.round(n / 3), Math.round((2 * n) / 3), n - 1]) {
+      const al = i === 0 ? 0.7 : (i + 0.6) * LS, s0 = at(al);
+      for (const sd of [-1, 1]) {
+        for (const v of [1.5, PLAYER.run]) {
+          const tr = trace();
+          const p = newPlayer(s0.x, f.sill.y - i * HS + 0.05, s0.z, yawTo(f.side.x * sd, f.side.z * sd), 0, v);
+          walk(p, 0.6, () => true, tr);   // (onto the flight: it starts at the section's top)
+          let wide = 0;
+          walk(p, 2.5, (pp) => { input.axisV = { x: 0, y: 1, run: false }; wide = Math.max(wide, Math.abs(ghAcross(pp.feet))); }, tr);
+          input.axisV = { x: 0, y: 0, run: false };
+          walk(p, 0.5, () => true, tr);
+          const ok = !p.falls && gh.onStairs(p.feet);
+          add({ id: `R7:side:${i}:${sd > 0 ? 'right' : 'left'}:${v}`, group: 'R7', pass: ok, reason: ok ? 'ok' : p.falls ? 'fell off the side' : `off the stairs (stopped at ${feet(p)})`, across: r3(wide), end: feet(p), trace: sha(tr.t) });
+        }
+      }
+    }
+    gh.setState(saved);   // (as built: the other routes ran, and run again, with them sealed)
   };
 
   const time = (k, fn) => { const t0 = performance.now(); fn(); timing[k] = (timing[k] || 0) + (performance.now() - t0) / 1000; };
   if (only.includes('R1')) time('R1', () => ladderCases('dome', 'R1'));
   if (only.includes('R2')) time('R2', () => ladderCases('tower', 'R2'));
   if (only.includes('R4')) time('R4', creek);
-  if (only.includes('R6')) { time('R6 rims', rims); time('R6 along', alongOffs); time('R6 ledges', ledgeOffs); time('R6 bridge', bridgeOffs); }
+  if (only.includes('R6')) { time('R6 rims', rims); time('R6 along', alongOffs); time('R6 ledges', ledgeOffs); }
+  if (only.includes('R7')) time('R7', stairs);
   return { kind: 'routes', version: 2, walls: { ...config.WALLS }, cases, timing };
 }
 

@@ -24,6 +24,8 @@ export class Player {
     this.physics = physics;
     this.feet = new THREE.Vector3();
     this.vel = new THREE.Vector3();
+    // Head bob (Menu > Gameplay): how much of the walk's bob and sway the view keeps, 1 all of it, 0 none.
+    this.bobScale = 1;
     this.yaw = 0; this.pitch = 0; this.roll = 0;
     this.onGround = false;
     this.sliding = false;        // on a slope too steep to walk (and not standing on walkable ground)
@@ -317,8 +319,9 @@ export class Player {
     if (!this.cameraControlled) return;
     const moving = this.mode === 'walk' && this.onGround && this.canMove && (this.input.axis().x || this.input.axis().y);
     this.bobAmt = THREE.MathUtils.damp(this.bobAmt || 0, moving ? 1 : 0, 6, dt);
-    const bobY = Math.sin(this.bob * Math.PI) * 0.035 * this.bobAmt;
-    const bobX = Math.cos(this.bob * Math.PI * 0.5) * 0.02 * this.bobAmt;
+    const bobK = this.bobAmt * (this.bobScale ?? 1);
+    const bobY = Math.sin(this.bob * Math.PI) * 0.035 * bobK;
+    const bobX = Math.cos(this.bob * Math.PI * 0.5) * 0.02 * bobK;
     let eye = PLAYER.eye, pitch = this.pitch, roll = 0;
     if (this.override) {
       const o = this.override, w = o.weight ?? 1;

@@ -112,6 +112,9 @@
 .ui-slider:focus-visible { outline: none; }
 .ui-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--ring); }
 .ui-slider:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px var(--ring); }
+.ui-slider:disabled { opacity: 0.4; cursor: not-allowed; }
+.ui-slider:disabled::-webkit-slider-thumb { transform: none; box-shadow: none; }
+.ui-slider:disabled::-moz-range-thumb { transform: none; box-shadow: none; }
 
 /* ---- switch ---- */
 .ui-switch { position: relative; width: 38px; height: 22px; padding: 0; border-radius: 999px; border: 1px solid var(--input);
@@ -120,6 +123,10 @@
   background: var(--foreground); box-shadow: var(--shadow-sm); transition: transform 0.18s ease; }
 .ui-switch[aria-checked='true'] { background: var(--primary); border-color: var(--primary); }
 .ui-switch[aria-checked='true']::after { transform: translateX(16px); background: var(--primary-foreground); }
+.ui-switch:disabled { opacity: 0.4; cursor: not-allowed; }
+/* A row whose control is disabled: its label and readout dim with it. */
+.ui-field:has(> .ui-slider:disabled, > .ui-switch:disabled) > .ui-label,
+.ui-field:has(> .ui-slider:disabled) > .ui-value { opacity: 0.5; }
 
 /* ---- select ---- */
 .ui-select { width: 100%; height: 32px; padding: 0 28px 0 10px; font: inherit; color: var(--foreground); border-radius: var(--radius);

@@ -47,15 +47,40 @@ export function installBench({ THREE, ctx, player, camera, renderer, clock, capt
       const room = ctx.bunker.room?.group;
       if (room) { room.updateWorldMatrix(true, false); list.push(['tower: bunker lift', room.localToWorld(V(0, 0.05, 2.9))]); }
     }
-    if (ctx.bridgeSpan) {
-      const b = ctx.bridgeSpan;
-      list.push(['bridge: middle', V(b.a.x + b.flat.x * b.L * 0.5, 0, b.a.z + b.flat.z * b.L * 0.5)]);
-      // The bridge descends: find its deck height from the collider below the midpoint.
-      const p = list[list.length - 1][1];
-      p.y = (b.a.y + (b.b?.y ?? b.a.y)) / 2 + 0.1;
+    // The gatehouse on the Rocks rim (props/gatehouse.js): in its corridor before the doors, and halfway down its stairs,
+    // let down for the bench and put back afterwards (a third entry: { enter, leave } round the area's frames).
+    const gh = ctx.gatehouse;
+    if (gh) {
+      const F = gh.frame, mid = Math.floor(F.n / 2), LS = gh.length / F.n;
+      list.push(['gatehouse: corridor', F.sill.clone().addScaledVector(F.out, -3).setY(F.sill.y + 0.05)]);
+      // (on the middle section's landing, half a metre past the flight above it)
+      const p = F.sill.clone().addScaledVector(F.out, mid * LS + 0.5).setY(gh.sectionEnd(mid - 1).y + 0.05);
+      let saved = null;
+      list.push(['gatehouse: stairs', p, {
+        enter: () => { saved = stairsState(gh); gh.armed = false; gh.setState({ doors: 1, extended: true, fallen: false }); },
+        leave: () => restoreStairs(gh, saved),
+      }]);
     }
     return list;
   }
+
+  // The gatehouse's doors and stairs as they stand, and put back: setState sets a whole state at once (the doors shut or
+  // open, the stairs in, out or fallen), then the doors' and each section's slide are set back exactly. (Sections that
+  // fell mid-descent can't come back without falling again: such a staircase comes back whole, and disarmed if any had
+  // not fallen. `armed` is put back, so the bench standing on the stairs drops nothing.)
+  const stairsState = (g) => ({
+    doors: g.doors(), armed: g.armed,
+    extended: Array.from({ length: g.sections }, (_, i) => g.extended(i)),
+    fallen: Array.from({ length: g.sections }, (_, i) => g.fallen(i)),
+  });
+  const restoreStairs = (g, s) => {
+    if (!s) return;
+    const fallen = s.fallen.every(Boolean);
+    g.setState({ doors: s.doors >= 0.5 ? 1 : 0, extended: !fallen && s.extended.every((v) => v >= 1), fallen });
+    g.setDoors(s.doors);
+    if (!fallen) s.extended.forEach((v, i) => g.setExtended(i, v));
+    g.armed = s.armed && (fallen || !s.fallen.some(Boolean));
+  };
 
   async function measure(frames) {
     const dt = 1 / 60;
@@ -86,10 +111,11 @@ export function installBench({ THREE, ctx, player, camera, renderer, clock, capt
     // they fall inside the wake-up fade from black), so spin those off first.
     for (let i = 0; i < 40; i++) { capture.step(1 / 60); sync(); }
     const rows = [];
-    for (const [name, p] of areas()) {
+    for (const [name, p, setup] of areas()) {
       if (only && !name.includes(only)) continue;
       const zone = p.y < -1500 ? 'tunnel' : 'surface';
       let worst = null;
+      setup?.enter();
       for (let k = 0; k < dirs; k++) {
         const yaw = (k / dirs) * Math.PI * 2;
         player.zone = zone;
@@ -98,6 +124,7 @@ export function installBench({ THREE, ctx, player, camera, renderer, clock, capt
         const m = await measure(frames);
         if (!worst || m.max > worst.max) worst = { ...m, yaw };
       }
+      setup?.leave();
       rows.push({
         area: name, avgMs: +worst.avg.toFixed(2), maxMs: +worst.max.toFixed(2), calls: worst.calls,
         ktris: Math.round(worst.tris / 1000), heading: Math.round((worst.yaw * 180) / Math.PI),
@@ -162,7 +189,7 @@ export function installBench({ THREE, ctx, player, camera, renderer, clock, capt
     // Every area of bench(), at the starting time and at night.
     for (const [phase, tag] of [[day, ''], [0.8, ' (night)']]) {
       setTime(phase);
-      for (const [name, p] of areas()) await visit(name + tag, p);
+      for (const [name, p, setup] of areas()) { setup?.enter(); await visit(name + tag, p); setup?.leave(); }
     }
     setTime(day);
     // Rim views: from each stack's rim, looking at every other stack.
@@ -253,9 +280,14 @@ export function installBench({ THREE, ctx, player, camera, renderer, clock, capt
     }
     // The bunker's terminal and rocks.exe (sequences/rocksExe.js): seated, typing, the cut to CAM 07, the blast, the
     // boulders' flights and landings, the cut back; then the Rocks afterwards. (Once a game: it changes the world.)
+    // The terminal needs power (Home and Mountain shed, props/terminal.js) and rocks.exe the observatory's coordinates.
     const term = ctx.bunker?.terminal;
     if (rocksExe && term && !term.state.ran) {
       const s = ctx.bunker.seat, sp = ctx.bunker.spawn;
+      const sw = ctx.state.switches;
+      if (sw) { sw[1] = false; sw[3] = false; }   // (props/cave.js LINES: tower, mountain, rocks, dome)
+      if (ctx.power) { ctx.power.dome = false; ctx.power.mountain = false; }
+      (ctx.state.observatory ||= {}).coords = true;
       await visit('bunker terminal', sp.pos.clone().setY(sp.pos.y + 0.05), { look: s.eye, n: 1 });
       window.hitchLabel = 'bunker terminal';
       term.enter();
@@ -263,7 +295,8 @@ export function installBench({ THREE, ctx, player, camera, renderer, clock, capt
       for (const line of ['ls', 'cat notes.txt', 'cd /opt/survey/bin']) { term.exec(line); await frame(); }
       term.exec('./rocks.exe');
       window.hitchLabel = 'rocks.exe';
-      for (let t = 0; t < 12 && (t < 3 || ctx.inSequence?.()); t += 1 / 30) { capture.step(1 / 30); if (Math.round(t * 30) % 3 === 0) await frame(); }
+      // (to the end of its closing lines, which hold the chair a moment after the cutscene)
+      for (let t = 0; t < 14 && (t < 3 || ctx.inSequence?.() || term.shell.busy); t += 1 / 30) { capture.step(1 / 30); if (Math.round(t * 30) % 3 === 0) await frame(); }
       term.leave();
       await run(1.2);
       const r = S.rocks, tor = ctx.torBlast?.center;

@@ -330,6 +330,9 @@ def build_shell():
         if abs(x) < DOOR_W + 0.1 and z < 0:
             continue
         C(x, 2.0, z, 2 * PI * (R_IN + R_OUT) / 2 / 60 + 0.06, 4.0, R_OUT - R_IN + 0.05, -a)
+    # The threshold, level with the floor across the wall's thickness: without it the floor's colliders (to r 5.1) and
+    # the plinth's (from r 5.47) left a 0.3 m deep pit in the doorway, one step taller than the player can climb.
+    C(0, (FL - 0.35) / 2, -(R_IN + R_OUT) / 2, 2 * (DOOR_W + 0.15), FL + 0.35, R_OUT - R_IN + 0.15)
 
     # Door frame, threshold, lintel; the riveted steel door, a part the game swings on its hinge (built shut across
     # the opening: driver 'door' 0 = shut, 1 = swung open outward against the wall).

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader } from '../render/gltf.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { patchMaterial } from '../render/materials.js';
 import { placeSecret } from './loungeSecret.js';
 import { makeInspectable } from './inspect.js';
 
-// The cartographer's lounge: the Tower elevator's secret third stop, straight below its cave station (press Down again
+// The cartographer's lounge: the Tower elevator's secret third stop, straight below its cave station (hold Down for 3 s
 // there). Modeled and lit in Blender (tools/blender/lounge_design.py): the desk lamp and two faint sconces are baked
 // with Cycles into one RGB lightmap, so everything draws unlit, five calls in all (wood, leather, brass, the printed
 // things, the glowing shades).

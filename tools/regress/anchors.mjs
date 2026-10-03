@@ -271,7 +271,6 @@ export async function recordAnchors(W) {
     const tor = calls('buildTor', 'rocks')[0];
     const piles = calls('buildRockPile', 'rocks');
     const seq = calls('buildSequoia', 'rocks')[0];
-    const bridge = calls('buildBridge')[0];
     const mov = calls('createMovableRocks', 'rocks')[0];
     const frogs = rec.emitters.find((e) => e.name === 'frogs');
     const groundRange = (x, z, r) => {
@@ -332,33 +331,69 @@ export async function recordAnchors(W) {
       bench: [[8, 6], [-12, -8], [-19.2, 4.3], [38, -13]].map(([x, z]) => st.heightAt(st.cx + x, st.cz + z)),
     };
 
-    // ---------------------------------------------------------------- End + bridge
+    // ---------------------------------------------------------------- End, and the gatehouse's stairs to it
     const en = S.end, ap = calls('createAperture')[0];
-    let deck = null;
-    if (bridge?.deckAt) {
-      // Deck underside (plank centre 0.025 below the deck line, 0.05 thick) over the cap where it crosses a lip.
-      const lipBand = (s2) => {
-        let min = Infinity, at = null;
-        for (let t = 0; t <= 1 + 1e-9; t += 0.0005) {
-          const p = bridge.deckAt(t), ed = s2.edgeDist(p.x, p.z), h = s2.heightAt(p.x, p.z);
-          if (ed < 0 || ed > 0.6 || h === null) continue;
-          const c = p.y - 0.05 - h;
-          if (c < min) { min = c; at = t; }
-        }
-        return { min, t: at };
-      };
-      const posts = [];
-      const a = new THREE.Vector3(...bridge.a), b = new THREE.Vector3(...bridge.b);
-      const flat = b.clone().sub(a).setY(0).normalize(), side = new THREE.Vector3(-flat.z, 0, flat.x);
-      for (const [end, sgn, n] of [[a, 1, 'rocks'], [b, -1, 'end']]) {
-        for (const s of [-1, 1]) {
-          const p = end.clone().addScaledVector(side, s * (bridge.width / 2 + 0.15)).addScaledVector(flat, -sgn * 0.3);
-          const st2 = S[n], th = Math.atan2(p.z - st2.cz, p.x - st2.cx);
-          posts.push({ stack: n, pos: v3(p), wallMargin: samplers[n].wallAt(th, p.y - 0.5) - Math.hypot(p.x - st2.cx, p.z - st2.cz) });
+    // The gatehouse on the Rocks rim and its stairs (props/gatehouse.js, built at the End landing ctx.bridgeB on the old
+    // bridge's heading), in its frame: along its outward heading from the sill, across to its right.
+    const gh = ctx.gatehouse;
+    let gatehouse = null;
+    if (gh) {
+      const f = gh.frame, n = f.n;
+      const along = (x, z) => (x - f.sill.x) * f.out.x + (z - f.sill.z) * f.out.z;
+      const at = (al, ac = 0) => [f.sill.x + f.out.x * al + f.side.x * ac, f.sill.z + f.out.z * al + f.side.z * ac];
+      const col = (name) => physics.colliders.find((c) => c.name === name) ?? null;
+      const housing = col('gatehouse'), doors = col('gatehouse:doors');
+      const stairCols = Array.from({ length: n }, (_, i) => col('stair:' + i));
+      let alMin = Infinity;   // the corridor's open back (the housing's innermost point)
+      if (housing) { const a = housing.geometry.attributes.position.array; for (let i = 0; i < a.length; i += 3) alMin = Math.min(alMin, along(a[i], a[i + 2])); }
+      // The step up from the cap onto the corridor floor across its open back (the doorway's width).
+      let step = null;
+      if (Number.isFinite(alMin)) {
+        step = { min: Infinity, max: -Infinity };
+        for (let ac = -1.2; ac <= 1.2 + 1e-9; ac += 0.1) {
+          const [x, z] = at(alMin - 0.05, ac), h = ground(st, x, z);
+          step.min = Math.min(step.min, f.sill.y - h); step.max = Math.max(step.max, f.sill.y - h);
         }
       }
-      deck = { a: bridge.a, b: bridge.b, endLip: lipBand(en), rocksLip: lipBand(st), posts };
+      // The stairs' walking surface (their colliders, built whether or not the stairs are out) over End's cap, from its
+      // lip to past the last section's foot: its least height above the ground (where the last flight meets End).
+      const ray = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+      const surfaceAt = (x, z) => {
+        let y = null;
+        for (const c of stairCols) {
+          if (!c) continue;
+          ray.origin.set(x, f.sill.y + 5, z);
+          const hit = c.bvh.raycastFirst(ray, THREE.DoubleSide);
+          if (hit && (y === null || hit.point.y > y)) y = hit.point.y;
+        }
+        return y;
+      };
+      const endLip = { min: Infinity, along: null };
+      for (let al = gh.length - 4; al <= gh.length + 0.5 + 1e-9; al += 0.02) {
+        const [x, z] = at(al), s = surfaceAt(x, z), h = en.heightAt(x, z);
+        if (s === null || h === null || en.edgeDist(x, z) < 0) continue;
+        if (s - h < endLip.min) { endLip.min = s - h; endLip.along = al; }
+      }
+      // The last section's foot on End (the landing) against End's built wall, as the bridge posts were.
+      const b = f.landing, thB = Math.atan2(b.z - en.cz, b.x - en.cx);
+      const thR = Math.atan2(f.sill.z - st.cz, f.sill.x - st.cx);
+      gatehouse = {
+        sill: v3(f.sill), out: v3(f.out), side: v3(f.side), top: v3(f.top), landing: v3(f.landing), n, length: gh.length,
+        sectionEnds: stairCols.map((_, i) => v3(gh.sectionEnd(i))),
+        sillPastRim: Math.hypot(f.sill.x - st.cx, f.sill.z - st.cz) - samplers.rocks.rim(thR).r,
+        corridorBack: alMin, step,
+        endLip: Number.isFinite(endLip.min) ? endLip : null,
+        footMargin: samplers.end.wallAt(thB, b.y - 0.5) - Math.hypot(b.x - en.cx, b.z - en.cz),
+        // As built: the doors shut (their collider on), the stairs in (theirs off).
+        colliders: { housing: housing ? housing.geometry.index.count / 3 : null, doors: doors?.enabled ?? null, stairsOn: stairCols.filter((c) => c?.enabled).length },
+      };
     }
+    // The pedestal by the aperture (props/pedestal.js) and the box over its hole.
+    const pd = ctx.pedestal;
+    const pedestal = pd ? {
+      root: v3(pd.root.position), top: v3(pd.top), button: v3(pd.buttonPos),
+      hole: pd.collider ? { x: pd.collider.x, z: pd.collider.z, hx: pd.collider.hx, hz: pd.collider.hz, ry: pd.collider.ry, y0: pd.collider.y0, y1: pd.collider.y1 } : null,
+    } : null;
     // Narrowest gap between the Rocks and End walls, above the cloud deck and at any height both reach.
     const gap = { aboveDeck: { min: Infinity }, all: { min: Infinity } };
     {
@@ -382,12 +417,13 @@ export async function recordAnchors(W) {
       gap.axis = D;
     }
     out.end = {
-      landing: bridge?.b ?? null,
+      landing: v3(ctx.bridgeB),
       aperture: ap ?? null,
       flatness: flatness(en, en.cx, en.cz, 3.4, en.top),
-      deck,
+      pedestal,
       rocksEndGap: gap,
     };
+    out.gatehouse = gatehouse;
   }
 
   // ---------------------------------------------------------------- Mountain

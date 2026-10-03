@@ -154,7 +154,7 @@ const eyeWorse = (b, c) => typeof c === 'number' && c < EYE_MARGIN && !(typeof b
 function caseProblems(b, c) {
   if (b.pass && !c.pass) return [['regressed', c.reason]];
   const why = [];
-  if (c.group === 'R6') {
+  if (c.group === 'R6' || c.eyeBands) {   // (walk-offs: R6, and R7's out of the gatehouse doorway)
     const ob = outcome(b), oc = outcome(c);
     if (oc !== ob && RANK[oc] > 0 && RANK[oc] >= RANK[ob]) why.push(['outcome', `${ob} -> ${oc}: ${c.reason}`]);
     else if (oc === 'landed' && c.landedBy !== b.landedBy) why.push(['landing', `now lands on ${c.landedBy ?? 'the wall'} (was ${b.landedBy ?? 'the wall'}): ${c.reason}`]);

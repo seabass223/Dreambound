@@ -1,9 +1,19 @@
 import * as THREE from 'three';
-import { atmo } from './atmosphere.js';
+import { atmo, STORM_GLSL } from './atmosphere.js';
 import { NOISE_GLSL, SKY_UNIFORMS_GLSL, SKY_FUNC_GLSL } from './glsl.js';
 import { Textures } from './textures.js';
 import { CLOUD_DECK_Y, STACKS } from '../config.js';
 import { Rng } from '../core/rng.js';
+
+// The storm (render/storm.js; atmosphere.js STORM_GLSL): its overcast takes the moonlight off the sea, and lightning
+// lights the clouds from inside: a faint wash everywhere and a glow round the stroke (k: how tight).
+const FLASH_GLSL = /* glsl */ `
+${STORM_GLSL}
+vec3 cloudFlash(vec3 dir, float k) {
+  float toward = max(dot(dir, uFlash.xyz), 0.0);
+  return FLASH_TINT * uFlash.w * (0.03 + pow(toward, k) * 0.45);
+}
+`;
 
 // ---------- Cloud sea far below ----------
 // A static, densely tessellated disc around the stacks whose vertices billow upward. Clouds pile up
@@ -61,6 +71,7 @@ varying vec3 vNormal2;
 varying float vHeight;
 ${NOISE_GLSL}
 ${SKY_FUNC_GLSL}
+${FLASH_GLSL}
 
 void main() {
   vec3 V = vWorld - cameraPosition;
@@ -77,7 +88,7 @@ void main() {
 
   bool sunUp = uSunDir.y > -0.05;
   vec3 L = sunUp ? uSunDir : uMoonDir;
-  float lightAmt = sunUp ? 1.0 : 0.06 * uNight;
+  float lightAmt = sunUp ? 1.0 : 0.06 * uNight * (1.0 - uStorm);   // no moonlight under the storm's overcast
   vec3 lightCol = sunUp ? uSunLight : vec3(0.32, 0.4, 0.62);
   float wrap = clamp(dot(n, normalize(L + vec3(0.0, 0.2, 0.0))) * 0.55 + 0.45, 0.0, 1.0);
   // Valleys between domes sit in their own shade; crowns catch the light.
@@ -93,6 +104,9 @@ void main() {
   vec3 hor = skyGradient(normalize(vec3(dir.x, min(dir.y, -0.001), dir.z)));
   float fog = 1.0 - exp(-pow(dist * 0.00028, 1.4));
   col = mix(col, hor, clamp(fog, 0.0, 1.0));
+  // Lightning: near, the billows round the stroke light up, crowns most; far, it becomes the sky's own flash at the
+  // horizon (sky.js), so the two meet there without a seam.
+  if (uFlash.w > 0.0) col += mix(cloudFlash(dir, 5.0) * (0.45 + 0.55 * crown) * (0.9 + d1 * 0.3), skyFlash(dir, 0.5), clamp(fog, 0.0, 1.0));
   if (uUnderground > 0.5) col = vec3(0.0);
   gl_FragColor = vec4(col, 1.0);
 }
@@ -201,6 +215,7 @@ varying vec3 vWorld;
 varying vec3 vStack;
 ${NOISE_GLSL}
 ${SKY_FUNC_GLSL}
+${FLASH_GLSL}
 void main() {
   vec2 uv = vUv;
   float tex = texture2D(uMap, uv).a;
@@ -219,6 +234,8 @@ void main() {
   col = mix(col, horizonColor(vDir), 0.25);
   // Night: dim, moonlit silhouettes.
   col = mix(col, amb * 0.3 + vec3(0.004, 0.005, 0.009), uNight * 0.92);
+  // Lightning lights a puff from inside: its thick middle most.
+  if (uFlash.w > 0.0) col += cloudFlash(vDir, 3.0) * (0.5 + n * 0.7) * (0.4 + 0.4 * tex);
   gl_FragColor = vec4(col * a, a);
 }
 `;

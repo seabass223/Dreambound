@@ -19,7 +19,10 @@ export function createFall(ctx) {
   }).map((st) => ({ st, reach: st.wallReach() + CLEAR }));
   let t = 0;
   let wind = audio.loop('fallWind');
-  const spot = player.safeSpot();
+  // Off the gatehouse's stairs during the descent the spot a moment back may be a section that has since fallen away:
+  // wake on the first one still standing ahead instead, or on End (props/gatehouse.js; it drops those spots from the
+  // history as each section goes).
+  const spot = (ctx.gatehouse?.armed && ctx.gatehouse.respawnSpot()) || player.safeSpot();
   const startPitch = player.pitch;
   player.mode = 'falling';
   player.canMove = false;

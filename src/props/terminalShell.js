@@ -8,10 +8,12 @@ import { mulberry32 } from '../core/rng.js';
 // being edited (prompt + input) and returns the ROWS rows on view plus where the cursor is. `version` goes up whenever
 // anything on screen changes, so the renderer only re-uploads then.
 //
-// The one program that matters is /opt/survey/bin/rocks.exe: it prints "executing rocks" and a dot every DOT_TIME s
-// up to four, then calls onRun() (the cutscene). The shell then waits, with no prompt, until returnFromFeed() prints the
-// garbled tail of the lost camera link and a fresh prompt. state().ran is set the moment it starts and after that
-// running it again prints nothing at all.
+// The one program that matters is /opt/survey/bin/rocks.exe. Until the observatory has read the ring off the sky
+// (coords()), it refuses (--help aside) and the one run isn't spent. Then it says so, prints "executing rocks" and a
+// dot every DOT_TIME s up to four, and calls onRun() (the cutscene). The shell waits, with no prompt, until
+// returnFromFeed() prints the garbled tail of the lost camera link; if the blast really went off, the program's own
+// verdict follows a beat later (still no prompt: the chair holds you till it's printed), then a fresh prompt.
+// state().ran is set the moment it starts and after that running it again prints nothing at all.
 
 export const COLS = 64, ROWS = 24;
 // Attributes: brightness level in the low two bits, bold (the heavier glyphs) in bit 2.
@@ -26,7 +28,14 @@ const DOTS = 4;
 const HOLD = 0.35;       // s the finished line stays up before onRun
 const FEED_TIMEOUT = 30; // s: if nobody calls returnFromFeed (no cutscene), come back by ourselves
 const NO_RUN_RETURN = 1; // s: ...and much sooner when there's no onRun at all
+// After the link is lost: s before each of rocks.exe's closing lines (the first once the screen's glitch has settled).
+const TAIL = [1.1, 0.7];
 const MAX_LINES = 400;   // scrollback kept
+
+// rocks.exe's words: refused (no coordinates), found, and its verdict once the stones are down.
+const NO_COORDS = [['rocks coordinates not found.', BRIGHT], ['Please retrieve coordinates from Observatory.', NORM]];
+const FOUND = 'Coordinates found from Observatory! Proceeding with blast.';
+const VERDICT = [['Blast coordinates resolution errors detected...', HOT], ['Manually positioning rocks is required', BRIGHT]];
 const MAX_INPUT = 240;
 
 const HELP = [
@@ -210,7 +219,9 @@ function tokenize(line, env) {
   return out;
 }
 
-export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = COLS, rows = ROWS, random = Math.random } = {}) {
+// coords: () => bool, whether the observatory's coordinates are in (rocks.exe won't run without them; a shell made
+// without it is a new game's: they aren't).
+export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = COLS, rows = ROWS, random = Math.random, coords = () => false } = {}) {
   const fs = buildFs();
   const st = () => state();
   const lines = [];
@@ -219,7 +230,8 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
   let histIdx = 0, draft = '';
   let oldpwd = null;
   let scroll = 0;                      // rows scrolled back from the bottom (PageUp / PageDown)
-  let run = null;                      // the running program: { t, line, phase: 'dots' | 'feed', fired }
+  // The running program: { t, line, phase: 'dots' | 'feed' | 'tail', wait, timeout, taken (onRun took it), said }.
+  let run = null;
   let lastTab = null;                  // the completion list shown by the last Tab (a second Tab doesn't repeat it)
   let sink = null;                     // output captured for a pipe
 
@@ -229,6 +241,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
     onExit: null,     // exit / logout
     get cwd() { return validCwd(); },
     get busy() { return !!run; },
+    get phase() { return run?.phase ?? null; },   // rocks.exe's: 'dots', 'feed' (the cutscene's), 'tail', or null
     get input() { return buf; },
     get cursor() { return cur; },
     key, exec, update, screen, returnFromFeed, complete, resolve: lookup, prompt: () => promptSegs(),
@@ -488,9 +501,13 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
     const s = st();
     if (s.ran) return;   // once only: after that, nothing at all
     if (args.includes('--help') || args.includes('-h')) { out('usage: rocks.exe   (arms and fires. no options.)'); return; }
+    // (A dry run needs the coordinates too; neither refusal spends the one run.)
+    if (!coords()) { for (const [t, a] of NO_COORDS) out(t, a); return; }
     if (args.includes('--dry-run') || args.includes('-n')) { out('dry run: 5 charges ok. nothing fired.'); return; }
     s.ran = true;
-    run = { t: 0, line: { t: 'executing rocks', a: BRIGHT }, phase: 'dots', wait: 0 };
+    // (direct, like the dots' line: a pipe never swallows what the program says as it fires)
+    pushLine({ t: FOUND, a: BRIGHT }, true);
+    run = { t: 0, line: { t: 'executing rocks', a: BRIGHT }, phase: 'dots', wait: 0, taken: false, said: 0 };
     pushLine(run.line, true);
   }
 
@@ -711,7 +728,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
     return n > 0 ? lines.slice(-n).map((l) => l.t) : [];
   }
 
-  // The dots, then onRun, then waiting for the feed to come back.
+  // The dots, then onRun, then waiting for the feed to come back, then (if it fired) the verdict.
   function update(dt) {
     if (!run) return;
     run.t += dt;
@@ -722,16 +739,27 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
       if (run.t >= DOTS * DOT_TIME + HOLD) {
         run.phase = 'feed'; run.wait = 0;
         const taken = shell.onRun ? shell.onRun() !== false : false;
-        if (run) run.timeout = taken ? FEED_TIMEOUT : NO_RUN_RETURN;   // (onRun may already have brought it back)
+        if (run) { run.taken = taken; run.timeout = taken ? FEED_TIMEOUT : NO_RUN_RETURN; }   // (onRun may already have brought it back)
       }
     } else if (run.phase === 'feed') {
       run.wait += dt;
       if (run.wait >= run.timeout) returnFromFeed();
+    } else if (run.phase === 'tail') {
+      run.wait += dt;
+      while (run && run.said < VERDICT.length && run.wait >= TAIL[run.said]) {
+        run.wait -= TAIL[run.said];
+        const [t, a] = VERDICT[run.said++];
+        out(t, a);
+        if (run.said === VERDICT.length) done();
+      }
     }
   }
 
-  // Back from the camera: the last of the link, garbled, then a prompt.
+  // Back from the camera: the last of the link, garbled; then, if the blast really went off (the cutscene took the
+  // run and kept it: main.js clears state.ran when it couldn't start), the verdict, a line at a time (update); then a
+  // prompt.
   function returnFromFeed() {
+    if (!run || run.phase === 'tail') return;   // (once per run)
     const blocks = '░▒▓░▒▓█ ';
     const garble = (n) => {
       let s = '';
@@ -741,6 +769,11 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
     out(garble(38 + Math.floor(random() * 22)), HOT);
     out(garble(14 + Math.floor(random() * 30)), BRIGHT);
     out('[cam07] link lost', BRIGHT | BOLD);
+    if (run.taken && st().ran) { run.phase = 'tail'; run.wait = 0; run.said = 0; touch(); return; }
+    done();
+  }
+  // The program's over: the prompt's back.
+  function done() {
     run = null;
     histIdx = history.length;
     touch();

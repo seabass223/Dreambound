@@ -203,7 +203,7 @@ export function buildTower(ctx) {
     ends: {
       top: { pos: cave.platePos, rotY: cave.plateRot, zone: 'surface', parent: ctx.surface, collider: ctx.lateCollider('tower-car') },
       bottom: ctx.tunnelStation('tower'),
-      // Press Down again at the cave station: the lounge below it.
+      // Hold Down at the cave station for 3 s: the lounge below it (props/elevator.js, HOLD_DOWN).
       ...(ctx.tunnels.stations.lounge ? { lounge: ctx.tunnelStation('lounge') } : {}),
     },
   });

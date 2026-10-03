@@ -79,7 +79,7 @@ export const FLAGS = {
       ['physics.colliders.*.min.*', { abs: 3 }], ['physics.colliders.*.max.*', { abs: 3 }],
       ['end.rocksEndGap.**', 'any'],
       ['rocks.tor.buried.**', 'any'], ['rocks.piles.*.buried.**', 'any'],
-      ['dome.trees.**', 'any'], ['tower.trees.**', 'any'], ['end.deck.posts.*.wallMargin', 'any'],
+      ['dome.trees.**', 'any'], ['tower.trees.**', 'any'], ['gatehouse.footMargin', 'any'],
     ],
     gates: [
       ['stacks.*.cliff.top12MaxNy', { max: 0.55, orBase: true }],   // End 0.70 and Mountain 0.59 already miss it
@@ -96,7 +96,7 @@ export const FLAGS = {
       ['stacks.*.cliff.rowStats', { atDepth: 10, key: 'devSd', addedSd: 0.15 }],
       ['stacks.*.cliff.rowStats', { atDepth: 19, key: 'devSd', addedSd: 0.5 }],
       ['rocks.tor.buried.minMargin', { min: 0.3 }], ['rocks.piles.*.buried.minMargin', { min: 0.3 }],
-      ['dome.trees.margin', { min: 0.3 }], ['tower.trees.margin', { min: 0.3 }], ['end.deck.posts.*.wallMargin', { min: 0.3 }],
+      ['dome.trees.margin', { min: 0.3 }], ['tower.trees.margin', { min: 0.3 }], ['gatehouse.footMargin', { min: 0.3 }],
     ],
   },
   // S3: outward-only calm smoothing (same surface as geo).
@@ -108,8 +108,10 @@ export const FLAGS = {
       ['dome.padFlatness', 'any'], ['dome.ringSlope15to22', 'any'], ['dome.sightline.**', 'any'], ['dome.spawnHeight', 'any'],
       ['rocks.movable.*.y', 'any'], ['rocks.frogs.*.1', 'any'], ['emitters.*.pos.1', 'any'], ['emitters.*.spots', 'any'],
       ['rocks.sequoia.carRect.**', 'any'],
-      ['rocks.bridgeA.1', { abs: 0.02 }], ['end.deck.a.1', { abs: 0.02 }], ['end.deck.rocksLip.**', { abs: 0.05 }], ['end.deck.endLip.**', { abs: 0.05 }],
-      ['end.deck.posts.*.pos.1', { abs: 0.02 }], ['end.deck.posts.*.wallMargin', { abs: 0.05 }],
+      // The gatehouse's floor stands on the highest Rocks ground under its corridor, and its stairs share the drop from
+      // there to the End landing (End itself has no relief).
+      ['rocks.bridgeA.1', { abs: 0.02 }], ['gatehouse.sill.1', { abs: 0.02 }], ['gatehouse.top.1', { abs: 0.02 }],
+      ['gatehouse.sectionEnds.*.1', { abs: 0.02 }], ['gatehouse.step.*', { abs: 0.02 }], ['gatehouse.endLip.*', { abs: 0.05 }],
       ['physics.dynamic.*.y0', 'any'], ['physics.dynamic.*.y1', 'any'],
       ['physics.colliders.*.min.*', { abs: 2 }], ['physics.colliders.*.max.*', { abs: 2 }],
     ],

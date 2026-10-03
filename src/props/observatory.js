@@ -1,17 +1,18 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader } from '../render/gltf.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { patchMaterial } from '../render/materials.js';
 import { Textures } from '../render/textures.js';
 import { atmo, atmoState } from '../render/atmosphere.js';
 import { clamp } from '../core/rng.js';
 import { rigged, UV_VERT, createRig, collectParts, partIndex } from '../render/rig.js';
-import { SCREEN_FRAG } from '../render/crt.js';
+import { SCREEN_FRAG, createCrtMessage } from '../render/crt.js';
 import { FAR_BAND, mergeable } from '../render/lod.js';
 import { createScopeExit } from '../ui/scopeExit.js';
 import { createStation } from './observatoryStation.js';
 import { makeInspectable } from './inspect.js';
-import { VIEW_DROP } from '../world/skyTarget.js';
+import { SKY_TARGET, VIEW_DROP } from '../world/skyTarget.js';
+import { createCoordsPan, coordsFinal, COORDS_LINES } from '../sequences/coordsPan.js';
 
 // The Mountain observatory, modeled in Blender (tools/blender/observatory_design.py): a stucco drum and a
 // riveted rotating dome, a refractor on a fork mount, geared handwheels, a periscope eyepiece and a room
@@ -69,6 +70,59 @@ const LAYER_OUT = { in: [45, 65], near: [110, 140] };
 // the dome and the tube), and how long the panel takes to swing.
 const HATCH_TOL = THREE.MathUtils.degToRad(0.35);
 const HATCH_TIME = 1.5;
+// The coordinates (the endgame's first step: rocks.exe wants them): the telescope held on SKY_TARGET, within COORDS_TOL
+// in each axis (the whole constellation is in the field within ~0.25 deg), with the figure showing, for COORDS_DWELL s.
+// Leaving the eyepiece then hands the view to the desk terminal (DESK_SCREEN, the green text one at 108 deg), which
+// reads them out (sequences/coordsPan.js): the camera ends square-on to its face, PAN_DIST out, at fov PAN_FOV.
+const COORDS_TOL = THREE.MathUtils.degToRad(0.4);
+const COORDS_DWELL = 1.0;
+const DESK_SCREEN = 1;
+const PAN_DIST = 0.6, PAN_FOV = 48;
+// The camera's way there from the eyepiece (252 deg), in the drum's polar terms (deg clockwise from the door, model -Z;
+// radius; height, the floor at 0.28): up off the eyepiece over the viewer's head, round the back of the pier between it
+// and the console (215 deg) at ~2.3 m, above the console and wide of the mount (the pier, its gear ring, the azimuth
+// motor and the tube's rear reach out at most 1.25 m up to 3.4 m, however the dome and the tube are turned), then
+// (desk.via) down over the chair onto the screen. Checked against the model, the dome and tube in every pose: from an
+// eyepiece stance, 0.33 m or more from anything after the first moment until the chair, whose back passes 0.25 m
+// behind the camera at the end; nothing in view comes nearer than 0.27 m (the near plane's corners are at 0.2 m).
+const PAN_ROUTE = [[236, 1.95, 2.3], [196, 1.6, 2.28], [150, 1.95, 2.18]];
+
+// A CRT face's frame in the model, fitted to its vertices by their UVs (render/crt.js: mode + u, id + v; the face spans
+// 0.02..0.98 of them): its centre, the axes the UVs run along (right, up), the normal out of it and its size (m).
+function faceFrame(geos, mode, id) {
+  const pts = [], uvs = [];
+  for (const g of geos) {
+    const p = g.attributes.position, uv = g.attributes.uv;
+    if (!uv) continue;
+    for (let i = 0; i < p.count; i++) {
+      const u = uv.getX(i), v = 1 - uv.getY(i);   // (glTF's flip undone, as UV_VERT does)
+      if (Math.floor(u) !== mode || Math.floor(v) !== id) continue;
+      pts.push(new THREE.Vector3().fromBufferAttribute(p, i));
+      uvs.push([u - mode, v - id]);
+    }
+  }
+  if (pts.length < 3) return null;
+  // Least squares: p - mean = gu (u - mean u) + gv (v - mean v).
+  const n = pts.length, c = pts.reduce((s, p) => s.add(p), new THREE.Vector3()).divideScalar(n);
+  const mu = uvs.reduce((s, q) => s + q[0], 0) / n, mv = uvs.reduce((s, q) => s + q[1], 0) / n;
+  let suu = 0, suv = 0, svv = 0;
+  const bu = new THREE.Vector3(), bv = new THREE.Vector3(), d = new THREE.Vector3();
+  pts.forEach((p, i) => {
+    const du = uvs[i][0] - mu, dv = uvs[i][1] - mv;
+    suu += du * du; suv += du * dv; svv += dv * dv;
+    d.subVectors(p, c);
+    bu.addScaledVector(d, du); bv.addScaledVector(d, dv);
+  });
+  const det = suu * svv - suv * suv;
+  if (Math.abs(det) < 1e-12) return null;
+  const gu = bu.clone().multiplyScalar(svv / det).addScaledVector(bv, -suv / det);
+  const gv = bv.clone().multiplyScalar(suu / det).addScaledVector(bu, -suv / det);
+  return {
+    center: c.clone().addScaledVector(gu, 0.5 - mu).addScaledVector(gv, 0.5 - mv),
+    right: gu.clone().normalize(), up: gv.clone().normalize(), normal: new THREE.Vector3().crossVectors(gu, gv).normalize(),
+    size: { w: gu.length() * 0.96, h: gv.length() * 0.96 },
+  };
+}
 
 // Indicator lamps: id and behaviour (0 random, 1 steady, 2 slow beacon, 3 fast chatter) packed in the UVs.
 const LAMP_FRAG = /* glsl */ `
@@ -152,6 +206,10 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
   const timeU = { value: 0 }, kU = { value: 1 };
   const std = (o, extra) => rigged(patchMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, envMapIntensity: 0.8, ...o })), rig, extra);
   const withObsUniforms = (fn) => (sh) => { sh.uniforms.uObsTime = timeU; sh.uniforms.uObsK = kU; fn(sh); };
+  // The desk terminal's coordinates readout (see desk, below): drawn once now, shown by the screens' own program, its
+  // canvas shaped like that screen's face so the glyphs aren't stretched.
+  const deskFace = faceFrame(Object.entries(groups).filter(([k]) => k.startsWith('screen@')).flatMap(([, g]) => g), 0, DESK_SCREEN);
+  const msg = createCrtMessage(COORDS_LINES, deskFace ? { aspect: deskFace.size.w / deskFace.size.h } : {});
   const M = {
     metal: std({ map: brushed.map, roughness: 1, metalness: 1, name: 'metal' }, (sh) => {
       sh.fragmentShader = sh.fragmentShader
@@ -176,7 +234,8 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     })), rig),
     emissive: rigged(new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 2.3, 1.3) }), rig),
     screen: rigged(new THREE.MeshBasicMaterial({ vertexColors: true, name: 'screen' }), rig, withObsUniforms((sh) => {
-      UV_VERT(sh, SCREEN_FRAG);
+      Object.assign(sh.uniforms, msg.uniforms);
+      UV_VERT(sh, msg.frag + SCREEN_FRAG);
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = crt(vObsUv, vColor.rgb) * uObsK;');
     })),
@@ -230,6 +289,32 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
   const farMesh = ctx.lod.addFarProxy(shell, { parent: root, band: FAR_BAND, material: far, name: 'observatory', keep: ['aPart'], aoTexture: ao });
   farMesh.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 3.5, 0), 9.5);
 
+  // ---- the desk terminal that reads out the coordinates (sequences/coordsPan.js), in the world: its face (fitted to
+  // the model's screen), the cinematic's waypoints and last place, and its readout (the message on the screen, or null
+  // for its stock scrolling text). null if the model has no such screen (then there is no cinematic).
+  const desk = (() => {
+    const f = deskFace;
+    if (!f) return null;
+    const screen = root.localToWorld(f.center.clone());
+    const normal = f.normal.clone().transformDirection(root.matrixWorld);
+    const at = (d, h) => screen.clone().addScaledVector(normal, d).setY(screen.y + h);
+    const D = THREE.MathUtils.DEG2RAD;
+    const drum = ([a, r, y]) => root.localToWorld(new THREE.Vector3(Math.sin(a * D) * r, y, -Math.cos(a * D) * r));
+    return {
+      screen, normal, size: f.size, fov: PAN_FOV,
+      end: at(PAN_DIST, 0),
+      // Round the pier, then over the chair (its back stands ~0.3 m behind the last place, a little under the screen's
+      // centre): just clear of it, so the last drop onto the screen's normal (and the tilt up to square-on that goes
+      // with it, the view being on the screen) is short and gentle.
+      via: [...PAN_ROUTE.map(drum), at(PAN_DIST + 0.8, 0.6), at(PAN_DIST + 0.35, 0.3)],
+      text: (rows, cursor = null, lit = 1) => {
+        if (!rows) { msg.hide(); return; }
+        msg.show(DESK_SCREEN);
+        msg.set(rows, cursor, lit);
+      },
+    };
+  })();
+
   // ---- interior lighting (shared light pool) and the interior mask ----
   const meta = nodes.META?.userData || {};
   const wp = (name) => nodes[name] ? root.localToWorld(nodes[name].getWorldPosition(new THREE.Vector3())) : null;
@@ -250,7 +335,9 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
   for (const n of ['SOUND_electronics', 'SOUND_desk']) if (nodes[n]) ctx.audio?.registerEmitter?.('electronics', wp(n), 'surface');
 
   // ---- state, drivers, controls ----
-  const st = ctx.state.observatory = { yaw: doorAngle + Math.PI * 0.2, pitch: 0.22, hatch: 0 };
+  // coords: the constellation has been read (the one place it is kept: core/save.js, rocks.exe's gate and the desk's
+  // readout all go by it).
+  const st = ctx.state.observatory = { yaw: doorAngle + Math.PI * 0.2, pitch: 0.22, hatch: 0, coords: false };
   const pivotY = meta.pivotY ?? 4.3, tubeFront = meta.tubeFront ?? 4.4;
   // Dome angle (about local +Y) that points the slit (local -Z) at world angle yaw; tracked continuously.
   const slitAngle = (yaw) => Math.atan2(-Math.cos(yaw), -Math.sin(yaw)) - root.rotation.y;
@@ -342,7 +429,51 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     player().cameraControlled = true;
     player().lookHandler = null;
     player().canMove = true;
+    // The view back at the eye at once (left from the updater, this frame would be drawn from the tube's mouth).
+    player().updateCamera?.(0);
     ctx.audio?.play('click', {});
+    // The coordinates just read: the desk's readout plays from here next frame (startPan). Until then the player is
+    // held where they stand, so a teleport (Travel) is told from a step.
+    if (panPending) {
+      panFrom = player().feet.clone();
+      player().canMove = false;
+      player().lookHandler = HOLD;
+    }
+  };
+  // The coordinates: the telescope held on SKY_TARGET (tested as the rear hatch tests its aim) while the constellation
+  // shows (render/constellation.js: dusk and night). Set once; the readout waits for the player to leave the eyepiece.
+  let coordsDwell = 0, panPending = false, panFrom = null, pan = null;
+  const HOLD = () => {};
+  const watchSky = (dt) => {
+    if (st.coords) return;
+    const across = Math.abs(Math.atan2(Math.sin(st.yaw - SKY_TARGET.yaw), Math.cos(st.yaw - SKY_TARGET.yaw))) * Math.cos(SKY_TARGET.pitch - VIEW_DROP);
+    const up = Math.abs(st.pitch - SKY_TARGET.pitch);
+    const C = ctx.constellation, shows = !!C?.points.visible && C.points.material.uniforms.uVis.value > 0.5;
+    coordsDwell = across < COORDS_TOL && up < COORDS_TOL && shows ? coordsDwell + dt : 0;
+    if (coordsDwell < COORDS_DWELL) return;
+    st.coords = true;
+    panPending = !!desk;
+    ctx.audio?.play('coordsBeep', { pos: desk?.screen ?? pier, kind: 'tick' });   // across the room, the desk stirs
+  };
+  // The frame after leaving the eyepiece with the coordinates read: the cinematic, unless the player has gone (Travel)
+  // or is back at the eyepiece (then it waits for the next time they leave).
+  const startPan = () => {
+    const p = player(), from = panFrom;
+    panFrom = null;
+    if (p.lookHandler === HOLD) { p.lookHandler = null; p.canMove = true; }
+    if (viewing) return;
+    panPending = false;
+    if (p.feet.distanceTo(from) > 0.3) return;   // (the readout simply shows: see readout)
+    const seq = createCoordsPan(ctx, { desk });
+    if (ctx.startSequence?.(seq)) pan = seq;
+  };
+  // The desk's readout: the cinematic drives it while it runs; otherwise it shows once the coordinates are in (at once
+  // from a restored save) and the cinematic isn't still to come.
+  const readout = () => {
+    if (pan && !pan.done) return;
+    pan = null;
+    if (desk && st.coords && !panPending) { const r = coordsFinal(timeU.value); desk.text(r.rows, r.cursor, r.lit); }
+    else if (msg.shown) msg.hide();
   };
   controls.viewer = ctx.interact.add({
     name: 'observatory:eyepiece', meshes: [viewerProxy], range: 2.3,
@@ -550,16 +681,43 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     updateDoor(dt);
     apply();
     station?.update(dt);
+    if (panFrom) startPan();
     if (viewing) {
       scopeView();
+      watchSky(dt);
       const a = ctx.input.axis();
       if (a.x || a.y || ctx.input.keys.has('Escape')) exitView();
     }
+    readout();
     const moving = yawVel + pitchVel > 1e-5;
     if (moving && !rumble) rumble = ctx.audio?.loop('domeRumble', { pos: pier });
     if (!moving && rumble) { rumble.stop(); rumble = null; }
     yawVel = 0; pitchVel = 0;
   });
 
-  return { root, st, parts, controls, viewing: () => viewing, hatch, drawers, print: paper, ladder: station?.ladder, station: station?.station, finish: () => station?.finish() };
+  // Console helpers (screenshots, the dev tour): aim at the constellation as hatch.align does the tor top; replay the
+  // desk's cinematic from where the player stands (in the observatory).
+  const sky = {
+    target: SKY_TARGET, tolerance: COORDS_TOL,
+    align: () => {
+      st.yaw += Math.atan2(Math.sin(SKY_TARGET.yaw - st.yaw), Math.cos(SKY_TARGET.yaw - st.yaw));
+      st.pitch = SKY_TARGET.pitch;
+      apply();
+      return SKY_TARGET;
+    },
+  };
+  if (desk) {
+    desk.play = () => {
+      if (viewing || (pan && !pan.done)) return false;   // (at the eyepiece its updater would keep the camera)
+      const seq = createCoordsPan(ctx, { desk });
+      if (!ctx.startSequence?.(seq)) return false;
+      pan = seq;
+      return true;
+    };
+  }
+
+  return {
+    root, st, parts, controls, viewing: () => viewing, hatch, drawers, print: paper, ladder: station?.ladder, station: station?.station, finish: () => station?.finish(),
+    coordsSeen: () => !!st.coords, sky, desk, coordsPan: () => pan,
+  };
 }

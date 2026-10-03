@@ -25,6 +25,20 @@
       "port": 5175
     },
     {
+      "name": "dreambound-stage",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        "dist-deploy",
+        "--port",
+        "5176",
+        "--strictPort"
+      ],
+      "port": 5176
+    },
+    {
       "name": "bug-review",
       "runtimeExecutable": "node",
       "runtimeArgs": [

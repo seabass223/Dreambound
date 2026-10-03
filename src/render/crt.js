@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { UV_VERT } from './rig.js';
 
 // The 70s CRT screens' content, drawn in the fragment shader (the observatory's consoles, props/observatory.js, and the
@@ -6,7 +7,9 @@ import { UV_VERT } from './rig.js';
 // which also declares what crt() needs: vObsUv, uObsTime, uObsK and the hashes oh() and oh1(). Use it as
 //   UV_VERT(shader, SCREEN_FRAG);  ...  diffuseColor.rgb = crt(vObsUv, tint) * uObsK;
 // A material may bend the oscilloscope's trace by defining CRT_SCOPE_Y(p, t, y) (a function of the screen point, the
-// time and the stock trace's height, returning the height to draw) ahead of SCREEN_FRAG.
+// time and the stock trace's height, returning the height to draw) ahead of SCREEN_FRAG, and replace a terminal
+// screen's scrolling text by defining CRT_TEXT(p, id, v) (the face point, the screen's id and the stock text's level,
+// returning the level to draw): see createCrtMessage.
 export { UV_VERT };
 
 // CRT content by mode: 0 terminal text, 1 oscilloscope, 2 radar sweep, 3 bar graph, 4 guider star field.
@@ -28,6 +31,9 @@ vec3 crt(vec2 u, vec3 tint) {
     v = glyph * step(col, len) * step(1.0, col) * step(0.3, oh(vec2(col, line + 91.0)));
     float cursor = step(abs(row - 1.0), 0.1) * step(abs(col - floor(len * 0.4) - 1.0), 0.1) * step(0.5, fract(t * 1.6));
     v = max(v, cursor * step(sub.y, 5.5));
+#ifdef CRT_TEXT
+    v = CRT_TEXT(p, id, v);
+#endif
   } else if (mode < 1.5) {
     vec2 grid = abs(fract(p * vec2(10.0, 8.0) + 0.5) - 0.5);
     v = 0.12 * (1.0 - smoothstep(0.0, 0.04, min(grid.x, grid.y)));
@@ -74,3 +80,98 @@ vec3 crt(vec2 u, vec3 tint) {
   return tint * (0.05 + v) * scan * corner * flicker;
 }
 `;
+
+// A fixed message on one terminal screen (the observatory desk's coordinates readout, sequences/coordsPan.js): its lines
+// drawn once at boot into a canvas, one character centred in each cell of a grid on the face (R the strokes, struck
+// twice a pixel apart as the beam spreads; G the phosphor's glow round them), and shown by CRT_TEXT on the screen whose
+// id is uMsgId, instead of its scrolling text. How much of each row shows and where the block cursor sits are uniforms,
+// so typing it out never touches the texture, and the screen's program is the same whatever it shows. Use it as
+//   UV_VERT(sh, msg.frag + SCREEN_FRAG); Object.assign(sh.uniforms, msg.uniforms);
+// lines: up to four rows of text. The grid (face units, 0..1 across and up the face as the UVs run): its left edge, the
+// top of its first row, its width and the height of a row; cols: cells across (the longest line and one for the cursor
+// after it). px: the canvas's width (its height follows the face's aspect, w / h), so a glyph keeps ~40 px across.
+const MSG_FONT = '"Consolas", "Menlo", "DejaVu Sans Mono", "Lucida Console", "Courier New", monospace';
+
+export const CRT_MESSAGE_FRAG = /* glsl */ `
+uniform sampler2D uMsg;
+uniform float uMsgId;      // the screen showing the message (-1: none)
+uniform vec4 uMsgBox;      // the grid: left, top (face units, y up), cell width, row height
+uniform vec4 uMsgRows;     // characters showing on rows 0..3
+uniform vec4 uMsgCursor;   // the block cursor: col, row, lit (0..1)
+uniform vec2 uMsgCurY;     // its top and bottom, down its cell (0..1): a capital's height, standing on the baseline
+float crtMessage(vec2 p, float id, float v) {
+  if (abs(id - uMsgId) > 0.5) return v;
+  vec2 g = vec2(p.x - uMsgBox.x, uMsgBox.y - p.y) / uMsgBox.zw;   // in cells: across, and down from the top row
+  vec2 cell = floor(g), f = g - cell;
+  float shown = cell.y < 0.5 ? uMsgRows.x : cell.y < 1.5 ? uMsgRows.y : cell.y < 2.5 ? uMsgRows.z : uMsgRows.w;
+  shown *= step(0.0, cell.y) * step(cell.y, 3.0);
+  vec2 m = texture2D(uMsg, p).rg;
+  float text = step(0.5, shown) * step(cell.x + 0.5, shown) * (m.r * 0.95 + m.g * 0.4);
+  float cur = uMsgCursor.z * step(abs(cell.x - uMsgCursor.x), 0.1) * step(abs(cell.y - uMsgCursor.y), 0.1)
+    * step(0.1, f.x) * step(f.x, 0.9) * step(uMsgCurY.x, f.y) * step(f.y, uMsgCurY.y);
+  return max(text, cur * 1.2);
+}
+#define CRT_TEXT crtMessage
+`;
+
+export function createCrtMessage(lines, { cols = Math.max(...lines.map((l) => l.length)) + 1, left = 0.075, top = 0.7, width = 0.85, rowH = 0.1, px = 1280, aspect = 0.35 / 0.256 } = {}) {
+  const cellW = width / cols;
+  const uniforms = {
+    uMsg: { value: null },
+    uMsgId: { value: -1 },
+    uMsgBox: { value: new THREE.Vector4(left, top, cellW, rowH) },
+    uMsgRows: { value: new THREE.Vector4() },
+    uMsgCursor: { value: new THREE.Vector4() },
+    uMsgCurY: { value: new THREE.Vector2(0.24, 0.72) },
+  };
+  if (typeof document === 'undefined' || !document.body) {
+    // Headless (the regression harness): a black stand-in.
+    const tex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+    tex.needsUpdate = true;
+    uniforms.uMsg.value = tex;
+  } else {
+    const W = px, H = Math.round(px / aspect);
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+    // One advance a little narrower than a cell; no taller than ~70 % of a row.
+    const cw = cellW * W, ch = rowH * H;
+    g.font = `100px ${MSG_FONT}`;
+    const size = Math.floor(Math.min((cw * 0.86 * 100) / g.measureText('M').width, ch * 0.7));
+    g.font = `${size}px ${MSG_FONT}`;
+    g.textBaseline = 'alphabetic';
+    const m = g.measureText('M');
+    const asc = m.actualBoundingBoxAscent ?? size * 0.66;
+    const lineAsc = m.fontBoundingBoxAscent ?? size * 0.8, lineDesc = m.fontBoundingBoxDescent ?? size * 0.22;
+    const baseIn = (ch - (lineAsc + lineDesc)) / 2 + lineAsc;   // the baseline, down from a row's top (px)
+    uniforms.uMsgCurY.value.set((baseIn - asc) / ch, baseIn / ch);
+    const each = (fn) => lines.forEach((line, r) => [...line].forEach((c, k) => {
+      if (c === ' ') return;
+      fn(c, (left + (k + 0.5) * cellW) * W - g.measureText(c).width / 2, (1 - top) * H + r * ch + baseIn);
+    }));
+    // The glow: green, blurred about a third of a cell; then the strokes added in red over it.
+    g.fillStyle = '#0f0'; g.shadowColor = '#0f0'; g.shadowBlur = Math.round(cw * 0.36);
+    each((c, x, y) => g.fillText(c, x, y));
+    g.shadowBlur = 0; g.shadowColor = 'transparent';
+    g.globalCompositeOperation = 'lighter';
+    g.fillStyle = '#f00';
+    each((c, x, y) => { g.fillText(c, x - 0.6, y); g.fillText(c, x + 0.6, y); });
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.anisotropy = 4;
+    uniforms.uMsg.value = tex;
+  }
+  // rows: [n0, n1, n2, n3] characters showing; cursor: [col, row] or null, lit: 0..1.
+  const set = (rows, cursor = null, lit = 1) => {
+    uniforms.uMsgRows.value.set(rows[0] ?? 0, rows[1] ?? 0, rows[2] ?? 0, rows[3] ?? 0);
+    if (cursor) uniforms.uMsgCursor.value.set(cursor[0], cursor[1], lit, 0);
+    else uniforms.uMsgCursor.value.z = 0;
+  };
+  return {
+    frag: CRT_MESSAGE_FRAG, uniforms, lines, cols, set,
+    show: (id) => { uniforms.uMsgId.value = id; },
+    hide: () => { uniforms.uMsgId.value = -1; },
+    get shown() { return uniforms.uMsgId.value >= 0; },
+  };
+}

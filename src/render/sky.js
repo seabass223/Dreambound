@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { atmo } from './atmosphere.js';
+import { atmo, STORM_GLSL } from './atmosphere.js';
 import { NOISE_GLSL, SKY_UNIFORMS_GLSL, SKY_FUNC_GLSL } from './glsl.js';
 import { CENTER_DIR } from './constellation.js';
 import { MOON_GLSL, moonMap, moonMapFlat, moonExtinction } from './moon.js';
@@ -21,6 +21,7 @@ varying vec3 vDir;
 ${NOISE_GLSL}
 ${SKY_FUNC_GLSL}
 ${MOON_GLSL}
+${STORM_GLSL}
 
 vec3 rotY(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(c * v.x + s * v.z, v.y, -s * v.x + c * v.z); }
 vec3 rotX(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x, c * v.y - s * v.z, s * v.y + c * v.z); }
@@ -73,6 +74,25 @@ void main() {
   col += moonGlow(moon) * uMoonExt * uNight * smoothstep(-0.05, 0.05, dir.y);
   if (moonCov > 0.0) col += moonSurface(moon) * uMoonExt * mix(0.5, 0.2, uNight) * moonCov;
 
+  // The storm (render/storm.js): a heavy overcast over the whole sky, its colours the sky's own (storm.js has already
+  // greyed and darkened them), lumpy underneath and drifting slowly; the horizon stays a band of haze. Lightning lights
+  // it from inside, most round the stroke and through its thicker parts.
+  // (uFlash.w is 0 in the environment map's copy.)
+  if (uStorm > 0.001) {
+    vec2 cp = dir.xz / (max(dir.y, 0.0) + 0.09);   // onto a flat ceiling: its lumps shrink toward the horizon
+    vec2 drift = vec2(uTime * 0.012, uTime * 0.005);
+    float n = fbm(cp * 0.8 + drift);
+    float m = fbm(cp * 2.3 - drift * 1.6 + 5.3);
+    // The lumps fade into an even haze toward the horizon (below it the projection would only smear them into
+    // streaks), where the far cloud sea meets it in the same colour and the same lightning (clouds.js).
+    float lumps = smoothstep(0.0, 0.18, dir.y);
+    float d0 = smoothstep(0.3, 0.8, n * 0.75 + m * 0.4);
+    float dens = mix(0.5, d0, lumps);
+    vec3 deck = mix(uHorizonAway, uZenith, smoothstep(-0.05, 0.6, dir.y)) * mix(1.0, mix(0.62, 1.08, d0), lumps);
+    col = mix(col, deck, uStorm * smoothstep(-0.12, 0.05, dir.y));
+    col += skyFlash(dir, dens);
+  }
+
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -95,8 +115,11 @@ export function createSky() {
   mesh.name = 'sky';
 
   // A low-cost copy (no stars, a plain moon: moonMapFlat) used to render the environment map for image-based lighting.
+  // The storm's overcast reaches it, its lightning doesn't (the map is kept for seconds; render/storm.js holds its
+  // refresh while a flash lights the shared sky colours).
   const envMat = mat.clone();
-  envMat.uniforms = { ...atmo, uStars: { value: 0 }, uConstDir: { value: CENTER_DIR.clone() }, uMoonMap: { value: moonMapFlat() }, uMoonExt: moonExt };
+  envMat.uniforms = { ...atmo, uStars: { value: 0 }, uConstDir: { value: CENTER_DIR.clone() }, uMoonMap: { value: moonMapFlat() }, uMoonExt: moonExt,
+    uFlash: { value: new THREE.Vector4(0, 1, 0, 0) } };
   const envScene = new THREE.Scene();
   const envMesh = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), envMat);
   envScene.add(envMesh);
@@ -104,6 +127,10 @@ export function createSky() {
   return {
     mesh,
     envScene,
+    // For the storm (render/storm.js): the stars' brightness (1; the environment map's copy has none) and the moon's
+    // extinction, rewritten by update() every frame (scale it after).
+    stars: mat.uniforms.uStars,
+    moonExt,
     update(camera) {
       mesh.position.copy(camera.position);
       moonExtinction(atmo.uMoonDir.value, moonExt.value);

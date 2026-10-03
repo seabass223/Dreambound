@@ -14,6 +14,14 @@ import { createShell, COLS, ROWS, EXTRA_GLYPHS, NORM } from './terminalShell.js'
 //
 // Pressing the screen (or the keyboard) sits you in the chair: Player.sit eases the eye to the seat while the view
 // narrows to seat.fov, and ui/terminalKeys.js hands every key to the shell until you leave (Esc, a click, or `exit`).
+//
+// It runs off the hub generator (props/cave.js), which can't carry it with the Home (dome) and Mountain lines on
+// as well: until both are switched off the tube is dark and silent. It still answers the reticle (it's plainly a thing
+// to use); pressing it gets a dead click and the low-battery glyph (ui/reticle.js flash) instead of the chair.
+
+// Whether the bunker has power: Home and Mountain both shed (no cave built, as in some tests: always).
+export const bunkerPowered = (ctx) => !ctx.power || (ctx.power.dome === false && ctx.power.mountain === false);
+const WARM = 0.9, COOL = 0.25;   // s: the tube coming up to brightness, and collapsing
 
 const GLYPHS = (() => { let s = ''; for (let c = 32; c < 127; c++) s += String.fromCharCode(c); return s + EXTRA_GLYPHS; })();
 const INDEX = new Map([...GLYPHS].map((ch, i) => [ch, i]));
@@ -282,14 +290,17 @@ void main() {
 //     onStand, which it chains); the missing ones are filled in.
 //   keyboard: an optional dedicated (invisible) pick mesh over the keyboard, pressed like the screen.
 // term: { state, shell, exec(line), key(e), active(), enter(), leave(), glitch, onRun, returnFromFeed(), update(dt),
-//   material, seat, item }. onRun(term) is called once, when rocks.exe has printed its four dots; the shell then waits
-//   (no prompt) for returnFromFeed() (or comes back by itself after 30 s, or 1 s when onRun is unset or returns false).
-//   Never call returnFromFeed() from inside onRun.
+//   material, seat, item, powered(), level }. onRun(term) is called once, when rocks.exe has printed its four dots; the
+//   shell then waits (no prompt) for returnFromFeed() (or comes back by itself after 30 s, or 1 s when onRun is unset or
+//   returns false), and after a real run holds the chair ~2 s more while rocks.exe prints its verdict. Never call
+//   returnFromFeed() from inside onRun. enter() refuses (false) while unpowered; level is the tube's brightness, 0..1,
+//   following powered() (bunkerRoom.js dims the screen's glint by it).
 export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS, rows = ROWS }) {
   ctx.state ??= {};
   const getState = () => (ctx.state.terminal ||= { ran: false, cwd: '/home/operator' });
   getState();
-  const shell = createShell({ state: getState, cols, rows });
+  // (rocks.exe asks the observatory's flag each time: a save's restore sets it under the shell)
+  const shell = createShell({ state: getState, cols, rows, coords: () => !!ctx.state.observatory?.coords });
 
   // ---- the screen ----
   const atlas = glyphAtlas();
@@ -311,6 +322,7 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
     uBack: { value: new THREE.Color(0.004, 0.009, 0.022) },
     uLook: { value: new THREE.Vector4(0.085, 0.75, 0.38, 1.0) },
   };
+  const GAIN = U.uLook.value.w;   // (uLook.w carries the power: 0 is a dead tube, glass and all, the same program)
   const material = new THREE.ShaderMaterial({ name: 'terminal', uniforms: U, vertexShader: VERT, fragmentShader: FRAG });
   if (screen) {
     if (!screen.geometry.attributes.normal) screen.geometry.computeVertexNormals();
@@ -357,15 +369,19 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
 
   const seated = () => { const p = ctx.player; return !!p && p.mode === 'sit' && p.seat === seat; };
   const active = () => seated() && ctx.player.sitDir !== -1;
+  const powered = () => bunkerPowered(ctx);
   let time = 0, lastKey = -10, pulse = 0;
   let soundPos = null, lastCwd = getState().cwd;
+  let level = powered() ? 1 : 0;
+  const where = () => (soundPos ||= (keyboard ?? screen)?.getWorldPosition?.(new THREE.Vector3()) ?? null);
 
   const term = {
     shell, glitch: 0, onRun: null, material, seat, item: null,
     get state() { return getState(); },
-    active,
-    enter() { return active() ? false : !!ctx.player?.sit(seat); },
-    // (Not while rocks.exe runs: from its first dot to the cut back the player stays in the chair.)
+    get level() { return level; },
+    active, powered,
+    enter() { return active() || !powered() ? false : !!ctx.player?.sit(seat); },
+    // (Not while rocks.exe runs: from its first dot until it has had its say the player stays in the chair.)
     leave() { return active() && !shell.busy ? ctx.player.standUp() : false; },
     exec(line) { const o = shell.exec(line); if (shell.version !== drawn) draw(); return o; },
     key(e) {
@@ -373,9 +389,9 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
       if (snd) {
         // (A held key repeats its edit silently: a real one clicks once, going down.)
         if (!e.repeat) {
-          soundPos ||= (keyboard ?? screen)?.getWorldPosition?.(new THREE.Vector3()) ?? null;
+          const pos = where();
           const space = e.key === ' ' || e.code === 'Space';
-          ctx.audio?.play(snd, { ...(soundPos ? { pos: soundPos } : {}), ...(space ? { space } : {}) });
+          ctx.audio?.play(snd, { ...(pos ? { pos } : {}), ...(space ? { space } : {}) });
         }
         lastKey = time;
       }
@@ -387,16 +403,22 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
       time += dt;
       // (The prompt shows the cwd: a save's restore changes it under the shell.)
       if (getState().cwd !== lastCwd) { lastCwd = getState().cwd; shell.version++; }
-      const ran = shell.busy;
+      const waiting = shell.phase === 'feed';
       shell.update(dt);
-      if (ran && !shell.busy) pulse = Math.max(pulse, 0.6);   // came back on its own
+      if (waiting && shell.phase !== 'feed') pulse = Math.max(pulse, 0.6);   // came back on its own
       if (shell.version !== drawn) draw();
       pulse = Math.max(0, pulse - dt * 1.4);
+      // The power: the tube warms up, or collapses. Should it die under someone sitting at it (only a dev's switch
+      // could: the switches are a cave away), they get up, unless rocks.exe is holding them.
+      const on = powered();
+      level = on ? Math.min(1, level + dt / WARM) : Math.max(0, level - dt / COOL);
+      if (!on && active() && !shell.busy) term.leave();
+      U.uLook.value.w = GAIN * (on ? smooth(level) : level * level);
       U.uTime.value = time;
       U.uK.value = (1 + atmo.uNight.value * 0.3) / Math.max(0.5, atmoState.exposure);
       U.uGlitch.value = Math.min(1, Math.max(term.glitch, pulse * pulse * 0.8));
       const blinkOn = time - lastKey < 0.5 || (time % BLINK) < BLINK * 0.55;
-      U.uCursor.value.set(cursor.col, cursor.row, cursor.show && blinkOn ? 1 : 0, 0);
+      U.uCursor.value.set(cursor.col, cursor.row, cursor.show && blinkOn && level > 0 ? 1 : 0, 0);
       // The view: narrowed onto the screen as the eye settles (in step with Player.sit's ease), and back.
       const p = ctx.player, c = cam();
       if (seated()) {
@@ -422,10 +444,18 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
   };
   shell.onExit = () => term.leave();
 
+  // Pressed without power: the item stays enabled (the reticle still lights on it), but all you get is a dead click and
+  // the low-battery glyph where the dot is.
+  const refuse = () => {
+    const pos = where();
+    ctx.audio?.play('noPower', pos ? { pos } : {});
+    ctx.reticle?.flash?.('batteryLow');
+  };
   if (screen) {
     term.item = ctx.interact?.add?.({
       name: 'bunker:terminal', meshes: [screen, keyboard].filter(Boolean), range: 2.4, exact: true, zone: 'surface',
-      onPress: () => term.enter(),
+      onPress: () => { if (powered()) term.enter(); else refuse(); },
+      blocked: () => (powered() ? null : 'batteryLow'),   // why a press does nothing (for the debug report)
     }) ?? null;
   }
   ctx.updaters?.push((dt) => term.update(dt));

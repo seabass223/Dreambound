@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader } from '../render/gltf.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { patchMaterial } from '../render/materials.js';
 import { atmo } from '../render/atmosphere.js';
@@ -7,6 +7,7 @@ import { addKeepOut } from '../render/lod.js';
 
 const RIDE = 8;
 const LOUNGE_RIDE = 6;   // the short drop from the Tower's cave station to its hidden lounge
+const HOLD_DOWN = 3;     // seconds Down must be held at that cave station to go on down to the lounge
 const DOOR_TIME = 1.7;
 // The car's inside, and the doorway (tools/blender/elevator_design.py keeps every end's placement to these).
 const CAR = { hw: 1.05, h: 2.6, z0: -0.16, z1: -2.35 };
@@ -187,7 +188,7 @@ function sharedAssets(asset) {
 
 // A two-ended elevator. Each end is a static car behind sliding doors; riding teleports the player
 // between identical cars after an 8 second descent/ascent. The Tower's has a secret third stop: `ends.lounge`, below
-// its cave station, reached by pressing Down again there (see props/lounge.js). start: the stop the car waits at in a
+// its cave station, reached by holding Down there for HOLD_DOWN seconds (see props/lounge.js). start: the stop the car waits at in a
 // new game (a saved game puts it back where it was).
 export function createElevator(ctx, { id, ends, start = 'top' }) {
   const S = sharedAssets(ctx.elevatorAsset);
@@ -287,7 +288,7 @@ export function createElevator(ctx, { id, ends, start = 'top' }) {
     const downHit = hit(0.056, 0.056, S.down.x, S.down.y, CAR.z0 - 0.02);
     ctx.interact.add({ name: `elevator:${id}:${key}:call`, meshes: [call], range: 2.8, exact: true, onPress: () => el.call(key) });
     ctx.interact.add({ name: `elevator:${id}:${key}:up`, meshes: [upHit], range: 2.4, exact: true, onPress: () => el.press(key, 'top') });
-    ctx.interact.add({ name: `elevator:${id}:${key}:down`, meshes: [downHit], range: 2.4, exact: true, onPress: () => el.press(key, 'bottom') });
+    ctx.interact.add({ name: `elevator:${id}:${key}:down`, meshes: [downHit], range: 2.4, exact: true, onPress: () => el.downPress(key), onRelease: () => el.downRelease(key) });
     // No grass or pebbles in the car (or leaning in through its walls).
     addKeepOut(wm, new THREE.Box3(new THREE.Vector3(-CAR.hw - 0.5, -1, CAR.z1 - 0.5), new THREE.Vector3(CAR.hw + 0.5, CAR.h + 0.3, 0.05)));
     // Each end is a small thing in a cliff, shed or tunnel: gone beyond ~90 m (see render/lod.js).
@@ -368,7 +369,36 @@ export function createElevator(ctx, { id, ends, start = 'top' }) {
     });
   };
 
+  // Down at the cave station of the elevator with a lounge below it (the Tower's) takes holding: pressed, the button
+  // stays in and lit; let go before HOLD_DOWN seconds and it springs back and goes dark, nothing else; held that long,
+  // the ride goes ahead as any other press. Every other Down is a plain press.
+  let hold = null;
+  const holdsDown = (key) => key === 'bottom' && stops[stops.indexOf(key) + 1] === 'lounge';
+  el.downPress = (key) => {
+    if (!holdsDown(key)) { el.press(key, 'bottom'); return; }
+    const b = el.ends[key].capBtns.down;
+    sound('click', key);
+    push(b);
+    if (!b) return;
+    b.held = true;
+    light(b, live());   // (dark without power, though it still goes in)
+    hold = { key, b, t: 0 };
+  };
+  el.downRelease = (key) => {
+    if (!hold || hold.key !== key) return;
+    hold.b.held = false;
+    light(hold.b, false);
+    hold = null;
+  };
+
   el.update = (dt) => {
+    if (hold && (hold.t += dt) >= HOLD_DOWN) {
+      const { key, b } = hold;
+      hold = null;
+      b.held = false;
+      light(b, false);
+      el.press(key, 'bottom');   // (a second click as it goes, and lit again for the ride if it can go)
+    }
     const k = live() ? 1 : 0;
     if (k !== lit) {
       lit = k;
@@ -378,6 +408,7 @@ export function createElevator(ctx, { id, ends, start = 'top' }) {
     S.extU.uElevFill.value.copy(FILL).multiplyScalar(atmo.uUnderground.value);
     // Pressed buttons: in 3 mm at once, then spring back out over ~0.25 s.
     for (const b of buttons) {
+      if (b.held) b.t = 1;   // held in
       if (b.t <= 0) continue;
       b.t = Math.max(0, b.t - dt / 0.25);
       const d = 0.003 * Math.min(1, b.t * 1.6);

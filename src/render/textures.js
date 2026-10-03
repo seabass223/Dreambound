@@ -951,35 +951,4 @@ export const Textures = {
     t.flipY = false;
     return t;
   }),
-
-  clockFace: () => once('clockFace', () => {
-    const S = 256;
-    const c = document.createElement('canvas');
-    c.width = c.height = S;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#efe6cf';
-    ctx.fillRect(0, 0, S, S);
-    ctx.translate(S / 2, S / 2);
-    ctx.fillStyle = '#2a2420';
-    for (let i = 0; i < 60; i++) {
-      const a = (i / 60) * Math.PI * 2;
-      const big = i % 5 === 0;
-      ctx.save(); ctx.rotate(a);
-      ctx.fillRect(-(big ? 3 : 1), -S * 0.46, big ? 6 : 2, big ? 18 : 8);
-      ctx.restore();
-    }
-    // Hands at 7:00 — minute hand straight up, hour hand at seven.
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#1a1512';
-    ctx.lineWidth = 9;
-    ctx.beginPath(); ctx.moveTo(0, 0);
-    const ha = (7 / 12) * Math.PI * 2;
-    ctx.lineTo(Math.sin(ha) * S * 0.24, -Math.cos(ha) * S * 0.24); ctx.stroke();
-    ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -S * 0.38); ctx.stroke();
-    ctx.fillStyle = '#b3261e';
-    ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
-    const t = tex(c, { repeat: false });
-    return t;
-  }),
 };

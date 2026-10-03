@@ -7,8 +7,10 @@ import { Stack } from '../terrain.js';
 import { Batcher, ColliderBuilder, mat4, mergeParts } from '../builders.js';
 import { scatter } from '../features.js';
 import { createAperture } from '../../props/aperture.js';
+import { pedestalHole, placePedestal, createLightShafts } from '../../props/pedestal.js';
 
 const HOLE = 1.75;
+const PEDESTAL_R = 4.3;   // the pedestal's distance from the aperture's middle, toward the landing
 
 export function buildEnd(ctx) {
   const cfg = STACKS.end;
@@ -29,6 +31,12 @@ export function buildEnd(ctx) {
     const d = Math.hypot(x - cx, z - cz);
     if (d < 3.4) col.lerp(new THREE.Color(0.15, 0.12, 0.09), 0.8);
   });
+  // The pedestal between the aperture and the landing (props/pedestal.js), its button panel toward the landing: its
+  // hole in the cap now, before the build; the model once the ground is there.
+  const toLanding = new THREE.Vector3(-cfg.bridgeDir.x, 0, -cfg.bridgeDir.z).normalize();
+  const pedX = cx + toLanding.x * PEDESTAL_R, pedZ = cz + toLanding.z * PEDESTAL_R;
+  const endProps = ctx.endPropsAsset;
+  if (endProps) stack.capHoles.push(pedestalHole(endProps, { x: pedX, z: pedZ, toward: toLanding }));
   const collider = new ColliderBuilder('end');
   const batcher = new Batcher();
   stack.build(collider);
@@ -52,6 +60,11 @@ export function buildEnd(ctx) {
   const center = new THREE.Vector3(cx, cfg.top, cz);
   const aperture = createAperture(ctx, { center, radius: HOLE, parent: ctx.surface, batcher, collider });
   ctx.aperture = aperture;
+  if (endProps) {
+    const ground = (x, z) => stack.heightAt(x, z) ?? stack.heightAtAnalytic(x, z);
+    placePedestal(ctx, endProps, { center: new THREE.Vector3(pedX, ground(pedX, pedZ), pedZ), toward: toLanding, ground });
+    createLightShafts(ctx, endProps, { center });   // (hidden until the ending)
+  }
 
   // Grass only in patches.
   for (const p of scatter(stack, 700, rng, (x, z) => fbm2(x * 0.18, z * 0.18, 3, 71) * 0.5 + 0.5 < 0.45 && Math.hypot(x - cx, z - cz) > 3.6, { margin: 1, tries: 6 })) {

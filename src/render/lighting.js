@@ -33,10 +33,26 @@ export function createLighting(renderer, scene, sky) {
 
   const tmp = new THREE.Vector3();
   const lightCol = new THREE.Color();
-  const snap = 55 * 2 / 2048;
+  let snap = (S * 2) / sun.shadow.mapSize.x;
+  // Shadow quality (Menu > Graphics > Shadows): the map's size, the same frustum. Only the map is reallocated (on its
+  // next update): no shader changes, so nothing recompiles.
+  const SHADOW_SIZE = { low: 1024, medium: 2048, high: 4096 };
+  const setShadowQuality = (q) => {
+    const n = Math.min(SHADOW_SIZE[q] ?? 2048, renderer.capabilities.maxTextureSize);
+    if (sun.shadow.mapSize.x === n) return;
+    sun.shadow.mapSize.set(n, n);
+    sun.shadow.map?.dispose();
+    sun.shadow.map = null;
+    sun.shadow.needsUpdate = true;
+    snap = (S * 2) / n;
+  };
 
-  return {
-    sun, hemi, refreshEnv,
+  const api = {
+    sun, hemi, refreshEnv, setShadowQuality,
+    // While true the environment map isn't re-rendered (it waits, and refreshes as soon as it is false): the storm
+    // (render/storm.js) holds it through a lightning flash, which lights the sky colours it is rendered from for a
+    // few frames only, and would otherwise stay in the map for seconds.
+    envHold: false,
     update(dt, clock, focus, underground) {
       const sunUp = clock.sunDir.y > -0.03;
       const dir = sunUp ? clock.sunDir : clock.moonDir;
@@ -70,7 +86,8 @@ export function createLighting(renderer, scene, sky) {
       scene.environmentIntensity = underground ? 0 : 0.55 - low * 0.2;
 
       envTimer -= dt;
-      if (envTimer <= 0 && !underground) { envTimer = 2.5; refreshEnv(); }
+      if (envTimer <= 0 && !underground && !api.envHold) { envTimer = 2.5; refreshEnv(); }
     },
   };
+  return api;
 }

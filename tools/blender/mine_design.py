@@ -37,7 +37,7 @@ CAP_Y, CAP_H, CAP_W = 2.25, 0.22, 0.22
 LAG_Y = CAP_Y + CAP_H              # lagging sits on the caps
 TRACK_X, GAUGE = -0.52, 0.6
 TRACK_Z = (2.6, -8.95)
-CART_Z = -6.95
+CART_Z = -6.0                      # (clear of the bench: room to pass between them to the bench and the heading)
 BENCH = dict(x0=0.5, x1=1.08, z0=-9.12, z1=-7.98, top=0.9)
 CUT_Z, CUT_X, CRIB_H0 = 3.6, 2.02, 2.7   # cribbing: out to CUT_Z, at CUT_X, CRIB_H0 tall at the headwall
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader } from '../render/gltf.js';
 import { materials, patchMaterial } from '../render/materials.js';
 import { mergeParts, mat4 } from '../world/builders.js';
 

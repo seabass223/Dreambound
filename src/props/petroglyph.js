@@ -15,13 +15,32 @@ import { once } from '../render/textures.js';
 // call; the two textures are made once, at build, and the preloader uploads them like every other.
 
 const PX = 0.0011;                 // metres per texel
-const TW = 512, TH = 800;          // texels across and up the face
-const W = TW * PX, H = TH * PX;    // the box on the face: 0.56 m across, 0.88 m up
 const DEPTH = 0.3;                 // it reaches this far in front of and behind the face's centre
 
-// The design, in metres on the face (x across to the right, y up; the box is centred on 0, 0). r: the groove's
-// half-width, d: its depth. Lines are wobbled and their width and depth wander as they're drawn.
-function design() {
+// The designs, in metres on the face (x across to the right, y up; the box is centred on 0, 0). r: the groove's
+// half-width, d: its depth. Lines are wobbled and their width and depth wander as they're drawn. Each has its box in
+// texels (tw, th), its lichen ([x, y, r, map lichen?, phase]) and a seed. `tower` is the clue; `arrow` points along +x
+// (carvePetroglyph turns it to aim at a place).
+const DESIGNS = { tower: towerDesign, arrow: arrowDesign };
+const dims = (kind) => { const d = DESIGNS[kind](); return { tw: d.tw, th: d.th, w: d.tw * PX, h: d.th * PX }; };
+
+function arrowDesign() {
+  const lines = [
+    // the shaft, a little bowed, from a cup mark at its tail to the head
+    { p: [[-0.215, 0.004], [-0.1, 0.012], [0.0, 0.009], [0.1, 0.003], [0.19, 0.0]], r: 0.0135, d: 0.0056 },
+    // the head: two strokes back from the point
+    { p: [[0.226, 0.0], [0.118, 0.082]], r: 0.0125, d: 0.0054 },
+    { p: [[0.226, 0.0], [0.114, -0.08]], r: 0.0125, d: 0.0054 },
+    // a short fletch at the tail
+    { p: [[-0.16, 0.01], [-0.205, 0.058]], r: 0.009, d: 0.0038 },
+    { p: [[-0.16, 0.006], [-0.2, -0.046]], r: 0.009, d: 0.0038 },
+  ];
+  const dots = [{ x: -0.248, y: 0.003, r: 0.016, d: 0.0065 }];
+  const lichen = [[-0.19, 0.19, 0.03, false, 1.4], [0.2, -0.2, 0.026, true, 2.9], [0.05, 0.215, 0.016, false, 4.4]];
+  return { tw: 560, th: 560, lines, dots, lichen, seed: 5011 };
+}
+
+function towerDesign() {
   const wave = (x0, x1, y, amp, wl, ph = 0) => {
     const p = [];
     for (let x = x0; x <= x1 + 1e-9; x += 0.01) p.push([x, y + amp * Math.sin(((x - x0) / wl) * Math.PI * 2 + ph)]);
@@ -54,14 +73,21 @@ function design() {
     // ... and a short drop to the second (the lounge): smaller, with a dot in it.
     { p: [[0.048, -0.284], [0.047, -0.318]], r: 0.012, d: 0.0052 },
     { p: rect(-0.012, -0.402, 0.108, -0.318), r: 0.0115, d: 0.005 },
+    // Beside the drop, the way down to it: the Down button (a triangle pointing down), held for three counts.
+    { p: [[0.168, -0.236], [0.236, -0.234], [0.203, -0.29], [0.168, -0.236]], r: 0.0085, d: 0.0038 },
   ];
   const dots = [
     { x: -0.141, y: 0.306, r: 0.019, d: 0.007 },   // the lamps: the arm ends and the peak
     { x: 0.001, y: 0.386, r: 0.019, d: 0.007 },
     { x: 0.144, y: 0.302, r: 0.019, d: 0.007 },
     { x: 0.048, y: -0.36, r: 0.0125, d: 0.006 },   // in the lounge
+    { x: 0.203, y: -0.318, r: 0.0085, d: 0.0045 },  // the three counts under the button
+    { x: 0.203, y: -0.348, r: 0.0085, d: 0.0045 },
+    { x: 0.203, y: -0.378, r: 0.0085, d: 0.0045 },
   ];
-  return { lines, dots };
+  const lichen = [[-0.172, -0.02, 0.042, false, 1.1], [-0.205, -0.262, 0.05, false, 2.3], [0.188, 0.165, 0.024, false, 0.4],
+    [-0.085, 0.335, 0.017, false, 3.7], [0.205, -0.05, 0.028, true, 5.2]];
+  return { tw: 512, th: 800, lines, dots, lichen, seed: 4099 };
 }
 
 // Weathering: how much of the pecking survives (depth and freshness), in patches a few centimetres across.
@@ -69,11 +95,12 @@ const wear = (x, y) => clamp(0.84 + 0.42 * fbm2(x * 4.5 + 1.7, y * 4.5 - 2.1, 3,
 
 // ------------------------------------------------------------------------------------------------ textures
 // carve: rgb = the tint on the rock's colour / 2, a = coverage (grooves and lichen); normal: tangent space, +v up the
-// face. DataTextures (not canvases): a canvas stores premultiplied alpha, which would zero the tint round the grooves
-// and darken their edges once filtered.
-export function petroglyphTextures() {
-  return once('petroglyph', () => {
-    const N = TW * TH, rng = new Rng(4099);
+// face, a = the glow (the grooves where no lichen covers them). DataTextures (not canvases): a canvas stores
+// premultiplied alpha, which would zero the tint round the grooves and darken their edges once filtered.
+export function petroglyphTextures(kind = 'tower') {
+  return once('petroglyph' + (kind === 'tower' ? '' : ':' + kind), () => {
+    const D0 = DESIGNS[kind](), TW = D0.tw, TH = D0.th, W = TW * PX, H = TH * PX;
+    const N = TW * TH, rng = new Rng(D0.seed);
     const G = new Float32Array(N);                  // groove depth (m)
     const toI = (x) => (x + W / 2) / PX - 0.5, toJ = (y) => (y + H / 2) / PX - 0.5;
     const X = (i) => (i + 0.5) * PX - W / 2, Y = (j) => (j + 0.5) * PX - H / 2;
@@ -114,7 +141,7 @@ export function petroglyphTextures() {
       }
     };
 
-    const { lines, dots } = design();
+    const { lines, dots } = D0;
     let seed = 0;
     for (const L of lines) {
       seed += 7;
@@ -174,24 +201,20 @@ export function petroglyphTextures() {
         LT[k * 3] = t[0] * grain; LT[k * 3 + 1] = t[1] * grain; LT[k * 3 + 2] = t[2] * grain;
       }
     };
-    patch(-0.172, -0.02, 0.042, false, 1.1);    // over the stack's left side
-    patch(-0.205, -0.262, 0.05, false, 2.3);
-    patch(0.188, 0.165, 0.024, false, 0.4);
-    patch(-0.085, 0.335, 0.017, false, 3.7);
-    patch(0.176, -0.29, 0.03, true, 5.2);       // against the first stop's corner
+    for (const [x, y, r, map, ph] of D0.lichen) patch(x, y, r, map, ph);
     // Specks, kept off the drawing (on it they'd read as marks).
     const bare = (x, y, r) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]].every(([u, v]) => {
       const i = Math.round(toI(x + u * r)), j = Math.round(toJ(y + v * r));
       return i < 0 || j < 0 || i >= TW || j >= TH || G[j * TW + i] === 0;
     });
     for (let k = 0; k < 16; k++) {
-      const x = rng.float(-0.24, 0.24), y = rng.float(-0.38, 0.38), r = rng.float(0.003, 0.009), map = rng.next() < 0.15, ph = rng.float(0, 6);
+      const x = rng.float(-W / 2 + 0.04, W / 2 - 0.04), y = rng.float(-H / 2 + 0.06, H / 2 - 0.06), r = rng.float(0.003, 0.009), map = rng.next() < 0.15, ph = rng.float(0, 6);
       if (bare(x, y, r + 0.012)) patch(x, y, r, map, ph);
     }
 
     // Pixels: the groove's cover and tint (pecked stone is lighter, a little warm, and a touch darker deep down), then
     // lichen over it; the height for the normals (lichen half fills the grooves and stands a little proud).
-    const carve = new Uint8Array(N * 4), normal = new Uint8Array(N * 4), h = new Float32Array(N);
+    const carve = new Uint8Array(N * 4), normal = new Uint8Array(N * 4), h = new Float32Array(N), glow = new Float32Array(N);
     for (let j = 0; j < TH; j++) {
       const y = Y(j);
       for (let i = 0; i < TW; i++) {
@@ -210,6 +233,7 @@ export function petroglyphTextures() {
         carve[o + 2] = clamp((b / 2) * 255 + 0.5, 0, 255);
         carve[o + 3] = clamp(Math.max(cover, la) * edge * 255 + 0.5, 0, 255);
         h[k] = -g * (1 - 0.55 * la) + (la > 0 ? la * 0.0005 * (0.6 + 0.4 * noise2(x * 300, y * 300, 31)) : 0);
+        glow[k] = cover * (1 - la) * edge;
       }
     }
     const S = 1 / (2 * PX);   // slope (m per m) from central differences
@@ -218,7 +242,8 @@ export function petroglyphTextures() {
       const nx = -(h[j * TW + Math.min(TW - 1, i + 1)] - h[j * TW + Math.max(0, i - 1)]) * S;
       const ny = -(h[Math.min(TH - 1, j + 1) * TW + i] - h[Math.max(0, j - 1) * TW + i]) * S;
       const l = Math.sqrt(nx * nx + ny * ny + 1), o = k * 4;
-      normal[o] = (nx / l * 0.5 + 0.5) * 255 + 0.5; normal[o + 1] = (ny / l * 0.5 + 0.5) * 255 + 0.5; normal[o + 2] = (1 / l * 0.5 + 0.5) * 255 + 0.5; normal[o + 3] = 255;
+      normal[o] = (nx / l * 0.5 + 0.5) * 255 + 0.5; normal[o + 1] = (ny / l * 0.5 + 0.5) * 255 + 0.5; normal[o + 2] = (1 / l * 0.5 + 0.5) * 255 + 0.5;
+      normal[o + 3] = glow[k] * 255 + 0.5;
     }
     const tex = (data) => {
       const t = new THREE.DataTexture(data, TW, TH, THREE.RGBAFormat);
@@ -268,8 +293,10 @@ function clip(poly, axis, s, lim) {
   return out;
 }
 
-// The rock's triangles facing the box's normal, clipped to the box (frame c; R across, U up, N out of the face).
-function decal(geo, c, R, U, N) {
+// The rock's triangles facing the box's normal, clipped to the box (frame c; R across, U up, N out of the face). The
+// design (w by h) is turned by `rot` (radians, from R toward U) about the centre; the box is the turned design's bounds.
+function decal(geo, c, R, U, N, w, h, rot = 0) {
+  const cr = Math.cos(rot), sr = Math.sin(rot);
   const P = geo.attributes.position.array, NN = geo.attributes.normal.array, T = geo.attributes.uv.array, C = geo.attributes.color.array;
   const pos = [], nor = [], uv = [], uv1 = [], col = [];
   const v = (i) => {
@@ -277,7 +304,7 @@ function decal(geo, c, R, U, N) {
     return [dx * R.x + dy * R.y + dz * R.z, dx * U.x + dy * U.y + dz * U.z, dx * N.x + dy * N.y + dz * N.z,
       NN[i * 3], NN[i * 3 + 1], NN[i * 3 + 2], T[i * 2], T[i * 2 + 1], C[i * 3], C[i * 3 + 1], C[i * 3 + 2]];
   };
-  const lim = [W / 2, H / 2, DEPTH];
+  const lim = [Math.abs(cr) * w / 2 + Math.abs(sr) * h / 2, Math.abs(sr) * w / 2 + Math.abs(cr) * h / 2, DEPTH];
   triangles(geo, (i0, i1, i2) => {
     let poly = [v(i0), v(i1), v(i2)];
     for (let ax = 0; ax < 3; ax++) {
@@ -295,7 +322,7 @@ function decal(geo, c, R, U, N) {
       const l = Math.hypot(p[3], p[4], p[5]) || 1;
       nor.push(p[3] / l, p[4] / l, p[5] / l);
       uv.push(p[6], p[7]);
-      uv1.push(p[0] / W + 0.5, p[1] / H + 0.5);
+      uv1.push((cr * p[0] + sr * p[1]) / w + 0.5, (-sr * p[0] + cr * p[1]) / h + 0.5);   // (outside the design: its clear edge)
       col.push(p[8], p[9], p[10]);
     };
     for (let k = 1; k < poly.length - 1; k++) { put(poly[0]); put(poly[k]); put(poly[k + 1]); }
@@ -318,35 +345,44 @@ function frame(n) {
   return { N, U, R: new THREE.Vector3().crossVectors(U, N) };
 }
 
-let glyphMat = null;
-function petroglyphMaterial() {
-  if (glyphMat) return glyphMat;
-  const cliff = materials().cliff, { carve, normal } = petroglyphTextures();
+// The grooves glow a little, a cool pale light of their own, so a carving can be found at any hour.
+const GLOW = new THREE.Color(0.13, 0.2, 0.23);
+const glyphMats = {};
+function petroglyphMaterial(kind = 'tower') {
+  if (glyphMats[kind]) return glyphMats[kind];
+  const cliff = materials().cliff, { carve, normal } = petroglyphTextures(kind);
   normal.channel = 1;   // on the decal's own uv (uv1); the rock's texture stays on the rock's uv
   const m = patchMaterial(new THREE.MeshStandardMaterial({
     name: 'petroglyph', vertexColors: true, map: cliff.map, normalMap: normal, roughness: cliff.roughness, envMapIntensity: cliff.envMapIntensity,
     transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4,
   }));
-  const uCarve = { value: carve }, patch = m.onBeforeCompile, key = m.customProgramCacheKey;
+  const uCarve = { value: carve }, uGlow = { value: GLOW }, patch = m.onBeforeCompile, key = m.customProgramCacheKey;
   m.onBeforeCompile = (sh, r) => {
     patch(sh, r);
     sh.uniforms.uCarve = uCarve;
+    sh.uniforms.uGlyphGlow = uGlow;
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D uCarve;')
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uCarve;\nuniform vec3 uGlyphGlow;')
       .replace('#include <color_fragment>', `#include <color_fragment>
         { vec4 pg = texture2D( uCarve, vNormalMapUv );
           diffuseColor.rgb *= pg.rgb * 2.0;
-          diffuseColor.a *= pg.a; }`);
+          diffuseColor.a *= pg.a; }`)
+      // (the glow is the normal map's alpha: the grooves, where no lichen covers them)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += uGlyphGlow * texture2D( normalMap, vNormalMapUv ).a;`);
   };
   m.customProgramCacheKey = () => key() + '|glyph';
   m.userData.carve = carve;
-  return (glyphMat = m);
+  m.userData.glow = uGlow;
+  return (glyphMats[kind] = m);
 }
 
-// Carves the petroglyph into whichever of `geos` (world-space rock geometry with normal, uv and colour, as batched for
-// the Rocks piles) is nearest `at`, facing roughly `normal`, centred `lift` metres up the face from there. Returns the
+// Carves a design (`kind`: DESIGNS) into whichever of `geos` (world-space rock geometry with normal, uv and colour, as
+// batched for the Rocks piles) is nearest `at`, facing roughly `normal`, centred `lift` metres up the face from there.
+// `toward` (a world point) turns it to point there as seen on the face (the arrow points along its +x). Returns the
 // mesh (in ctx.surface, faded out at 28-38 m), or null if the face isn't there.
-export function carvePetroglyph(ctx, { geos, at, normal, lift = 0, name = 'petroglyph' }) {
+export function carvePetroglyph(ctx, { geos, at, normal, lift = 0, name = 'petroglyph', kind = 'tower', toward = null }) {
+  const { w: W, h: H } = dims(kind);
   // The stone: the nearest to `at`.
   let stone = null, best = Infinity;
   for (const g of geos) triangles(g, () => {
@@ -371,16 +407,17 @@ export function carvePetroglyph(ctx, { geos, at, normal, lift = 0, name = 'petro
     });
     if (sum.lengthSq() > 0) f = frame(sum);
   }
-  const geo = decal(stone, c, f.R, f.U, f.N);
+  const rot = toward ? Math.atan2(toward.clone().sub(c).dot(f.U), toward.clone().sub(c).dot(f.R)) : 0;
+  const geo = decal(stone, c, f.R, f.U, f.N, W, H, rot);
   if (!geo) return null;
-  const mesh = new THREE.Mesh(geo, petroglyphMaterial());
+  const mesh = new THREE.Mesh(geo, petroglyphMaterial(kind));
   mesh.name = name;
   mesh.position.copy(c);
   mesh.castShadow = false;
   mesh.receiveShadow = true;
   mesh.matrixAutoUpdate = false;
   mesh.updateMatrix();
-  mesh.userData.frame = { center: c.clone(), right: f.R.clone(), up: f.U.clone(), normal: f.N.clone(), width: W, height: H };
+  mesh.userData.frame = { center: c.clone(), right: f.R.clone(), up: f.U.clone(), normal: f.N.clone(), width: W, height: H, rot };
   ctx.surface.add(mesh);
   ctx.lod?.add(mesh, { out: [28, 38], name });
   return mesh;

@@ -29,7 +29,8 @@ const TAPS = {
   'world/water.js': ['edgeWaterfall', 'streamGeometry'],
   'world/waterfx.js': ['splashFX'],
   'world/rockpiles.js': ['buildTor', 'buildRockPile'],
-  'world/bridge.js': ['buildBridge'],
+  'props/gatehouse.js': ['placeGatehouse'],
+  'props/pedestal.js': ['placePedestal'],
   'props/cabin.js': ['placeCabin'],
   'props/observatory.js': ['placeObservatory'],
   'props/powertower.js': ['buildPowerTower'],
@@ -174,7 +175,8 @@ class Recorder {
         Object.assign(info, { x: o.x, z: o.z, radius: o.radius, height: o.height });
         info.walls = ret.walls; info.blocker = ret.blocker;
         break;
-      case 'buildBridge': info.a = v3(o.a); info.b = v3(o.b); info.sag = o.sag ?? 2.2; info.width = o.width ?? 1.3; info.deckAt = ret?.deckAt; break;
+      case 'placeGatehouse': info.a = v3(o.a); info.b = v3(o.b); info.frame = ret?.frame; info.api = ret; break;
+      case 'placePedestal': info.center = v3(o.center); info.root = v3(ret?.root?.position); break;
       case 'placeCabin': info.origin = v3(a[2]?.origin); break;
       case 'placeObservatory': info.center = v3(a[2]?.center); info.doorAngle = a[2]?.doorAngle; break;
       case 'buildPowerTower': info.base = v3(o.base); info.rotY = o.rotY; break;
@@ -213,6 +215,10 @@ export async function buildHeadless({ walls, torSculpt: withSculpt = true } = {}
   // The bunker room's model (props/bunkerRoom.js) and the tor's blast (world/rockpiles.js): optional, as in the game.
   const has = (f) => fs.existsSync(path.join(ROOT, 'public/models', f));
   const bunker = has('bunker.glb') ? await parseGlb(GLTFLoader, 'bunker.glb') : null;
+  // The endgame's models: the Rocks gatehouse and its stairs, the End pedestal and light shafts, the pill clock.
+  const gatehouse = has('gatehouse.glb') ? await parseGlb(GLTFLoader, 'gatehouse.glb') : null;
+  const endprops = has('endprops.glb') ? await parseGlb(GLTFLoader, 'endprops.glb') : null;
+  if (has('alarmclock.glb')) (await imp('props/clock.js')).setAlarmClockAsset(await parseGlb(GLTFLoader, 'alarmclock.glb'));
   (await import(SRC + 'props/aperture.js')).setIrisAsset(iris);   // the iris diaphragm (End door, roof station)
   const torSculpt = withSculpt && fs.existsSync(path.join(ROOT, 'public/models/tor.glb'))
     ? (await imp('world/rockpiles.js')).torSculpt(await parseGlb(GLTFLoader, 'tor.glb'), has('tor_blast.glb') ? await parseGlb(GLTFLoader, 'tor_blast.glb') : null) : null;
@@ -255,6 +261,8 @@ export async function buildHeadless({ walls, torSculpt: withSculpt = true } = {}
     walkstoneAsset: { gltf: walkstone, albedo: tex(), normal: tex(), rough: tex() },
     mineAsset: { gltf: mine, ao: tex(), wood: tex(), woodN: tex(), rust: tex(), rustN: tex(), paint: tex(), paintN: tex() },
     bunkerAsset: bunker && { gltf: bunker, lm: tex(), env: tex(), wall: tex(), wallN: tex(), floor: tex(), floorR: tex(), floorN: tex(), concrete: tex(), orange: tex(), orangeN: tex(), green: tex(), greenN: tex(), steel: tex(), alu: tex(), decal: tex() },
+    gatehouseAsset: gatehouse && { gltf: gatehouse, ao: tex(), concrete: tex(), concreteN: tex(), steel: tex(), steelN: tex(), paint: tex(), paintN: tex(), floor: tex(), grating: tex(), gratingMask: tex() },
+    endPropsAsset: endprops && { gltf: endprops, ao: tex(), steel: tex(), steelN: tex() },
     torSculpt,
   });
   const buildMs = performance.now() - t0;

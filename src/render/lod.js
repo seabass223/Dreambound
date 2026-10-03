@@ -119,6 +119,12 @@ export class LodSystem {
     return il;
   }
 
+  // From now on, draw no instance of an instanced set where test(x, y, z) holds (world, the instance's origin), in the
+  // sets whose name passes `sets` (the Rocks targets' bare earth clears its grass: world/rockTargets.js).
+  hideInstancesWhere(test, sets = () => true) {
+    for (const il of this.instanced) if (sets(il.name)) il.hideWhere(test);
+  }
+
   bounds(e) {
     e.target.updateWorldMatrix(true, true);
     _box.setFromObject(e.target);
@@ -216,6 +222,15 @@ export class InstancedLod {
   }
 
   key(ix, iz) { return (ix + 32768) * 65536 + (iz + 32768); }
+
+  // Skip every instance where test(x, y, z) holds, and gather again at the next update.
+  hideWhere(test) {
+    const P = this.pos;
+    let n = 0;
+    for (let i = 0; i < this.n; i++) if (!this.skip[i] && test(P[i * 3], P[i * 3 + 1], P[i * 3 + 2])) { this.skip[i] = 1; n++; }
+    if (n) this.at.set(1e9, 0, 0);
+    return n;
+  }
 
   update(cam, scale) {
     if (cam.distanceTo(this.at) < this.step && Math.abs(scale - this.atScale) < this.atScale * 0.1) return;

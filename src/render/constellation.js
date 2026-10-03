@@ -68,7 +68,7 @@ void main() {
   vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0);
   gl_Position = vec4(p.xy, p.w * 0.99999, p.w);
   // Through the telescope (projectionMatrix[1][1] = 1 / tan(fov / 2): 1.5 by eye, 36 at the eyepiece) the stars are
-  // sharp points; by eye the whole figure is a pinch of sky: the dim ones vanish, the bright ones are a faint knot.
+  // sharp points; by eye there is nothing to see (not even the bright ones as a faint knot: it gave the place away).
   float zoom = smoothstep(4.0, 20.0, projectionMatrix[1][1]);
   float px = uPxH / 1080.0;
   vBig = aStar.y * zoom;
@@ -78,7 +78,7 @@ void main() {
   float tw = 0.88 + 0.12 * sin(uTime * (1.3 + aStar.z * 0.9) + aStar.z * 17.0);
   // In the dusk sky the eyepiece darkens the sky, not the stars (they are points): lift them against it.
   float dusk = mix(mix(4.0, 2.2, aStar.y), 1.0, uNight);
-  vB = aStar.x * tw * dusk * mix(0.05 * aStar.y, 1.0, zoom);
+  vB = aStar.x * tw * dusk * zoom;
   vCol = mix(vec3(0.82, 0.88, 1.0), vec3(1.0, 0.93, 0.8), aStar.y);
 }
 `;

@@ -9,8 +9,12 @@ export class Input {
     this.started = false;
     this.interactHeld = false;
 
+    // Keys typed into a text field (the menu's Reporter ID and SAS fields, the bug report's description) are the
+    // field's: the game neither moves nor presses on them (E and Space were swallowed, so they couldn't be typed).
+    const typing = (el) => !!el && ((el.tagName === 'INPUT' && !['range', 'checkbox', 'radio', 'button', 'submit', 'color'].includes(el.type))
+      || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
     addEventListener('keydown', (e) => {
-      if (e.repeat) return;
+      if (e.repeat || typing(e.target)) return;
       this.keys.add(e.code);
       if (e.code === 'Space' || e.code === 'KeyE') { e.preventDefault(); this._press(); }
     });

@@ -2,6 +2,7 @@
 node_modules/
 dist/
 dist-ssr/
+dist-deploy/
 .vite/
 *.local
 
@@ -12,6 +13,9 @@ dist-ssr/
 *.blend2
 __pycache__/
 *.pyc
+
+# Image-editor working files (the shipped images are exported from them, e.g. public/og.webp from src/ui/og-src.psd)
+*.psd
 
 # Regression harness scratch output (the baseline*.json files are tracked)
 tools/regress/out/

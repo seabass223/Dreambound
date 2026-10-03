@@ -14,7 +14,7 @@ import { materials } from '../render/materials.js';
 // tools/blender/tor_blast_design.py: the stump, the far stand-ins, the debris chunks and their clip, the five boulders
 // and the charges) as `blast` (world/torBlast.js), or null.
 export async function loadTorSculpt() {
-  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const { GLTFLoader } = await import('../render/gltf.js');
   const load = (f) => new GLTFLoader().loadAsync(import.meta.env.BASE_URL + 'models/' + f).catch(() => null);
   const [tor, blast] = await Promise.all([load('tor.glb'), load('tor_blast.glb')]);
   try { return tor ? torSculpt(tor, blast) : null; } catch { return null; }

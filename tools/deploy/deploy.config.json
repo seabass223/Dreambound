@@ -1,0 +1,17 @@
+{
+  "$comment": "Defaults for npm run deploy (tools/deploy/deploy.mjs). Flags override them; see the README's Deploy section.",
+
+  "$encode": "transfer compression of models, code and page: none | br | gzip. Lossless, undone by the browser: the game gets the same bytes.",
+  "encode": "br",
+
+  "$meshopt": "model compression: off | lossless (EXT_meshopt_compression, the same vertices at runtime) | quantize (also rounds positions and normals: smaller, not bit-exact).",
+  "meshopt": "off",
+
+  "$textures": "texture re-encoding, same resolution and names: off | webp-lossless (the same pixels) | webp (lossy, at webpQuality).",
+  "textures": "off",
+  "webpQuality": 90,
+
+  "$textureGlobs": "which texture files the texture setting applies to, as globs on paths in dist/ (e.g. models/*.png). include first, then exclude.",
+  "textureInclude": ["**/*"],
+  "textureExclude": []
+}

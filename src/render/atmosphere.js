@@ -40,6 +40,13 @@ export const atmo = {
   uUnderground: { value: 0 },
   uFogDensity: { value: 0.00085 },
   uWind: { value: new THREE.Vector2(1, 0.3) },
+  // How hard the foliage sways (materials.js WIND_VERT): 1 normally, up to ~3 in the storm (render/storm.js). uWind
+  // itself must keep its size: the clouds integrate it over time.
+  uWindAmp: { value: 1 },
+  // The storm (render/storm.js): its overcast 0..1, and the lightning: xyz the unit direction from the camera to the
+  // flash, w its brightness now (0 between strokes). The sky, the cloud sea and the clouds light up toward it.
+  uStorm: { value: 0 },
+  uFlash: { value: new THREE.Vector4(0, 1, 0, 0) },
   // Drawing-buffer height in pixels (particles keep a minimum on-screen size with it). Set by main.js each frame.
   uPxH: { value: 1080 },
   uCloudColor: { value: new THREE.Color() },
@@ -61,12 +68,36 @@ export const atmo = {
   uMineB: { value: new THREE.Vector4(0, 0, 0, 0) },
 };
 
+// The storm's uniforms (render/storm.js) for the sky and the clouds, and the lightning's light on the sky toward dir:
+// a tight hot core round the stroke, a broad glow and a faint wash, brighter where the cloud is thicker (dens 0..1),
+// fading out below the horizon. The sky and the far cloud sea use the same, so they meet at the horizon without a seam.
+export const STORM_GLSL = /* glsl */ `
+uniform float uStorm;
+uniform vec4 uFlash;
+const vec3 FLASH_TINT = vec3(0.6, 0.67, 0.9);
+vec3 skyFlash(vec3 dir, float dens) {
+  if (uFlash.w <= 0.0) return vec3(0.0);
+  float toward = max(dot(dir, uFlash.xyz), 0.0);
+  float lobe = pow(toward, 28.0) * 0.55 + pow(toward, 6.0) * 0.22 + pow(toward, 2.0) * 0.06 + 0.025;
+  return FLASH_TINT * uFlash.w * lobe * mix(0.25, 1.45, dens) * smoothstep(-0.25, 0.05, dir.y);
+}
+`;
+
 export const atmoState = {
   moonLight: new THREE.Color(0.32, 0.4, 0.62),
   exposure: 1,
 };
 
 const _c = new THREE.Color();
+
+// Average lit color of the cloud sea, used to dissolve cliff bases into it: from the sky colours above, so whatever
+// changes those afterwards (the storm) calls it again.
+export function updateCloudColor() {
+  const cc = atmo.uCloudColor.value;
+  cc.copy(atmo.uZenith.value).lerp(atmo.uHorizonAway.value, 0.5).multiplyScalar(0.85)
+    .add(_c.copy(atmo.uAmbient.value).multiplyScalar(0.55))
+    .add(_c.copy(atmo.uSunLight.value).multiplyScalar(0.12));
+}
 
 export function updateAtmosphere(clock, elapsed) {
   const alt = clock.altDeg;
@@ -78,11 +109,7 @@ export function updateAtmosphere(clock, elapsed) {
   sample(alt, 'glow', atmo.uSunGlow.value);
   sample(alt, 'light', atmo.uSunLight.value);
   sample(alt, 'amb', atmo.uAmbient.value);
-  // Average lit color of the cloud sea, used to dissolve cliff bases into it.
-  const cc = atmo.uCloudColor.value;
-  cc.copy(atmo.uZenith.value).lerp(atmo.uHorizonAway.value, 0.5).multiplyScalar(0.85)
-    .add(_c.copy(atmo.uAmbient.value).multiplyScalar(0.55))
-    .add(_c.copy(atmo.uSunLight.value).multiplyScalar(0.12));
+  updateCloudColor();
   atmo.uNight.value = clock.night;
   atmo.uTime.value = elapsed;
   // Eye adaptation: open up at night, but keep it a deep blue night rather than a grey day.

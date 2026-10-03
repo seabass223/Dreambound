@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader } from '../render/gltf.js';
 import { patchMaterial } from '../render/materials.js';
 import { Rng, noise2 } from '../core/rng.js';
 

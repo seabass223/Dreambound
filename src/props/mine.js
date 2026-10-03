@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader } from '../render/gltf.js';
 import { materials, patchMaterial } from '../render/materials.js';
 import { atmo } from '../render/atmosphere.js';
 import { addKeepOut } from '../render/lod.js';
 import { fbm3, noise3, smoothstep, clamp } from '../core/rng.js';
+import { placeMineNotes } from './mineNotes.js';
 
 // The old mine adit in the Mountain's south hillside, at the foot of the summit cone (world/stacks/mountain.js).
 //
@@ -207,11 +208,13 @@ function buildRock(stack, F, batcher, collider) {
     }
     geos.push(geometry(pos, idx, uv, col));
   }
-  // The floor: grit and rubble, a little humped, under the walls' feet.
+  // The floor: grit and rubble, a little humped, under the walls' feet. It spans the hole cut in the cap (a little
+  // wider than the bore): narrower, it left a slot along each side of the hole between the face and the hole's front
+  // edge, where nothing stood over the cut-away ground and you could see down through the island.
   {
-    const nx = 13, nz = Math.ceil((HEADING + 0.5 + 0.3) / 0.3) + 1;
+    const nx = 13, nz = Math.ceil((HEADING + 0.5 + 0.3) / 0.3) + 1, FW = Math.max(HW + 0.12, HOLE.x + 0.08);
     geos.push(grid(nz, nx, (i, j) => {
-      const lz = 0.5 - Math.min(i * 0.3, HEADING + 0.5 + 0.2), lx = -HW - 0.12 + (j / (nx - 1)) * (2 * HW + 0.24);
+      const lz = 0.5 - Math.min(i * 0.3, HEADING + 0.5 + 0.2), lx = -FW + (j / (nx - 1)) * (2 * FW);
       const y = 0.02 + 0.035 * fbm3(lx * 1.6, 0, lz * 1.6, 2, 76) + 0.03 * Math.max(0, noise3(lx * 5, 1, lz * 5, 77)) - 0.02 * (1 - Math.abs(lx) / HW);
       return new THREE.Vector3(lx, Math.max(y, 0.005) - (lz > FACE_Z + 0.05 ? (lz - FACE_Z) * 0.06 : 0), lz);
     }, (p) => [p.x / TILE, p.z / TILE], (p) => {
@@ -223,8 +226,9 @@ function buildRock(stack, F, batcher, collider) {
   // A shadow shell (as the Dome's cliff cave's): the sun's shadow of the bore is cast from its own walls, and the depth
   // bias let a thin line of sunlight onto the floor along the foot of the walls and the heading, as if from under it.
   // This tube, SHELL further out all round (closed under the floor and behind the heading), facing in like the bore
-  // so it casts and is never seen, holds the shadow's depth well away from the floor. It starts behind the hole in the
-  // cap, where it is all under the hill.
+  // so it casts and is never seen, holds the shadow's depth well away from the floor. It starts just behind the face (it
+  // is culled from outside and hidden by the walls from inside, so it can run under the drape over the hole too: started
+  // behind the hole, the first 2.7 m of the drive kept the line of light along the foot of its walls).
   {
     const SHELL = 0.45, O = [0, 1.3];
     const loop = profile().map(([px, py]) => {
@@ -234,7 +238,7 @@ function buildRock(stack, F, batcher, collider) {
     loop[0][1] = loop[loop.length - 1][1] = -0.6;
     for (let f = 1; f < 4; f++) loop.push([HW + SHELL - (f / 4) * 2 * (HW + SHELL), -0.6]);   // under the floor, right to left
     const n = loop.length, zs = [];
-    for (let lz = HOLE.z0 - 0.3; lz > -HEADING - SHELL; lz -= 0.6) zs.push(lz);
+    for (let lz = FACE_Z - 0.15; lz > -HEADING - SHELL; lz -= 0.6) zs.push(lz);
     zs.push(-HEADING - SHELL - 0.1);
     const pos = [], idx = [];
     for (const lz of zs) for (const [x, y] of loop) pos.push(x, y, lz);
@@ -269,15 +273,25 @@ function buildRock(stack, F, batcher, collider) {
   const top = (lx) => F.ground(lx, FACE_Z) + 0.05;
   const inner = outline(FACE_Z);
   const O = new THREE.Vector2(0, 1.3), X = DRAPE.x, yb = -0.45;
+  // (It reaches past the drape's edges as far out as the drape's sides fall (0.9 m), closing off the front of the low
+  // ground under them: stopping at the edges, a ray could slip in beside the face, under a side, to the hole.)
   const outer = inner.map((p) => {
     const d = new THREE.Vector2(p.x - O.x, p.y - O.y).normalize();
     let s = 0.1;
     for (; s < 30; s += 0.02) {
       const qx = O.x + d.x * s, qy = O.y + d.y * s;
-      if (Math.abs(qx) >= X || qy <= yb || qy >= top(qx)) break;
+      if (Math.abs(qx) >= X + 0.9 || qy <= yb || qy >= top(qx)) break;
     }
     return new THREE.Vector3(O.x + d.x * s, O.y + d.y * s, FACE_Z);
   });
+  // ...and the outline point nearest each top corner sits right on it, so the edge turns the corner there rather than
+  // cutting across it (the points are ~0.5 m apart, and a chord across the corner left a gap however far out it went).
+  for (const sx of [-1, 1]) {
+    const cx = sx * (X + 0.9), C = new THREE.Vector3(cx, top(cx), FACE_Z), a = Math.atan2(C.y - O.y, C.x - O.x);
+    let best = -1, bd = Infinity;
+    outer.forEach((q, j) => { const d = Math.abs(Math.atan2(Math.sin(Math.atan2(q.y - O.y, q.x - O.x) - a), Math.cos(Math.atan2(q.y - O.y, q.x - O.x) - a))); if (d < bd) { bd = d; best = j; } });
+    outer[best].copy(C);
+  }
   const ROWS = 9;
   const faceGeo = grid(ROWS, nP, (i, j) => {
     const t = (i / (ROWS - 1)) ** 1.4;
@@ -311,6 +325,25 @@ function buildRock(stack, F, batcher, collider) {
     for (let i = 0; i < nz - 1; i++) for (let j = 0; j < nx - 1; j++) {
       const a = i * nx + j, b = a + 1, c2 = a + nx, d = c2 + 1;
       idx.push(a, b, c2, b, d, c2);
+    }
+    // Its sides closed: the cut lowers the ground behind the face up to the drape's edges, so without these a gap ran in
+    // under each side edge to the hole, and at a glancing angle you saw through the hill. Each side falls away from the
+    // edge, outward and down to just under the hill's surface there, so it reads as more of the slope, not a wall.
+    for (const j of [0, nx - 1]) {
+      const base = pos.length / 3, out = j ? 1 : -1;
+      for (let i = 0; i < nz; i++) {
+        const k = i * nx + j, lx = pos[k * 3], y = pos[k * 3 + 1], lz = pos[k * 3 + 2];
+        const ox = lx + out * 0.9, [wx, wz] = F.toWorld(ox, lz);
+        const yb = Math.min(y, (stack.heightAt(wx, wz) ?? y) - F.y) - 0.25;
+        pos.push(lx, y, lz, ox, yb, lz);
+        uv.push(uv[k * 2], uv[k * 2 + 1], wx * 0.22, wz * 0.22);   // (the top shares the drape edge's uv, so no seam)
+        col.push(col[k * 3], col[k * 3 + 1], col[k * 3 + 2], col[k * 3], col[k * 3 + 1], col[k * 3 + 2]);
+      }
+      for (let i = 0; i < nz - 1; i++) {
+        const t0 = base + i * 2, b0 = t0 + 1, t1 = t0 + 2, b1 = t0 + 3;
+        if (out > 0) idx.push(t0, b0, t1, b0, b1, t1);   // facing out and up, like the slope it continues
+        else idx.push(t0, t1, b0, b0, t1, b1);
+      }
     }
     return geometry(pos, idx, uv, col);
   })();
@@ -424,6 +457,8 @@ export function buildMine(ctx, stack, asset, F, { batcher }) {
 
   ctx.lod.add(root, { out: [70, 90], name: 'mine' });
   const clueNode = empties.CLUE;
+  // the scrap with the clue on the bench, the observatory's blueprint on the wall (props/mineNotes.js)
+  const notes = placeMineNotes(ctx, root, clueNode);
   const clue = clueNode ? { pos: root.localToWorld(clueNode.position.clone()), ry: F.ry + (clueNode.userData.ry ?? 0), size: clueNode.userData.size ?? [0.36, 0.34] } : null;
-  return { root, inside: F.inside, clue, frame: F };
+  return { root, inside: F.inside, clue, notes, frame: F };
 }

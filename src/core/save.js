@@ -2,9 +2,12 @@
 // page with progress the save doesn't have brings up the browser's own "Leave site?" prompt (main.js); leave anyway
 // and that progress is gone.
 //
-// A snapshot holds where the player stands (the last safe pose: never mid-ride, mid-fall, on a ladder or in a
-// cutscene), the time of day and every piece of puzzle state, and restore() puts it all back through the props' own
-// APIs so the world looks the way it was left.
+// A snapshot holds where the player stands (the last safe pose: never mid-ride, mid-fall, on a ladder, on the endgame's
+// stairs or in a cutscene), the time of day and every piece of puzzle state, and restore() puts it all back through
+// the props' own APIs so the world looks the way it was left.
+
+import { openStairs } from '../sequences/stairsReveal.js';
+import { startDescent } from '../sequences/descent.js';
 
 export const SAVE_KEY = 'dreambound.save.v1';
 const OLD_PENDING_KEY = 'dreambound.save.pending.v1';   // where earlier builds kept unsaved progress at unload
@@ -15,6 +18,8 @@ const num = (v, fallback) => (Number.isFinite(v) ? v : fallback);
 // Whether rocks.exe has run, in a state or a snapshot: only once the tor has gone up. It's marked run at its first dot,
 // two seconds before the cutscene blows the tor; a save from in between would otherwise never get to blow it at all.
 const ranOf = (s) => !!s.terminal?.ran && !!s.tor?.exploded;
+// The endgame's flags, in a state or a snapshot (missing in saves from before it: all false).
+const endgameOf = (s) => ({ open: !!s.endgame?.open, descent: !!s.endgame?.descent });
 
 export function readSnapshot(key) {
   try {
@@ -68,11 +73,14 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
       } : null,
       towerSwitches: s.towerSwitches ? s.towerSwitches.map((b) => [...b]) : null,
       towerLEDs: ctx.towerLEDs ? ctx.towerLEDs.map((l) => R(l.level)) : null,
-      observatory: obs ? { yaw: R(obs.yaw, 5), pitch: R(obs.pitch, 5), hatch: R(obs.hatch), stationOpen: !!obs.stationOpen } : null,
+      observatory: obs ? { yaw: R(obs.yaw, 5), pitch: R(obs.pitch, 5), hatch: R(obs.hatch), stationOpen: !!obs.stationOpen, coords: !!obs.coords } : null,
       lounge: s.lounge ? { secretOpen: !!s.lounge.secretOpen } : null,
       bunker: s.bunker ? { open: !!s.bunker.open } : null,
       terminal: s.terminal ? { ran: ranOf(s), cwd: typeof s.terminal.cwd === 'string' ? s.terminal.cwd : null } : null,
       tor: s.tor ? { exploded: !!s.tor.exploded } : null,
+      // The staircase out of the Rocks' gatehouse (sequences/stairsReveal.js), and the descent down it
+      // (sequences/descent.js): which of its sections have fallen isn't kept (see restore).
+      endgame: s.endgame ? endgameOf(s) : null,
       elevators: lifts,
     };
   };
@@ -82,11 +90,13 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
     switches: snap.switches, power: snap.power, towerSwitches: snap.towerSwitches, towerLEDs: snap.towerLEDs,
     // (The boulders count once rocks.exe has thrown them: before that they don't exist, whatever an old save says.)
     rocks: snap.rocks?.released ? { positions: snap.rocks.positions.map((q) => [Math.round(q.x * 5), Math.round(q.z * 5)]), solved: snap.rocks.solved, seed: snap.rocks.seed ?? null } : null,
-    observatory: snap.observatory && { yaw: Math.round(snap.observatory.yaw * 50), pitch: Math.round(snap.observatory.pitch * 50), open: snap.observatory.stationOpen },
+    observatory: snap.observatory && { yaw: Math.round(snap.observatory.yaw * 50), pitch: Math.round(snap.observatory.pitch * 50), open: snap.observatory.stationOpen, coords: !!snap.observatory.coords },
     lounge: snap.lounge,
     bunker: snap.bunker,
     terminal: ranOf(snap),   // (only whether rocks.exe has run: wandering its directories isn't progress)
     tor: !!snap.tor?.exploded,
+    // (Open goes with the solve: a solved save from before the endgame opens the stairs as it is restored.)
+    endgame: { open: !!snap.endgame?.open || (!!snap.rocks?.released && !!snap.rocks?.solved), descent: !!snap.endgame?.descent },
     elevators: snap.elevators,
   });
   const dirty = () => {
@@ -162,18 +172,38 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
         if (Array.isArray(snap.towerLEDs) && ctx.towerLEDs) snap.towerLEDs.forEach((v, i) => { if (ctx.towerLEDs[i]) ctx.towerLEDs[i].level = num(v, ctx.towerLEDs[i].level); });
 
         // The observatory: dome and telescope, the rear hatch, the roof station's iris (props/observatory*.js).
+        // Whether the constellation's coordinates were read: only the flag (the desk shows "Coordinates Validated!"
+        // from it, with no pan, and rocks.exe's gate reads it).
         const o = snap.observatory, st = s.observatory;
         if (o && st) {
           st.yaw = num(o.yaw, st.yaw);
           st.pitch = num(o.pitch, st.pitch);
           if (ctx.observatory?.hatch?.set) ctx.observatory.hatch.set(num(o.hatch, 0));
           if (o.stationOpen && ctx.observatory?.station?.open) ctx.observatory.station.open(true);
+          if (o.coords) st.coords = true;
         }
 
         // The lounge's secret bookcase (props/loungeSecret.js): once open, it stays open.
         if (snap.lounge?.secretOpen) ctx.tunnels?.lounge?.secret?.open(true);
         // The Tower bunker's door (world/bunker.js), open or shut as it was left.
         if (snap.bunker && ctx.bunker) ctx.bunker.door.set(!!snap.bunker.open);
+
+        // The endgame (before the player is placed, so the stairs' colliders are there to stand on). Open: the
+        // gatehouse's doors open and its staircase out, at once (no reveal: the solve above did the same through
+        // ctx.onRocksSolved). The descent begun: midnight held, the storm up, the time and Travel locked, the stairs
+        // armed, all at once; and whether its sections have fallen follows from where the player stands: on the End
+        // stack, all of them (and the doors shut behind), anywhere else (the pose a save keeps from the descent is
+        // never on the stairs), none.
+        const eg = endgameOf(snap);
+        if (eg.open) {
+          openStairs(ctx);
+          if (eg.descent) {
+            const p = snap.player, end = ctx.stacks?.end;
+            const onEnd = !!end && Number.isFinite(p?.x) && end.edgeDist(p.x, p.z) > -0.5 && p.y > end.top - 4;
+            if (onEnd) ctx.gatehouse?.setState({ doors: 0, extended: true, fallen: true });
+            startDescent(ctx, { clock, instant: true });
+          }
+        }
 
         // Elevators: which stop each car waits at (doors shut, as built).
         const lifts = snap.elevators ?? {};

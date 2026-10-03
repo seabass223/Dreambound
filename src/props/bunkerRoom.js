@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader } from '../render/gltf.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { patchMaterial } from '../render/materials.js';
 import { atmo, atmoState } from '../render/atmosphere.js';
 import { SCREEN_FRAG, UV_VERT } from '../render/crt.js';
-import { createTerminal } from './terminal.js';
+import { createTerminal, bunkerPowered } from './terminal.js';
 
 // The survey relay room at the bottom of the Tower's bunker stair (world/bunker.js), modeled, textured and lit in
 // Blender (tools/blender/bunker_design.py): block walls, a polished concrete floor, orange cabinets, a workbench with the
@@ -293,6 +293,8 @@ export function placeBunkerRoom(ctx, asset, { F, P, parent, near, inside, inCar 
     // (bar lights and screens: about a third of their face's size; bulbs a little bigger than the filament's glass)
     lightU.uLR.value.push(l?.kind === 'pendant' ? 0.06 : l?.kind === 'lamp' ? 0.03 : l?.size ? Math.min(...l.size) * 0.5 + 0.05 : 0.08);
   }
+  // The terminal's screen as a lamp: its glint follows the tube (dark without power). Its spill is in the bake.
+  const termLight = lamps.slice(0, NL).findIndex((l) => l?.light === 'terminal');
 
   const box = meta.env_box ?? [-2.4, 0, 0, 2.4, 3, 3.6];
   const U = {
@@ -411,11 +413,14 @@ export function placeBunkerRoom(ctx, asset, { F, P, parent, near, inside, inCar 
   const glowU = { uGlow: { value: glow.value } };
   M.glow = roomMaterial('glow', { ...U, ...glowU }, 'diffuseColor.rgb = vColor.rgb * uGlow;', { extra: 'uniform float uGlow;' });
   // The indicator lamps: each its own (an id per lamp, below): most steady, some blinking slowly, a few chattering.
-  M['glow@led'] = roomMaterial('led', { ...U, ...glowU, uTime: atmo.uTime }, `
+  // One is the terminal's power LED (uTermLedId, found below): it goes out with the tube (uTermLed, its level).
+  const ledU = { uTermLed: { value: 1 }, uTermLedId: { value: -1 } };
+  M['glow@led'] = roomMaterial('led', { ...U, ...glowU, ...ledU, uTime: atmo.uTime }, `
     float h = fract(sin(aLedV * 12.9898) * 43758.5453), on = 1.0;
     if (h > 0.72) on = step(0.5, fract(uTime * (0.35 + h * 0.4) + h * 7.0));
     if (h > 0.9) on = step(0.45, fract(sin(floor(uTime * (7.0 + h * 9.0)) * 78.233 + h * 31.0) * 43758.5453));
-    diffuseColor.rgb = vColor.rgb * uGlow * mix(0.08, 0.85, on);`, { extra: 'uniform float uGlow;\nvarying float aLedV;' });
+    if (abs(aLedV - uTermLedId) < 0.5) on *= uTermLed;
+    diffuseColor.rgb = vColor.rgb * uGlow * mix(0.08, 0.85, on);`, { extra: 'uniform float uGlow, uTermLed, uTermLedId;\nvarying float aLedV;' });
   {
     // (the per-lamp id rides on its own attribute through a varying)
     const m = M['glow@led'], prev = m.onBeforeCompile;
@@ -482,6 +487,8 @@ export function placeBunkerRoom(ctx, asset, { F, P, parent, near, inside, inCar 
       yaw: F.ry + (se.yaw ?? -Math.PI / 2), pitch: se.pitch ?? -0.135, fov: se.fov ?? 40,
     };
     terminal = createTerminal(ctx, { screen, seat, keyboard: kb });
+    // Its power LED: the indicator lamp nearest the glass (bunker_design.py terminal(): on the chin, 0.3 m off).
+    if (meshes['glow@led']) ledU.uTermLedId.value = nearestLed(meshes['glow@led'].geometry, termGeo, 0.45);
   }
 
   // ---- the pendants in the shared light pool (lighting the plate, the doors and the stair), only while you're in the
@@ -529,7 +536,9 @@ export function placeBunkerRoom(ctx, asset, { F, P, parent, near, inside, inCar 
     if (!seen) return;
     U.uGain.value = gain * k;
     U.uK.value = k;
-    for (let i = 0; i < NL; i++) U.uLC.value[i].copy(lightBase[i]).multiplyScalar(gain * k);
+    const tube = terminal ? terminal.level : bunkerPowered(ctx) ? 1 : 0;
+    for (let i = 0; i < NL; i++) U.uLC.value[i].copy(lightBase[i]).multiplyScalar(gain * k * (i === termLight ? tube : 1));
+    ledU.uTermLed.value = tube;
     glowU.uGlow.value = glow.value * k;
     crtU.uObsTime.value = atmo.uTime.value;
     crtU.uObsK.value = k;
@@ -549,7 +558,8 @@ export function placeBunkerRoom(ctx, asset, { F, P, parent, near, inside, inCar 
       const u = n.userData, c = toWorld(n.position);
       ctx.physics.addOBB({ x: c.x, z: c.z, hx: u.hx, hz: u.hz, ry: F.ry + (u.ry ?? 0), y0: y + u.y0, y1: y + u.y1, zone: 'surface' });
     }
-    // The CRT's whine, hum and fan at the terminal; the air in the duct over the room. Heard only from down here.
+    // The CRT's whine, hum and fan at the terminal (only while it has power); the air in the duct over the room. Heard
+    // only from down here.
     const emitters = [];
     const tp = E('TERMINAL'), sp = E('SOUND');
     if (tp || sp) emitters.push(ctx.audio?.registerEmitter?.('terminal', toWorld((tp ?? sp).clone().add(new THREE.Vector3(0.15, -0.05, 0))), 'surface'));
@@ -558,7 +568,8 @@ export function placeBunkerRoom(ctx, asset, { F, P, parent, near, inside, inCar 
     if (live.length) {
       ctx.updaters.push(() => {
         const off = !ctx.camera || !near(ctx.camera.position);
-        for (const e of live) e.off = off;
+        const dead = !bunkerPowered(ctx);
+        for (const e of live) e.off = off || (dead && e.name === 'terminal');
       });
     }
   };
@@ -570,7 +581,7 @@ export function placeBunkerRoom(ctx, asset, { F, P, parent, near, inside, inCar 
     // Where ?spawn=bunker stands you: beside the chair, facing the terminal.
     spawn: spawnN ? { pos: toWorld(spawnN.position).setY(room.matrixWorld.elements[13]), yaw: F.ry + (ex('SEAT_STAND').yaw ?? -Math.PI / 2) } : null,
     scope: () => scope,
-    tune: { floorK, floorK2, crt: crtU, glow },
+    tune: { floorK, floorK2, crt: crtU, glow, led: ledU },
     finish,
   };
 }
@@ -594,6 +605,15 @@ function ledIds(geo) {
   const id = new Float32Array(n), ids = new Map();
   for (let i = 0; i < n; i++) { const r = find(i); if (!ids.has(r)) ids.set(r, ids.size + 1); id[i] = ids.get(r); }
   geo.setAttribute('aLed', new THREE.BufferAttribute(id, 1));
+}
+// The id (ledIds) of the indicator lamp nearest the centre of geometry `to` (same space), within max m; -1 if none.
+function nearestLed(geo, to, max) {
+  if (!to.boundingBox) to.computeBoundingBox();
+  const c = to.boundingBox.getCenter(new THREE.Vector3()), v = new THREE.Vector3();
+  const P = geo.attributes.position, id = geo.attributes.aLed;
+  let best = -1, bd = max;
+  for (let i = 0; i < P.count; i++) { const d = v.fromBufferAttribute(P, i).distanceTo(c); if (d < bd) { bd = d; best = id.getX(i); } }
+  return best;
 }
 
 // CAM 07: the cctv layer's housing (lens at its origin looking +z, its bracket behind) at stack.hiddenCam, lit by the
