@@ -37,6 +37,24 @@ export function buildMountain(ctx) {
   const door = [shed.x + tang.x * 2.9, shed.z + tang.z * 2.9];
   let trail = null;   // laid out on the bare hillside (below), then it cuts its bed into it
 
+  // The spur: the same path the other way, toward the mine (props/mine.js, a hundred metres round the foot), for a
+  // little way. It forks from the trail on the doorstep, makes a U-turn (as wide as the trail's) round the shed's outer
+  // front corner, runs back past the rain barrel and the shed's side, and follows the foot of the mountain, drifting in
+  // toward the hill, until it peters out some 30 m past the shed: it says which way to go, and no more. In the shed's
+  // frame (x out toward the rim, z out of the door):
+  const SPUR = { turn: 1.95, z: 3.5 };   // the U-turn's radius, and how far out of the door its centre is
+  const inShed = (lx, lz) => [shed.x + Math.cos(thS) * lx + tang.x * lz, shed.z + Math.sin(thS) * lx + tang.z * lz];
+  const spurHead = [door, inShed(0, 3.2)];
+  for (let k = 0; k <= 12; k++) { const a = k * Math.PI / 12; spurHead.push(inShed(SPUR.turn * (1 - Math.cos(a)), SPUR.z + SPUR.turn * Math.sin(a))); }
+  for (let lz = SPUR.z - 0.7; lz > -2.3; lz -= 0.7) spurHead.push(inShed(SPUR.turn * 2, lz));
+  // ...and round the foot, the way the trail's legs go round the summit: [theta, r] from the shed's back corner on.
+  const DEG = Math.PI / 180, back = inShed(SPUR.turn * 2, -2.8);
+  const spurLegs = [
+    [Math.atan2(back[1] - sz, back[0] - sx), Math.hypot(back[0] - sx, back[1] - sz)],
+    [thS - 12 * DEG, 61.4], [thS - 20 * DEG, 59.6], [thS - 27 * DEG, 57.6], [thS - 33.5 * DEG, 56.2],
+  ];
+  let spur = null;    // laid on the ground as the trail and the shed leave it
+
   const q = {};
   stack.shapeFns.push((x, z, h) => {
     const d = Math.hypot(x - sx, z - sz);
@@ -49,21 +67,35 @@ export function buildMountain(ctx) {
     return h;
   });
   trail = layoutTrail({ sx, sz, head: [door, [door[0] + tang.x * 2.5, door[1] + tang.z * 2.5]], legs, ground: (x, z) => stack.heightAtAnalytic(x, z) });
+  spur = layoutTrail({
+    sx, sz, head: spurHead, legs: spurLegs, ground: (x, z) => stack.heightAtAnalytic(x, z), smooth: 1.5,
+    fade: { boards: 16.5, narrow: 16, tread: 11, earth: 4.5, seed: 3 },
+  });
+  // Nothing instanced (grass, flowers, pebbles) grows through its pebbles: hidden once the scatter is built
+  // (world/index.js), so none of it is drawn again and everything else stays where it was (see tools/regress).
+  stack.finish = () => ctx.lod.hideInstancesWhere((x, y, z) => spur.on(x, z, q) && Math.abs(y - q.y) < 2);
   // The mine adit (props/mine.js) in the south hillside: its cut and the hole behind its portal are the cap's, so they
   // go in before it is built.
   const mineF = mineFrame(stack, { sx, sz });
   const verge = new THREE.Color(0.2, 0.16, 0.11);
   stack.colorFns.push((x, z, h, col) => {
     trail.near(x, z, q);
-    if (q.d < 1.7) col.lerp(verge, (1 - smoothstep(0.8, 1.7, q.d)) * 0.6);
+    let w = q.d < 1.7 ? (1 - smoothstep(0.8, 1.7, q.d)) * 0.6 : 0;
+    // (the spur's the same, fading out with it and a few metres beyond its last pebbles; where both are, the darker)
+    spur.near(x, z, q);
+    if (q.d < 1.7) w = Math.max(w, (1 - smoothstep(0.8, 1.7, q.d)) * 0.6 * spur.wear(q.s));
+    if (w > 0) col.lerp(verge, w);
   });
 
   const collider = new ColliderBuilder('mountain');
   const batcher = new Batcher();
   stack.build(collider);
   // The path's walking surface is a collider of its own (its own BVH; all of it walkable, see mountainPath.js).
-  buildMountainTrail(trail, batcher, ctx.lateCollider('mountain-trail'));
+  buildMountainTrail(trail, batcher, ctx.lateCollider('mountain-trail'), { open: [spur] });
+  // The spur: no collider (you walk on the cap under it); one tread with the trail's where they part.
+  buildMountainTrail(spur, batcher, null, { seed: 9, ground: (x, z) => stack.heightAt(x, z), over: trail });
   ctx.mountainTrail = trail;   // (main.js: footsteps on its pebbles and ties)
+  ctx.mountainSpur = spur;
 
   // ---- Shed ---- (props/shed.js, tools/blender/shed_design.py): a timber hoist house on a stone plinth round the
   // elevator's upper stop; its own collider ('shed'), and into the props' far stand-in below.
@@ -94,7 +126,7 @@ export function buildMountain(ctx) {
     const sp = rng.next() < 0.75 ? 'pine' : 'broadleaf';
     const s = rng.float(0.7, 1.15);
     if (mineF.near(p.x, p.z, 1)) continue;   // (after its draws) not in the mine's cut or over its drive
-    if (!crownClear(ctx.forest, trail, sp, p.x, p.y, p.z, s)) continue;   // (after its draws) no bough low over the path
+    if (![trail, spur].every((t) => crownClear(ctx.forest, t, sp, p.x, p.y, p.z, s))) continue;   // (after its draws) no bough low over the path or its spur
     ctx.forest.add(sp, p.x, p.y, p.z, s);
     collider.addCylinder(p.x, p.y - 0.5, p.z, ctx.forest.radiusOf(sp) * s + 0.08, 4, 6);
     trees.push({ x: p.x, z: p.z, r: 0 });
@@ -114,6 +146,9 @@ export function buildMountain(ctx) {
     treeOk: (x, z) => Math.hypot(x - shed.x, z - shed.z) > 7 && Math.hypot(x - sx, z - sz) > 13,
     avoid: trees,
   });
+  // ...and along the spur (after everything else's, so nothing else's draws move): grass and flowers. No trees: each
+  // would be a trunk in the stack's own collider.
+  dressTrail(ctx, stack, spur, null, { seed: 171, trees: false, beside: [trail], ok: (x, z) => !shedProp?.inside(x, z, 0.2) });
 
   const props = batcher.build(stack.group, { name: 'mountain-props' });
   for (const m of props) if (m.material.name === 'trail-pebbles') m.castShadow = false;   // (flat on the ground)
@@ -136,6 +171,8 @@ export function buildMountain(ctx) {
   });
   stack.trail = trail.path;   // the switchback path from the shed to the observatory (a Path, with heights)
   stack.trailInfo = trail;    // its layout: near(x, z), yAt(s), turns, steps (world/mountainPath.js)
+  stack.spur = spur.path;     // the spur from the door round the shed and along the foot, toward the mine
+  stack.spurInfo = spur;      // its layout too: ends (where its edging, tread and patches stop), span(s), patches
   stack.shed = { x: shed.x, z: shed.z, rot: shedRot, door: door, platePos };
   ctx.stacks.mountain = stack;
   return stack;

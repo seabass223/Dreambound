@@ -98,7 +98,8 @@ over its hole), the Rocks-End wall gap (above the cloud deck and overall). The g
 the sill stands past the Rocks rim, the corridor's open back and the step up from the cap onto its floor there, the
 stairs' walking surface over End's lip (its least height above End's ground, where the last flight meets it), the
 stairs' foot inside End's built wall (as the bridge posts were), and its colliders as built (the housing's triangles,
-the doors' collider on, none of the stairs'). Mountain: meadow count, trail, observatory, shed. Every scatter call (count, margin, x/z hash and
+the doors' collider on, none of the stairs'). Mountain: meadow count, trail, the spur off it (its centreline, where its
+edging, its tread and its last patch stop, and the patches), observatory, shed. Every scatter call (count, margin, x/z hash and
 y hash separately), every forest/meadow/pebble/stone/flower placement per stack, trails, audio emitters, physics
 colliders/circles/ladders, LOD registrations (the wall must never be LOD-faded). rocks.exe's pieces come in through
 these general records: the tor's own meshes (intact, far, stump, stump far, debris, the flying chunks) in the Rocks
@@ -109,7 +110,9 @@ group, the bunker room's meshes in the Tower group, its 13 furniture OBBs in `ph
 and its collider piece), and the LOD entries `gatehouse` (8), `gatehouse:far`, `gatehouse:lights` (2),
 `gatehouse:doors`, `gatehouse:stair` (14) and `pedestal`. The light shafts are built (hidden) with no collider,
 emitter or LOD entry, and the gatehouse's and the pedestal's keep-outs (no grass or pebbles under them) only skip
-instances when the instanced sets are gathered, after the scatter's draws, so no placement moves.
+instances when the instanced sets are gathered, after the scatter's draws, so no placement moves. The Mountain spur
+(no grass through its pebbles) hides its own once the sets are built, by a test of its tread's shape instead of a box
+(`hideInstancesWhere`, as the Rocks targets' bare earth does; `world/index.js` calls the stack's `finish`).
 
 ## Routes
 
@@ -176,9 +179,44 @@ them. For rocks.exe and the Rocks boulders (from the repo root, e.g. `node tools
 
 Record the baseline once the tree is ready (`--update-baseline`, which refuses a nondeterministic run and a tree
 edited during the run, and stamps the tree hash into both files; compare prints it). The current baseline is from
-tree `90df2826e89f1dd1` (2026-10-02, flags off, 2385 route cases, 62 of them failing, all pre-existing), recorded
-for the endgame: the rope bridge Rocks → End replaced by the gatehouse on the Rocks rim and its stairs, the End
-pedestal, the storm. Every diff against the one before (tree `ace5a6c40216d199`) is accounted for:
+tree `f982b7414753808c` (2026-10-03, flags off, 2385 route cases, 62 of them failing, all pre-existing), recorded
+for the Mountain's spur: a branch of the switchback path (`world/mountainPath.js`, placed by `stacks/mountain.js`)
+that leaves it at the shed door, rounds the shed and follows the foot of the mountain toward the mine for some 30 m,
+then peters out. It is laid on the cap as built (no bed cut in it, no collider of its own), its verges are placed
+after everything else on the last stack built, from their own streams, and the grass on its pebbles is hidden once
+the instanced sets are built, so nothing is scattered again. (It was first recorded from tree `e33bd5bcd61ddf60`; the
+review then moved one edging board that lay back over its neighbour's end inside the U-turn and let the tread's edge
+down where one side's edging stops, which changed only the three `position` hashes below.) Every diff against the one
+before (tree `90df2826e89f1dd1`) is accounted for:
+
+- Anchors, the worn earth under it: `stacks.mountain.cap.sha.color` (144 of the cap's 23326 vertices, all within
+  1.7 m of its centreline). The cap's position, index, uv and normal hashes, its collider piece, the relief grid and
+  the rim slope are unchanged.
+- Anchors, its meshes in the `mountain-props` batch (`stacks.mountain.group.0|1|5.verts|position`): the pebbles
+  5115 → 5590 verts (the trail's tread is the first 5115, bit for bit; the spur's tread and its five patches are the
+  475 after it); the timber 11016 → 12072 (of the trail's 459 ties and boards 456 are as they were and in order;
+  where the spur's tread crosses the trail's edging on the doorstep two boards are left out and a third is cut back
+  from 0.70 to 0.38 m, after their random draws; the spur's 46 follow); and the far stand-in that merges them
+  87617 → 89148 (+475 +1056).
+- Anchors, its verges: `mountain.meadow` and `placements.adds.mountain.meadow.*` 6139 → 6474 (335 tufts along it),
+  `placements.adds.mountain.flower.*` 221 → 283 (62 clumps), `lod.instanced` 19 → 23 (its flowers' four sets). The
+  24216 placements recorded before are the first 24216 now, each unchanged (x, y, z, scale, kind); every scatter
+  call's output is identical; and every instanced set's matrices and colours are bit for bit what they were (the
+  first 21977 of the grass, the others whole), rotations and tints included. No tree, shrub, pebble or stone was
+  added, moved or removed.
+- Not an anchor: 20 grass tufts of the Mountain's own scatter stood on its pebbles and are no longer drawn (hidden,
+  above); they stay in the recorded placements, as under the gatehouse. Nothing else stood on it (the nearest
+  trunk is 6.8 m from its centreline, the nearest shrub 1.8 m; the scatter's trees are also held to `crownClear` of
+  the spur after their draws, which drops none today). Four of its own tufts fall in the shed's keep-out by the rain
+  barrel.
+- Anchors, new: `mountain.spur` (`n`, `total`, `sha`, `ends.boards|narrow|tread|earth`, `patches.n|sha`).
+- Routes: identical, every trace. `physics.colliders` is the same 34, each with the same vertices and indices (the
+  spur has none: you walk on the cap under it), so no walk and no fall moved.
+- `--stages` against it: what failed against the one before (below) fails the same way, and nothing of the spur's.
+
+The one before, tree `90df2826e89f1dd1` (2026-10-02), was recorded for the endgame: the rope bridge Rocks → End
+replaced by the gatehouse on the Rocks rim and its stairs, the End pedestal, the storm. Its diffs against the one
+before it (tree `ace5a6c40216d199`):
 
 - Anchors, the storm (`materials.js`): the vertex- and fragment-shader hashes of every patched material
   (`stacks.*.materials.cap|cliff.vs|fs`, `sharedMaterials.cap|cliff|stone.vs|fs`). The vertex shader now declares
@@ -219,12 +257,12 @@ pedestal, the storm. Every diff against the one before (tree `ace5a6c40216d199`)
   `R6:end:rim:315deg:6.2` (one of the flips above), and under `relief` `R6:dome:rim:15deg:0.5` (the flip described
   below).
 
-The one before, tree `ace5a6c40216d199` (2026-10-02, the mine and the Rocks carvings; recorded without a note here)
+The one before that, tree `ace5a6c40216d199` (2026-10-02, the mine and the Rocks carvings; recorded without a note here)
 changed `stacks.mountain.group` (the `mountain-props` stone, cap, cliff and far meshes), the `mountain` collider
 (+12 triangles) and the `mine` collider (4200 → 4248 triangles, its box), and `lod.entries` 146 → 148 (the two arrow
 carvings, `petroglyph:arrow:1|2`); in the routes, 97 Mountain traces, `R6:mountain:rim:65deg:0.5` now breaching and
 `R6:mountain:strafe:262.5deg:*` and `R6:mountain:oblique:347.5deg:-55` now falling clean (64 → 62 failing). The one
-before that, tree `6cf3cc29401f24c2` (2026-10-01, rocks.exe), changed the anchors only: the fragment-shader hashes of
+before it, tree `6cf3cc29401f24c2` (2026-10-01, rocks.exe), changed the anchors only: the fragment-shader hashes of
 every patched material (`bunkerDeep` in `materials.js`); `stacks.tower.group` (the bunker room's meshes; `tower-props`
 without the room's bare shell, and the lower stair's colours); `stacks.rocks.group` (the tor's own meshes, intact,
 far, stump, stump far, debris and the flying chunks, out of `rocks-props` and its far stand-in); the `bunker-car`
@@ -289,7 +327,13 @@ Rocks 1; oblique: End 5, Tower 2, Rocks 1; strafe: End 4). No R7 case fails.
 - Not covered by R6 (known gaps): the controller's 9 m fall trigger used to fire while the player was still over a
   steep Mountain cap face (feet 0.1-0.9 m above the ground), and `createFall` leaves out the stack it starts over,
   so such a fall dropped through the cap. The Mountain's slope limit (README "Walking and slopes") closed it for
-  faces up to 50°: a slide down them counts as on the ground. Steeper cap faces are cliffs and still fall. The eye is measured against the cliff meshes only: falls off the Dome rim
+  faces up to 50°: a slide down them counts as on the ground. Steeper cap faces used to be cliffs that still fell: a
+  run from the observatory off one arm of the switchbacks onto the next (an 8 m bank of 44-72° faces at the hairpin
+  21-23 m from the summit, 40° right of the door), or off the plateau at Walk speed above 1x, reached the 9 m and
+  sank through the hill (71 of 11,872 swept runs at 1x, 8,141 at 2x). Closed 3 October: the trigger re-measures its
+  drop wherever a slope-limited collider lies under the feet (`Physics.hillsideBelow`), and a fast fall takes more
+  substeps (`STEP_REACH` in the controller), so a 30 m/s landing can't carry the capsule's axis through a face. The
+  routes are identical at the harness's 1/60 (all 2,385 traces); nothing was re-baselined. The eye is measured against the cliff meshes only: falls off the Dome rim
   over its cave hood pass through the `dome-props` mesh early in the fall, with or without the drift (measured at
   85-125° when the hood was on the north side; since the ledge was shortened it is at about 215°).
 - Dome pad flatness is 0.011 m on the built mesh (triangles straddle d = 15 m), just over the plan's 0.01.

@@ -18,10 +18,26 @@ import { createShell, COLS, ROWS, EXTRA_GLYPHS, NORM } from './terminalShell.js'
 // It runs off the hub generator (props/cave.js), which can't carry it with the Home (dome) and Mountain lines on
 // as well: until both are switched off the tube is dark and silent. It still answers the reticle (it's plainly a thing
 // to use); pressing it gets a dead click and the low-battery glyph (ui/reticle.js flash) instead of the chair.
+//
+// REMOTE_TRANSFORM (the word on the note in the lounge desk's drawer) puts a picture on the tube: public/models/
+// bunker_mars.jpg, loaded with the room (bunkerRoom.js) and drawn by the same shader, in its own colours, under the
+// tube's curve, scanlines, vignette and glass. The text goes out and the tube is black for a beat; the picture then
+// arrives as a slow-scan frame does, drawn down the tube a line at a time behind the beam's bright line, its newest
+// lines noisy and not yet locked; then it is steady, its blacks black (the unlit tube's blue gives way under it).
+// Meanwhile the shell is locked and nothing stands you up: a click, Escape or any key (everything that goes through
+// term.leave(), and term.key()) puts the picture away instead (it collapses to a line and is gone) and you are back at
+// a fresh prompt, still seated. It goes dark with the tube if the power dies, and isn't saved.
 
 // Whether the bunker has power: Home and Mountain both shed (no cave built, as in some tests: always).
 export const bunkerPowered = (ctx) => !ctx.power || (ctx.power.dome === false && ctx.power.mountain === false);
 const WARM = 0.9, COOL = 0.25;   // s: the tube coming up to brightness, and collapsing
+// The picture's beats (s). dark: from Enter to its first line (the text out in the first `fade` of it); scan: its top
+// line to its bottom one; settle: the last noise dying after that; out: from the click to the prompt (the collapse
+// takes `collapse` of it, the rest is black). guard: from that click, how long leave() goes on doing nothing (a double
+// click, or a browser's Escape and its letting the mouse go arriving apart, mustn't stand you up as well). past: how far
+// below the picture the beam's line runs (off the glass). gain: its brightness against the text's (scanlines take a
+// fifth back).
+export const PICTURE = { dark: 0.5, fade: 0.08, scan: 2.0, settle: 0.7, out: 0.2, collapse: 0.12, guard: 0.5, past: 1.04, gain: 1.0 };
 
 const GLYPHS = (() => { let s = ''; for (let c = 32; c < 127; c++) s += String.fromCharCode(c); return s + EXTRA_GLYPHS; })();
 const INDEX = new Map([...GLYPHS].map((ch, i) => [ch, i]));
@@ -165,6 +181,10 @@ uniform vec3 uHot;         // what the brightest strokes go toward
 uniform vec3 uHalo;        // the glow round them
 uniform vec3 uBack;        // the unlit tube
 uniform vec4 uLook;        // curvature, glow, scanline depth, gain
+uniform sampler2D uPic;    // REMOTE_TRANSFORM's picture (sRGB, its top row first; one black texel when there is none)
+uniform vec4 uPicA;        // the text put out 0..1; the picture drawn this far down (0: none, to a little past 1);
+                           // its height (1; to 0 as it collapses); how unsettled its newest lines are 0..1
+uniform float uPicGain;
 varying vec2 vUv;
 varying vec3 vN;
 varying vec3 vV;
@@ -247,16 +267,41 @@ void main() {
     g.x += (h21(vec2(band, 7.0 + floor(uTime * 29.0))) - 0.5) * 18.0 * gl * bandOn;
     g.y = mod(g.y + floor(uTime * 9.0) * 0.37 * uGrid.y * max(0.0, gl - 0.7), uGrid.y + 2.0);
   }
-  vec2 t = textAt(g, gx, gy, true);
+  float txt = 1.0 - uPicA.x;                   // (the text gives the tube up to the picture)
+  vec2 t = vec2(0.0);
+  if (txt > 0.0) t = textAt(g, gx, gy, true) * txt;
   vec3 split = vec3(t.x);
-  if (gl > 0.02) {
+  if (gl > 0.02 && txt > 0.0) {
     float sh = 0.45 * gl + 0.25 * bandOn;
-    split.r = textAt(g + vec2(sh, 0.0), gx, gy, false).x;
-    split.b = textAt(g - vec2(sh, 0.0), gx, gy, false).x;
+    split.r = textAt(g + vec2(sh, 0.0), gx, gy, false).x * txt;
+    split.b = textAt(g - vec2(sh, 0.0), gx, gy, false).x * txt;
   }
   float core = t.x;
   vec3 col = uHalo * t.y * uLook.y;                                         // the halo
   col += mix(uTint, uHot, smoothstep(0.45, 1.35, core)) * split;            // the strokes, whiter where brightest
+  // The picture, in its own colours, filling the tube (its raster the bulged 0..1, so its edges bow a little inside
+  // the glass's). It arrives as a slow-scan frame: drawn down the glass a line at a time behind the beam's bright line,
+  // the newest lines noisy, a few dropped, and not yet locked sideways; then steady, with a little grain. Put away, it
+  // collapses onto the tube's middle line, brightening as it goes.
+  vec2 spx = dFdx(sp), spy = dFdy(sp);
+  float grain = h21(gl_FragCoord.xy + fract(uTime * 7.0) * 311.0) - 0.5;
+  float lit = 0.0;                                                          // 1 where the picture is drawn
+  if (uPicA.y > 0.0) {
+    float hgt = max(uPicA.z, 0.001);
+    vec2 q = vec2(sp.x, 0.5 + (0.5 - sp.y) / hgt);                          // across and down the picture
+    float under = q.y - uPicA.y;                                            // > 0: not drawn yet
+    float fresh = exp(min(under, 0.0) * 14.0) * uPicA.w;                    // 1 on the newest line, dying up the tube
+    float lr = h21(vec2(floor(q.y * 240.0), floor(uTime * 24.0)));          // (per line, 24 times a second)
+    q.x += (lr - 0.5) * 0.02 * fresh * fresh;
+    vec3 s = textureGrad(uPic, q, vec2(spx.x, -spx.y / hgt), vec2(spy.x, -spy.y / hgt)).rgb * uPicGain;
+    s *= 1.0 - 0.6 * fresh * step(0.86, lr);
+    s = s * (1.0 + grain * (0.06 + 0.9 * fresh)) + vec3(0.1 * fresh * (0.5 + grain));
+    float inPic = step(0.0, q.y) * step(q.y, 1.0) * step(0.0, q.x) * step(q.x, 1.0);
+    float ue = under / 0.0035;
+    lit = inPic * step(under, 0.0);
+    col += s * (lit * mix(3.0, 1.0, min(hgt, 1.0)));
+    col += uHot * (1.6 * inPic * exp(-ue * ue));                            // the beam's line
+  }
   // Scanlines (eight to a text row), faded where they'd be finer than a couple of pixels.
   float sl = g0.y * 8.0;
   float fw = fwidth(sl);
@@ -265,9 +310,10 @@ void main() {
   float roll = exp(-pow((fract(sp.y * 0.8 - uTime * 0.11) - 0.5) * 6.0, 2.0));
   float flick = 1.0 + 0.012 * sin(uTime * 377.0) + 0.01 * sin(uTime * 23.0 + 1.3) * sin(uTime * 3.1);
   float vig = clamp(1.0 - 0.55 * pow(length(c * vec2(1.0, 1.2)) * 1.35, 3.0), 0.0, 1.0);
-  vec3 back = uBack * (0.75 + 0.25 * scan) * (1.0 + 0.6 * roll);
+  // (The unlit tube's blue gives way under the picture: its blacks, the redaction box, are black.)
+  vec3 back = uBack * (0.75 + 0.25 * scan) * (1.0 + 0.6 * roll) * (1.0 - lit);
   vec3 e = (col * scan * (1.0 + 0.05 * roll) + back) * flick * vig;
-  e += uTint * (h21(gl_FragCoord.xy + fract(uTime * 7.0) * 311.0) - 0.5) * (0.012 + 0.5 * gl);
+  e += uTint * grain * (0.012 + 0.5 * gl);
   e += uTint * gl * 0.4 * bandOn * h21(vec2(floor(g.y * 3.0), floor(uTime * 40.0)));
   e = max(e, 0.0) * uK * uLook.w;
   // The glass: dark where the picture isn't, a faint warm reflection of the room, stronger at grazing angles.
@@ -282,20 +328,27 @@ void main() {
 }
 `;
 
-// createTerminal(ctx, { screen, seat, keyboard, cols, rows }) -> term (call it at build time: it makes its material and
-// textures at once).
+// createTerminal(ctx, { screen, seat, keyboard, picture, cols, rows }) -> term (call it at build time: it makes its
+// material and textures at once).
 //   screen: the glass mesh, a 4:3 face with UVs 0..1 over it as glTF exports them (u right, v down the glass); it gets
 //     this module's material. Don't LOD-fade it (a ShaderMaterial has no dithered twin): hide it, or fade: false.
 //   seat: { eye, stand (Vector3, world), yaw, pitch, fov } (+ optional yawRange, pitchMin, pitchMax, dip, onSit,
 //     onStand, which it chains); the missing ones are filled in.
 //   keyboard: an optional dedicated (invisible) pick mesh over the keyboard, pressed like the screen.
+//   picture: the 4:3 picture REMOTE_TRANSFORM shows (a Texture: sRGB, flipY false, as the room's others), or nothing
+//     (a missing file, or a headless stub with no image): the command then only says it has no carrier. Either way the
+//     material is the same program: the sampler (material.uniforms.uPic) holds a black texel when there's no picture,
+//     and whatever it holds decides (a test gives it one there).
 // term: { state, shell, exec(line), key(e), active(), enter(), leave(), glitch, onRun, returnFromFeed(), update(dt),
-//   material, seat, item, powered(), level }. onRun(term) is called once, when rocks.exe has printed its four dots; the
-//   shell then waits (no prompt) for returnFromFeed() (or comes back by itself after 30 s, or 1 s when onRun is unset or
-//   returns false), and after a real run holds the chair ~2 s more while rocks.exe prints its verdict. Never call
-//   returnFromFeed() from inside onRun. enter() refuses (false) while unpowered; level is the tube's brightness, 0..1,
-//   following powered() (bunkerRoom.js dims the screen's glint by it).
-export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS, rows = ROWS }) {
+//   material, seat, item, powered(), level, picture }. onRun(term) is called once, when rocks.exe has printed its four
+//   dots; the shell then waits (no prompt) for returnFromFeed() (or comes back by itself after 30 s, or 1 s when onRun
+//   is unset or returns false), and after a real run holds the chair ~2 s more while rocks.exe prints its verdict. Never
+//   call returnFromFeed() from inside onRun. enter() refuses (false) while unpowered; level is the tube's brightness,
+//   0..1, following powered() (bunkerRoom.js dims the screen's glint by it). picture: what the picture is doing ('dark',
+//   'scan', 'hold', or 'out' as it is put away), null when the tube shows the shell; while it isn't null, leave() puts
+//   the picture away and returns false (nobody stands up), and key() does the same with any key; leave() goes on
+//   returning false until PICTURE.guard after that.
+export function createTerminal(ctx, { screen, seat, keyboard = null, picture = null, cols = COLS, rows = ROWS }) {
   ctx.state ??= {};
   const getState = () => (ctx.state.terminal ||= { ran: false, cwd: '/home/operator' });
   getState();
@@ -308,6 +361,9 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
   const charTex = new THREE.DataTexture(cells, cols, rows);
   charTex.magFilter = charTex.minFilter = THREE.NearestFilter;
   charTex.generateMipmaps = false;
+  // (the picture's stand-in, so the sampler is bound and the program the same without it)
+  const noPic = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+  noPic.needsUpdate = true;
   const U = {
     uChars: { value: charTex }, uAtlas: { value: atlas.tex },
     uGrid: { value: new THREE.Vector2(cols, rows) },
@@ -321,6 +377,9 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
     uHalo: { value: new THREE.Color(0.05, 0.2, 1.0) },
     uBack: { value: new THREE.Color(0.004, 0.009, 0.022) },
     uLook: { value: new THREE.Vector4(0.085, 0.75, 0.38, 1.0) },
+    uPic: { value: picture?.isTexture && picture.image ? picture : noPic },
+    uPicA: { value: new THREE.Vector4(0, 0, 1, 0) },
+    uPicGain: { value: PICTURE.gain },
   };
   const GAIN = U.uLook.value.w;   // (uLook.w carries the power: 0 is a dead tube, glass and all, the same program)
   const material = new THREE.ShaderMaterial({ name: 'terminal', uniforms: U, vertexShader: VERT, fragmentShader: FRAG });
@@ -374,17 +433,83 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
   let soundPos = null, lastCwd = getState().cwd;
   let level = powered() ? 1 : 0;
   const where = () => (soundPos ||= (keyboard ?? screen)?.getWorldPosition?.(new THREE.Vector3()) ?? null);
+  const play = (name, opt = {}) => { const pos = where(); ctx.audio?.play(name, { ...(pos ? { pos } : {}), ...opt }); };
+
+  // ---- the picture (REMOTE_TRANSFORM) ----
+  // { phase, t }: 'dark' (the text out, a held black), 'scan' (drawn down the tube), 'hold' (steady), 'out' (put away:
+  // the collapse, a blink of black, then the shell), 'dead' (the power went: frozen as it was while the tube dies).
+  let pic = null;
+  let held = null;   // the key that put it away, while it may still be down (its repeats aren't typed)
+  let guard = -1;    // (on `time`) until then leave() stands nobody up: what put the picture away may come twice
+  const A = U.uPicA.value;
+  const showing = () => !!pic && pic.phase !== 'dead';
+  const clearPicture = () => { pic = null; A.set(0, 0, 1, 0); };
+  // Back to the shell: the text as it was, a fresh prompt under the command, a little tear as it comes.
+  function endPicture() {
+    clearPicture();
+    shell.release();
+    pulse = Math.max(pulse, 0.35);
+    if (shell.version !== drawn) draw();
+  }
+  // Put away (a click, Escape, any key): once.
+  function dismiss() {
+    if (!showing() || pic.phase === 'out') return;
+    pic.phase = 'out'; pic.t = 0;
+    A.x = 1;
+    guard = time + PICTURE.guard;
+    play('glitch', { dur: PICTURE.out, amt: 0.5 });
+  }
+  // The shell asks for it: only with a picture to show, on a live tube.
+  shell.onPicture = () => {
+    if (U.uPic.value === noPic || !powered()) return false;
+    pic = { phase: 'dark', t: 0 };
+    A.set(0, 0, 1, 1);
+    pulse = Math.max(pulse, 0.5);   // the text tears as it goes
+    play('feedCut');
+    return true;
+  };
+  function updatePicture(dt, on) {
+    // The power gone: it dies with the tube (and the shell is the shell again under it).
+    if (pic.phase === 'dead') { if (on || level <= 0) clearPicture(); return; }
+    if (!on) { pic.phase = 'dead'; shell.release(); return; }
+    // Out of the chair some other way (Travel's standUp, a restored save): gone at once.
+    if (!active()) { endPicture(); return; }
+    pic.t += dt;
+    if (pic.phase === 'dark' && pic.t >= PICTURE.dark) { pic.phase = 'scan'; pic.t -= PICTURE.dark; }
+    if (pic.phase === 'scan' && pic.t >= PICTURE.scan) { pic.phase = 'hold'; pic.t -= PICTURE.scan; }
+    if (pic.phase === 'dark') A.x = Math.min(1, pic.t / PICTURE.fade);
+    else if (pic.phase === 'scan') A.set(1, Math.max(1e-4, (pic.t / PICTURE.scan) * PICTURE.past), 1, 1);
+    else if (pic.phase === 'hold') A.set(1, PICTURE.past, 1, Math.max(0, 1 - pic.t / PICTURE.settle));
+    else if (pic.t >= PICTURE.out) endPicture();
+    else {
+      const u = Math.min(1, pic.t / PICTURE.collapse);
+      A.z = (1 - u) * (1 - u);
+      if (u >= 1) A.y = 0;
+    }
+  }
 
   const term = {
     shell, glitch: 0, onRun: null, material, seat, item: null,
     get state() { return getState(); },
     get level() { return level; },
+    get picture() { return showing() ? pic.phase : null; },
     active, powered,
     enter() { return active() || !powered() ? false : !!ctx.player?.sit(seat); },
+    // The picture up: this puts it away instead, and nobody stands (the next one does, once PICTURE.guard has passed
+    // since: a double click is one click).
     // (Not while rocks.exe runs: from its first dot until it has had its say the player stays in the chair.)
-    leave() { return active() && !shell.busy ? ctx.player.standUp() : false; },
+    leave() {
+      if (showing()) { dismiss(); return false; }
+      if (time < guard) return false;
+      return active() && !shell.busy ? ctx.player.standUp() : false;
+    },
     exec(line) { const o = shell.exec(line); if (shell.version !== drawn) draw(); return o; },
     key(e) {
+      // (The key that put the picture away types nothing afterwards either, however long it's held.)
+      const id = e.code || e.key;
+      if (e.repeat && held !== null && id === held) return null;
+      if (!e.repeat) held = null;
+      const up = showing();   // (before the shell has the key: the Enter that asks for the picture doesn't put it away)
       const snd = shell.key(e);
       if (snd) {
         // (A held key repeats its edit silently: a real one clicks once, going down.)
@@ -395,6 +520,8 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
         }
         lastKey = time;
       }
+      // Any key puts the picture away (the shell, locked, typed nothing): not a modifier alone, nor a held key's repeats.
+      if (up && snd && !e.repeat) { dismiss(); held = id; }
       if (shell.version !== drawn) draw();
       return snd;
     },
@@ -412,6 +539,7 @@ export function createTerminal(ctx, { screen, seat, keyboard = null, cols = COLS
       // could: the switches are a cave away), they get up, unless rocks.exe is holding them.
       const on = powered();
       level = on ? Math.min(1, level + dt / WARM) : Math.max(0, level - dt / COOL);
+      if (pic) updatePicture(dt, on);
       if (!on && active() && !shell.busy) term.leave();
       U.uLook.value.w = GAIN * (on ? smooth(level) : level * level);
       U.uTime.value = time;

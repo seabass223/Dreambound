@@ -10,6 +10,10 @@ import { ctrlLetter } from '../props/terminalShell.js';
 // as it auto-repeats. Escape leaves; so does losing the mouse (some browsers spend Escape on that and never send it),
 // unless a dialog took it (F8's report); not while rocks.exe runs, nor during its cutscene.
 // While seated, a small pill in the top right corner says how to get up (styled like ui/scopeExit.js).
+// While the tube shows its picture (REMOTE_TRANSFORM, term.picture), none of those stands you up: term.leave() puts the
+// picture away instead, as does any key (term.key), and the pill says so ("Back": Esc, a click or any key). Escape lets
+// the mouse go as it does so, and you are still seated: a click that only takes the mouse back (core/input.js: no
+// press) puts a picture away all the same.
 
 const CSS = `
 .term-exit { position: fixed; top: 22px; right: 22px; z-index: 20; display: flex; align-items: center; gap: 10px;
@@ -54,8 +58,16 @@ export function installTerminalKeys({ ctx, uiOpen = () => false }) {
     const t = term();
     if (t?.active() && !ctx.inSequence?.() && !uiOpen()) t.leave();
   };
+  // The picture up and the mouse free (an earlier Escape let it go): this click only locks it again, so Input presses
+  // nothing; it puts the picture away here. (Not the pill's: that has its own click.)
+  const onDown = (e) => {
+    if (e.button !== 0 || document.pointerLockElement || el.contains(e.target)) return;
+    const t = live();
+    if (t?.picture) t.leave();
+  };
   addEventListener('keydown', onKey, true);
   addEventListener('keyup', onUp, true);   // (only watched: Input still gets it)
+  addEventListener('mousedown', onDown, true);
   document.addEventListener('pointerlockchange', onLock);
 
   // The hint.
@@ -66,14 +78,18 @@ export function installTerminalKeys({ ctx, uiOpen = () => false }) {
   el.className = 'term-exit';
   el.type = 'button';
   el.innerHTML = '<b>Esc</b><span>Leave</span><small>or click</small>';
+  const what = el.querySelector('span'), how = el.querySelector('small');
   el.addEventListener('click', (e) => { e.stopPropagation(); term()?.leave(); });
   el.addEventListener('mousedown', (e) => e.stopPropagation());
   document.body.appendChild(el);
-  let shown = false, raf = 0;
+  let shown = false, back = false, raf = 0;
   const tick = () => {
     const t = term();
     const on = !!(t?.active() && !uiOpen() && !ctx.inSequence?.() && !t.shell.busy);
     if (on !== shown) { shown = on; el.classList.toggle('on', on); }
+    // The picture up: Esc and a click put it away (so does any key) and you stay in the chair.
+    const pic = !!t?.picture;
+    if (pic !== back) { back = pic; what.textContent = pic ? 'Back' : 'Leave'; how.textContent = pic ? 'click or any key' : 'or click'; }
     raf = requestAnimationFrame(tick);
   };
   raf = requestAnimationFrame(tick);
@@ -81,6 +97,7 @@ export function installTerminalKeys({ ctx, uiOpen = () => false }) {
   return () => {
     removeEventListener('keydown', onKey, true);
     removeEventListener('keyup', onUp, true);
+    removeEventListener('mousedown', onDown, true);
     document.removeEventListener('pointerlockchange', onLock);
     cancelAnimationFrame(raf);
     el.remove();

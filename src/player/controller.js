@@ -14,6 +14,12 @@ const SIT_TIME = 0.9;   // seconds to sit down or stand up
 // along the slope. The fall's vertical speed is capped at this times the slope's sine, and the level push-out turns it
 // into sliding down the face.
 const SLIDE_SPEED = 2.8;
+// The furthest one sub-step of the walk may move the capsule (half its radius), and the most sub-steps a frame takes.
+// The capsule's collision is a shell (Physics.resolveCapsule): once a sub-step carries its axis' lower end under the
+// ground (a move as long as its radius: with 4 sub-steps, a fall from 25.6 m/s at the 0.05 s frame cap, or from about
+// 21 m/s running into a slope at Walk speed 2x), the ground no longer holds it up. Walking and running take 4
+// sub-steps, as ever; a fall takes more once it is fast enough (from 12 m/s at 0.05 s, 19 m/s at 30 fps, 38 m/s at 60).
+const STEP_REACH = PLAYER.radius * 0.5, MAX_STEPS = 24;
 const smooth = (t) => t * t * (3 - 2 * t);
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -100,7 +106,9 @@ export class Player {
     // Check ladder attachment before moving.
     if (this.tryAttachLadder(a)) return;
 
-    const steps = 4;
+    // (the fall's speed by the end of the frame, or the walk's: whichever moves the capsule further)
+    const reach = Math.max(speed, Math.abs(this.vel.y) - PLAYER.gravity * dt) * dt;
+    const steps = Math.min(MAX_STEPS, Math.max(4, Math.ceil(reach / STEP_REACH)));
     const sdt = dt / steps;
     const wasGround = this.onGround;
     const col = this.col;
@@ -144,7 +152,7 @@ export class Player {
         const d = speed * dt;
         this.bob += d * 2.1;
         this.stepDist += d;
-        const stride = a.run ? 1.35 : 0.95;
+        const stride = a.run ? 1.9 : 0.95;   // (a runner's long stride: about 3.3 steps a second, fewer than the walk's 3.6)
         if (this.stepDist > stride) { this.stepDist = 0; this.onStep?.(this.feet, a.run); }
       }
       this.histTimer -= dt;
@@ -154,7 +162,16 @@ export class Player {
         if (this.history.length > 20) this.history.shift();
       }
     }
-    if (!this.onGround && this.feet.y < this.lastGroundY - 9) this.onFall?.();
+    // The dream-fall: 9 m of drop with nothing to land on. Over a hillside (the Mountain's cap) there is: the fall
+    // ignores the ground, so started there it sank through the hill. The measure above misses a run off one arm of the
+    // switchbacks onto the next (the bank between is a cliff up to 9 m high, the flight is more than 1.5 m clear of it,
+    // over the path the nearest ground is the path's own collider, which has no slope rule, and a touchdown in any
+    // sub-step but the frame's last doesn't count as ground), and at a faster Walk speed a run off the plateau is 9 m
+    // of flight. So there the drop is measured from here instead, and the capsule comes down on the hill.
+    if (!this.onGround && this.feet.y < this.lastGroundY - 9) {
+      if (this.physics.hillsideBelow(this.feet, this.zone)) this.lastGroundY = this.feet.y;
+      else this.onFall?.();
+    }
   }
 
   safeSpot() {

@@ -14,6 +14,11 @@ import { mulberry32 } from '../core/rng.js';
 // returnFromFeed() prints the garbled tail of the lost camera link; if the blast really went off, the program's own
 // verdict follows a beat later (still no prompt: the chair holds you till it's printed), then a fresh prompt.
 // state().ran is set the moment it starts and after that running it again prints nothing at all.
+//
+// And one command nobody lists: REMOTE_TRANSFORM, the word typed on the note in the lounge desk's drawer (in any case,
+// whatever follows it ignored; help, ls and Tab know nothing of it). It asks onPicture('mars') for its picture. Taken
+// (true), the shell is locked: no prompt, every key swallowed, the rest of the line dropped, until release() gives a
+// fresh prompt under the command (nothing else is printed). Not taken, it prints one line: no carrier.
 
 export const COLS = 64, ROWS = 24;
 // Attributes: brightness level in the low two bits, bold (the heavier glyphs) in bit 2.
@@ -36,6 +41,9 @@ const MAX_LINES = 400;   // scrollback kept
 const NO_COORDS = [['rocks coordinates not found.', BRIGHT], ['Please retrieve coordinates from Observatory.', NORM]];
 const FOUND = 'Coordinates found from Observatory! Proceeding with blast.';
 const VERDICT = [['Blast coordinates resolution errors detected...', HOT], ['Manually positioning rocks is required', BRIGHT]];
+// The lounge note's word, the picture it asks for, and what it says when there's none to show.
+const SECRET = 'REMOTE_TRANSFORM', PICTURE = 'mars';
+const NO_CARRIER = 'REMOTE_TRANSFORM: no carrier';
 const MAX_INPUT = 240;
 
 const HELP = [
@@ -232,6 +240,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
   let scroll = 0;                      // rows scrolled back from the bottom (PageUp / PageDown)
   // The running program: { t, line, phase: 'dots' | 'feed' | 'tail', wait, timeout, taken (onRun took it), said }.
   let run = null;
+  let pic = null;                      // the picture on the tube (REMOTE_TRANSFORM): its name while the shell is locked
   let lastTab = null;                  // the completion list shown by the last Tab (a second Tab doesn't repeat it)
   let sink = null;                     // output captured for a pipe
 
@@ -239,12 +248,14 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
     cols, rows, version: 0, pushed: 0, lines, history,
     onRun: null,      // () => bool: the program has finished printing (return false if nothing will call returnFromFeed)
     onExit: null,     // exit / logout
+    onPicture: null,  // (name) => bool: REMOTE_TRANSFORM asks for its picture (true: shown, and release() will be called)
     get cwd() { return validCwd(); },
     get busy() { return !!run; },
     get phase() { return run?.phase ?? null; },   // rocks.exe's: 'dots', 'feed' (the cutscene's), 'tail', or null
+    get locked() { return !!pic; },               // a picture has the tube: no prompt, no input (not busy: nothing runs)
     get input() { return buf; },
     get cursor() { return cur; },
-    key, exec, update, screen, returnFromFeed, complete, resolve: lookup, prompt: () => promptSegs(),
+    key, exec, update, screen, returnFromFeed, release, complete, resolve: lookup, prompt: () => promptSegs(),
     reset,
   };
   const touch = () => { shell.version++; };
@@ -511,6 +522,19 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
     pushLine(run.line, true);
   }
 
+  // REMOTE_TRANSFORM: the picture, if whoever draws the screen has it (the shell locked until release()); else a line.
+  function remote() {
+    if (shell.onPicture?.(PICTURE) === true) { pic = PICTURE; touch(); return; }
+    out(NO_CARRIER);
+  }
+  // The picture's put away: the prompt's back, under the command that asked for it.
+  function release() {
+    if (!pic) return;
+    pic = null;
+    histIdx = history.length;
+    touch();
+  }
+
   function command(name, args, piped) {
     switch (name) {
       case 'help': HELP.forEach((l) => out(l)); return;
@@ -561,6 +585,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
   // One simple command (its words).
   function simple(argv, piped) {
     const [name, ...args] = argv;
+    if (name.toUpperCase() === SECRET) { remote(); return; }   // (the note's word: not in COMMANDS, so never listed or completed)
     if (name.includes('/')) { runPath(name, args); return; }
     if (COMMANDS.includes(name)) { command(name, args, piped); return; }
     // On the PATH (/bin is all builtins): /opt/radar.
@@ -585,7 +610,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
       else groups[groups.length - 1].push(t);
     }
     for (const g of groups) {
-      if (run) break;   // a program took over: the rest of the line is dropped
+      if (run || pic) break;   // a program (or the picture) took over: the rest of the line is dropped
       if (!g.length) continue;
       const redir = g.findIndex((t) => t.op === '>' || t.op === '>>');
       if (redir >= 0) {
@@ -600,7 +625,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
       let piped = null;
       for (let i = 0; i < stages.length; i++) {
         if (i < stages.length - 1) { sink = []; simple(stages[i], piped); piped = sink; sink = null; } else simple(stages[i], piped);
-        if (run) break;   // a program took over: the rest of the pipe is dropped too
+        if (run || pic) break;   // a program took over: the rest of the pipe is dropped too
       }
     }
   }
@@ -670,12 +695,12 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
   }
 
   // A key (a KeyboardEvent-like { key, code, ctrlKey, metaKey, altKey, shiftKey }). Returns the sound to play:
-  // 'key', 'keyEnter' or null. While a program runs every key is ignored (but still clicks).
+  // 'key', 'keyEnter' or null. While a program runs, or a picture has the tube, every key is ignored (but still clicks).
   function key(e) {
     const k = e.key;
     const ctrl = (e.ctrlKey || e.metaKey) && !e.altKey;
     const sound = k === 'Enter' ? 'keyEnter' : /^(Shift|Control|Alt|Meta|CapsLock)$/.test(k) ? null : 'key';
-    if (run) return sound;
+    if (run || pic) return sound;
     if (k !== 'PageUp' && k !== 'PageDown' && sound && scroll) { scroll = 0; touch(); }
     if (k !== 'Tab') lastTab = null;
     if (ctrl) {
@@ -719,7 +744,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
 
   // Runs a line as if typed and Enter pressed (console / tests). Returns the output lines' text.
   function exec(line) {
-    if (run) return [];
+    if (run || pic) return [];
     buf = String(line); cur = buf.length;
     const n0 = shell.pushed;
     submit();
@@ -812,7 +837,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
     const vr = [];
     for (const l of lines) wrapLine(l, vr, !l.hard);
     inputRow0 = vr.length;
-    if (!run) {
+    if (!run && !pic) {
       const segs = promptSegs();
       let t = '', a = [];
       for (const [s, at] of segs) { t += s; for (let i = 0; i < s.length; i++) a.push(at); }
@@ -828,7 +853,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
   function screen() {
     const vr = visualRows();
     let curRow, curCol;
-    if (run) {
+    if (run || pic) {
       const last = vr[vr.length - 1];
       curRow = vr.length - 1; curCol = last ? last.t.length : 0;
       if (curCol >= cols) { vr.push({ t: '', a: [] }); curRow++; curCol = 0; }
@@ -851,7 +876,7 @@ export function createShell({ state = () => ({ ran: false, cwd: HOME }), cols = 
     outText(textOf(lookup('/etc/motd', '/').node));
     lines[0].a = BRIGHT | BOLD;
     out('');
-    buf = ''; cur = 0; run = null; scroll = 0; histIdx = history.length;
+    buf = ''; cur = 0; run = null; pic = null; scroll = 0; histIdx = history.length;
     touch();
   }
   reset();

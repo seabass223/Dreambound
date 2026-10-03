@@ -16,6 +16,135 @@ const LEVEL = {
   thunder: 0.86, shaftSwell: 0.38, buzz: 0.55, buzzWet: 0.3,
 };
 
+// The elevator doors: how long their leaves take to travel (DOOR_TIME in props/elevator.js: sfx_doorOpen and
+// sfx_doorClose land their stops on it, unless the caller passes its own as opt.dur), and their output level.
+const DOOR_TRAVEL = 1.7;
+const DOOR_LEVEL = 1;
+
+// Birdsong (AudioEngine.bird / birdPhrase). Each kind is a species with a song of its own: `make()` is one bird's own
+// voice (its pitch, pace and repertoire, kept for the whole of its bout), `song(b)` its next phrase as syllables
+// [start (s), length (s), f0, f1 (Hz), level, { m: a pitch passed through on the way (at 45 %), v: [vibrato or buzz
+// rate (Hz), depth as a share of the pitch], n: noise in a band round the pitch, a / r: attack and release (s) }],
+// none overlapping. wave: its harmonics (birdWave); vol: its loudness; phrases: how many it sings from one perch, with
+// `rest` seconds between them; w: how likely it is to be the next singer [with the sun high, with it low].
+const rand = (a, b) => a + Math.random() * (b - a);
+const BIRDS = [
+  { // Two or three clear, slow whistles stepping down, each with a faint quaver and a breath in it (a mountain
+    // chickadee's, a golden-crowned sparrow's).
+    name: 'whistle', wave: 'pure', vol: 0.65, phrases: [3, 6], rest: [4, 9], w: [1, 0.8],
+    make: () => ({ f: rand(3300, 4300), n: Math.random() < 0.55 ? 3 : 2, step: rand(0.8, 0.9), k: rand(0.9, 1.12), q: rand(20, 30) }),
+    song: (b) => {
+      const s = [];
+      for (let i = 0, at = 0; i < b.n; i++) {
+        const f = b.f * Math.pow(b.step, i), d = (i ? rand(0.3, 0.38) : rand(0.36, 0.46)) / b.k;
+        s.push([at, d, f * 0.985, f * 0.976, 1 - i * 0.12, { m: f * 1.012, v: [b.q, 0.004], n: 0.03, a: 0.05, r: 0.11 }]);
+        at += d + rand(0.07, 0.13);
+      }
+      return s;
+    } },
+  { // A carol (a robin's): liquid two- and three-syllable words from the bird's own handful of rising, falling, arched
+    // and dipping notes, some of them burry, strung together in a different order every time.
+    name: 'carol', wave: 'soft', vol: 1, phrases: [3, 5], rest: [2.5, 6], w: [0.9, 1.4],
+    make: () => {
+      const f = rand(2300, 3100), notes = [];
+      for (let i = 0, n = 5 + Math.floor(Math.random() * 3); i < n; i++) {
+        const c = f * rand(0.8, 1.3), w = rand(0.1, 0.24), kind = Math.floor(Math.random() * 4);
+        notes.push([rand(0.09, 0.16), c * (kind % 2 ? 1 + w : 1 - w), kind > 1 ? c * (kind % 2 ? 1 - w : 1 + w) : 0,
+          c * (kind === 0 ? 1 + w : kind === 1 ? 1 - w : kind === 2 ? 1 - 0.6 * w : 1 + 0.5 * w),
+          Math.random() < 0.35 ? [rand(36, 52), rand(0.02, 0.04)] : null]);
+      }
+      return { notes, k: rand(0.9, 1.12), last: -1 };
+    },
+    song: (b) => {
+      const s = [];
+      for (let w = 0, words = 3 + Math.floor(Math.random() * 3), at = 0; w < words; w++) {
+        for (let i = 0, n = 2 + Math.floor(Math.random() * 2); i < n; i++) {
+          let j; do j = Math.floor(Math.random() * b.notes.length); while (j === b.last);
+          b.last = j;
+          const [d, f0, m, f1, v] = b.notes[j];
+          s.push([at, d / b.k, f0, f1, rand(0.7, 1), { m, v, a: 0.012, r: d * 0.45 }]);
+          at += (d + rand(0.03, 0.07)) / b.k;
+        }
+        at += rand(0.15, 0.3) / b.k;
+      }
+      return s;
+    } },
+  { // A trill: one quick slurred note over and over, even and dry and slowing a touch (a junco's), or starting slowly
+    // and running together like a dropped ball coming to rest (a wrentit's).
+    name: 'trill', wave: 'soft', vol: 0.7, phrases: [3, 5], rest: [4.5, 9], w: [1, 0.7],
+    make: () => ({ f: rand(3900, 5400), rate: rand(11, 17), len: rand(1.1, 1.9), bounce: Math.random() < 0.4, up: Math.random() < 0.3 }),
+    song: (b) => {
+      const s = [];
+      if (b.bounce) {
+        const f = b.f * 0.78;
+        for (let i = 0, at = 0, gap = rand(0.28, 0.36); i < 20 && at < 2.4; i++) {
+          const d = Math.min(0.11, gap * 0.62);
+          s.push([at, d, f * 1.1, f * 0.9, 0.55 + 0.45 * Math.min(1, i / 5), { a: 0.008, r: d * 0.5 }]);
+          at += gap; gap = Math.max(0.058, gap * rand(0.8, 0.86));
+        }
+      } else {
+        const n = Math.round(b.len * rand(0.85, 1.15) * b.rate);
+        for (let i = 0, at = 0; i < n; i++) {
+          const u = i / (n - 1), per = (0.95 + 0.1 * u) / b.rate, lv = Math.min(1, 0.35 + u * 3) * (u > 0.85 ? 1 - (u - 0.85) * 2.5 : 1);
+          s.push([at, per * 0.62, b.f * (b.up ? 0.86 : 1.17), b.f * (b.up ? 1.15 : 0.9), lv, { m: b.up ? 0 : b.f * 0.84, a: 0.006, r: per * 0.25 }]);
+          at += per;
+        }
+      }
+      return s;
+    } },
+  { // Contact calls from the brush: a thin high "tsip" or a lower, rougher "chek", singly or a loose few.
+    name: 'chip', wave: 'pure', vol: 0.5, phrases: [4, 9], rest: [1, 4], w: [1.2, 1],
+    make: () => ({ f: rand(5600, 7600), low: Math.random() < 0.35 }),
+    song: (b) => {
+      const s = [];
+      for (let i = 0, n = 1 + Math.floor(Math.random() * Math.random() * 4), at = 0; i < n; i++, at += rand(0.16, 0.5)) {
+        if (b.low) s.push([at, rand(0.035, 0.05), b.f * 0.62, b.f * 0.42, rand(0.7, 1), { m: b.f * 0.66, n: 0.3, a: 0.004, r: 0.02 }]);
+        else s.push([at, rand(0.02, 0.03), b.f * 1.22, b.f * 0.8, rand(0.7, 1), { n: 0.2, a: 0.003, r: 0.012 }]);
+      }
+      return s;
+    } },
+  { // A dove's coo, low and soft: a short note, a long one swelling up and over, then three plain ones.
+    name: 'dove', wave: 'pure', vol: 0.8, phrases: [2, 3], rest: [5, 11], w: [0.45, 0.9],
+    make: () => ({ f: rand(430, 520), k: rand(0.92, 1.08) }),
+    song: (b) => {
+      const f = b.f, k = b.k, o = { v: [rand(4.5, 6), 0.006], n: 0.05, a: 0.07, r: 0.16 };
+      const s = [[0, 0.2 / k, f * 0.97, f, 0.5, o], [0.23 / k, 0.52 / k, f, f * 1.03, 1, { ...o, m: f * 1.3 }]];
+      for (let i = 0, at = 1.05 / k; i < 3; i++, at += rand(0.58, 0.66) / k) s.push([at, rand(0.38, 0.44) / k, f * 1.01, f * 0.97, 0.8 - i * 0.08, o]);
+      return s;
+    } },
+  { // A thrush's flute: one long clear note, then a shimmering cascade climbing away from it and fading, each phrase
+    // pitched differently from the last.
+    name: 'flute', wave: 'pure', vol: 0.85, phrases: [3, 5], rest: [3.5, 8], w: [0.6, 1.5],
+    make: () => ({ f: rand(2200, 2700), last: -1, vib: rand(24, 32) }),
+    song: (b) => {
+      let i; do i = Math.floor(Math.random() * 4); while (i === b.last);
+      b.last = i;
+      const f = b.f * [1, 1.19, 1.41, 0.89][i], d0 = rand(0.36, 0.5), s = [[0, d0, f * 0.995, f, 0.8, { a: 0.09, r: 0.08 }]];
+      const steps = [1.5, 1.26, 1.68, 1.41, 1.78, 1.5, 1.89];
+      for (let j = 0, n = 4 + Math.floor(Math.random() * 3), at = d0 + rand(0.04, 0.08); j < n; j++) {
+        const c = f * steps[j] * rand(0.97, 1.03), d = rand(0.1, 0.15), up = j % 2 === 0;
+        s.push([at, d, c * (up ? 0.93 : 1.08), c * (up ? 1.08 : 0.93), 0.75 * Math.pow(0.86, j), { v: [b.vib, rand(0.05, 0.085)], a: 0.012, r: d * 0.45 }]);
+        at += d + rand(0.005, 0.03);
+      }
+      return s;
+    } },
+  { // A sparrow's song: two or three bright notes, a buzz, and a quick falling trill, sometimes with a last low note.
+    name: 'song', wave: 'soft', vol: 1, phrases: [3, 5], rest: [4.5, 9], w: [1, 1],
+    make: () => ({ f: rand(3000, 3900), intro: 2 + Math.floor(Math.random() * 2), buzz: rand(70, 115), n: 5 + Math.floor(Math.random() * 4), k: rand(0.9, 1.12) }),
+    song: (b) => {
+      const f = b.f, k = b.k, s = [];
+      let at = 0;
+      for (let i = 0; i < b.intro; i++, at += 0.2 / k) s.push([at, 0.1 / k, f * 1.03, f * 0.97, 0.85, { a: 0.008, r: 0.04 }]);
+      const bz = rand(0.3, 0.45) / k;
+      s.push([at += 0.03, bz, f * 1.36, f * 1.3, 0.6, { v: [b.buzz, 0.07], a: 0.02, r: 0.05 }]);
+      at += bz + 0.05;
+      for (let i = 0; i < b.n; i++, at += 0.068 / k) s.push([at, 0.045 / k, f * 1.2, f * 0.82, 0.8 * Math.pow(0.93, i), { a: 0.005, r: 0.02 }]);
+      if (Math.random() < 0.6) s.push([at + 0.03, 0.13, f * 0.74, f * 0.7, 0.5, { a: 0.015, r: 0.06 }]);
+      return s;
+    } },
+];
+const BIRD_LEVEL = 0.09;
+
 // In-place RBJ biquad over a Float32Array at `rate`: the filters of the sounds baked into buffers (the fire's grains,
 // the rain). type: 'bandpass' (constant peak), 'lowpass', 'highpass' or 'peaking' (dB: its gain).
 function biquad(x, type, f, Q, rate, dB = 0) {
@@ -43,6 +172,8 @@ export class AudioEngine {
     this.pending = [];
     this.gust = 0.4; this.gustTarget = 0.4; this.gustTimer = 0;
     this.birdTimer = 2; this.dripTimer = 2;
+    this.singers = [];     // the birds in song (bird())
+    this.sunRising = false;
     this.altDeg = 0;       // sun altitude, stored by update() for emitter ticks (frogs)
     this.zone = 'surface';
     this.listenerPos = new THREE.Vector3();
@@ -129,6 +260,10 @@ export class AudioEngine {
 
     this.buildWind();
     this.buildInsects();
+    // The birds' way out (bird()): held to the outdoors' share in update(), and shut while a storm is on.
+    this.birdBus = this.gain(1);
+    this.birdBus.connect(this.outdoor);
+    this.birdK = 1;
     this.buildCave();
     this.buildFeed();
     this.buildStorm();
@@ -1194,16 +1329,118 @@ export class AudioEngine {
     this.thud(o, s0 + d, 46, 0.55);
   }
 
-  sfx_doorOpen({ pos }, t) {
-    const o = this.out(pos, 3);
-    this.creak(o, t, 1.6, 85, 0.22);
-    this.creak(o, t + 0.1, 1.2, 190, 0.08);
-    const s = this.src(this.brown, false); const lp = this.filter('lowpass', 380); const g = this.gain(0);
-    s.connect(lp).connect(g).connect(o); this.env(g, t, 0.2, 0.35, 1.4); s.start(t); s.stop(t + 1.8);
-    this.thud(o, t + 1.62, 90, 0.4);
-  }
+  // The elevator's doors (props/elevator.js): two 44 mm stainless leaves hung on rollers from a head track, their feet
+  // in the sill's groove, drawn 0.7 m apart (or together) by the operator's motor and belt in DOOR_TRAVEL seconds and
+  // eased at both ends, so the whole run follows their speed (quickest half way): the rollers' rumble with the hollow
+  // leaves humming along, the bearings' rattle, the hiss of the guides and seals, the motor's whirr, and a tick each
+  // time a roller's worn spot comes round. Opening: the lock let go (a click, then the clunk of its hook lifting clear),
+  // the run, and the leaves coming to rest on their stops one just after the other, the hangers settling. Closing: the
+  // operator's relay and the belt taking up, the run (duller as the gap shuts), a breath of air pushed out from
+  // between the leaves, their rubber edges meeting in a heavy, damped double thud with the panels booming, and the lock
+  // dropping in behind. No two plays are quite alike.
+  sfx_doorOpen({ pos, dur = DOOR_TRAVEL }, t) { this.doors(pos, t, true, dur); }
 
-  sfx_doorClose(opt, t) { this.sfx_doorOpen(opt, t); }
+  sfx_doorClose({ pos, dur = DOOR_TRAVEL }, t) { this.doors(pos, t, false, dur); }
+
+  doors(pos, t, open, D = DOOR_TRAVEL) {
+    const ac = this.ctx;
+    const R = (a, b) => a + Math.random() * (b - a);
+    const te = t + D;
+    const o = this.gain(DOOR_LEVEL);
+    o.connect(this.out(pos, 3));
+    // ---- the run
+    const rum = this.src(this.brown), lum = this.gain(1), rg = this.gain(0), hg = this.gain(0);
+    rum.connect(this.filter('highpass', 60, 0)).connect(this.filter('lowpass', R(210, 260), 3)).connect(lum).connect(rg).connect(o);
+    rum.connect(this.filter('bandpass', R(118, 142), 5)).connect(hg).connect(o);
+    const lm = ac.createBufferSource(); lm.buffer = this.fireMod; lm.loop = true; lm.playbackRate.value = R(1.4, 2.1);
+    lm.connect(this.gain(0.3)).connect(lum.gain);
+    const rol = this.src(this.pink), rbp = this.filter('bandpass', 500, 1.2), ram = this.gain(0.7), rgn = this.gain(0);
+    const rm = ac.createBufferSource(); rm.buffer = this.fireMod; rm.loop = true; rm.playbackRate.value = R(9, 14);
+    rm.connect(this.gain(0.3)).connect(ram.gain);
+    rol.connect(rbp).connect(ram).connect(rgn).connect(o);
+    const sl = this.src(this.white), sbp = this.filter('bandpass', 3000, 0.7), sg = this.gain(0);
+    sl.connect(sbp).connect(sg).connect(o);
+    const mot = ac.createOscillator(); mot.type = 'sawtooth';
+    const wh = ac.createOscillator(); wh.type = 'triangle';
+    const mam = this.gain(0.75), mg = this.gain(0), wg = this.gain(0), mf = R(96, 116), wf = mf * R(5.6, 6.7);
+    rm.connect(this.gain(0.25)).connect(mam.gain);
+    mot.connect(this.filter('lowpass', 600, 0)).connect(mam).connect(mg).connect(o);
+    wh.connect(wg).connect(o);
+    for (let i = 0; i <= 16; i++) {
+      const u = i / 16, tt = t + u * D, at = i ? 'linearRampToValueAtTime' : 'setValueAtTime';
+      const v = Math.pow(4 * u * (1 - u), 1.15), m = Math.sqrt(4 * u * (1 - u)), gap = open ? u : 1 - u;
+      rg.gain[at](0.16 * v, tt);
+      hg.gain[at](0.16 * v, tt);
+      rbp.frequency[at](360 + 360 * v + 140 * gap, tt);
+      rgn.gain[at](0.88 * v, tt);
+      sbp.frequency[at](2100 + 1300 * v + 900 * gap, tt);
+      sg.gain[at](0.09 * v * (0.55 + 0.45 * gap), tt);
+      mot.frequency[at](mf * (0.5 + 0.5 * m), tt);
+      wh.frequency[at](wf * (0.5 + 0.5 * m), tt);
+      mg.gain[at](0.08 * m, tt);
+      wg.gain[at](0.018 * m, tt);
+    }
+    [mot, wh].forEach((x) => { x.start(t); x.stop(te + 0.05); });
+    [rum, rol, sl].forEach((x) => { x.start(t, Math.random() * 3); x.stop(te + 0.05); });
+    [lm, rm].forEach((x) => { x.start(t, Math.random() * 60); x.stop(te + 0.05); });
+    // The hangers' rollers: a tick as each one's worn spot comes round, so they bunch up half way and are louder there.
+    const tk = this.gain(1);
+    tk.connect(this.filter('lowpass', 2600, 0)).connect(o);
+    for (let leaf = 0; leaf < 2; leaf++) {
+      const turns = R(2.7, 3.7);
+      for (let k = Math.random(); k < turns; k++) {
+        const u = 0.5 - Math.sin(Math.asin(1 - 2 * k / turns) / 3), v = 4 * u * (1 - u);
+        if (v < 0.3) continue;
+        this.burst(tk, t + u * D, { f: R(650, 1250), q: 2, peak: 0.16 * v * R(0.6, 1), a: 0.0008, d: 0.02 });
+        this.grain(tk, t + u * D, 'tick', R(0.45, 0.7), 0.3 * v);
+      }
+    }
+    if (Math.random() < 0.45) this.creak(o, t + R(0.3, 0.5) * D, D * R(0.18, 0.28), R(210, 290), 0.022);
+    if (open) {
+      // The lock: its click, and the clunk of the hook lifting off its keeper.
+      this.burst(o, t, { f: R(2400, 3000), q: 1.6, peak: 0.3, a: 0.0006, d: 0.012 });
+      this.ring(o, t, R(1250, 1450), [[1, 0.5, 0.05], [1.62, 0.3, 0.035], [2.47, 0.16, 0.025]], 0.1);
+      const tc = t + R(0.05, 0.075), k = R(0.92, 1.08);
+      this.thud(o, tc, 98 * k, 0.28);
+      this.burst(o, tc, { f: R(700, 900), q: 1.2, peak: 0.3, a: 0.0008, d: 0.03 });
+      this.ring(o, tc, 320 * k, [[1, 0.5, 0.16], [2.31, 0.3, 0.11], [3.9, 0.16, 0.07], [5.6, 0.08, 0.05]], 0.14);
+      // The stops: each leaf's soft bump, the leaves' steel answering, and the hangers settling.
+      for (const dt of [0, R(0.025, 0.055)]) {
+        this.thud(o, te + dt, R(64, 76), 0.15);
+        this.burst(o, te + dt, { buf: this.brown, type: 'lowpass', f: 320, q: 0.6, peak: 0.22, a: 0.004, d: 0.12 });
+      }
+      this.ring(o, te, R(116, 132), [[1, 0.5, 0.3], [2.2, 0.28, 0.2], [3.6, 0.14, 0.12]], 0.085);
+      for (let n = 1 + Math.floor(Math.random() * 2), tt = te + R(0.07, 0.11); n > 0; n--, tt += R(0.05, 0.09)) {
+        this.burst(o, tt, { f: R(1500, 2200), q: 2.5, peak: 0.07, a: 0.0006, d: 0.012 });
+      }
+    } else {
+      // The operator's relay, and the belt taking up the leaves.
+      this.burst(o, t, { f: R(2800, 3400), q: 2, peak: 0.18, a: 0.0005, d: 0.01 });
+      this.ring(o, t, R(1700, 2000), [[1, 0.5, 0.03], [1.5, 0.3, 0.02]], 0.05);
+      this.thud(o, t + R(0.03, 0.05), R(108, 124), 0.14);
+      // The air between the leaves, pushed out as they come together.
+      const pf = this.src(this.pink), pb = this.filter('bandpass', 450, 0.9), pg = this.gain(0), tp = te - R(0.3, 0.36);
+      pb.frequency.setValueAtTime(R(380, 460), tp); pb.frequency.exponentialRampToValueAtTime(R(900, 1100), te);
+      pf.connect(pb).connect(pg).connect(o);
+      pg.gain.setValueAtTime(0.0001, tp); pg.gain.exponentialRampToValueAtTime(0.4, te - 0.02); pg.gain.exponentialRampToValueAtTime(0.0001, te + 0.03);
+      pf.start(tp, Math.random() * 3); pf.stop(te + 0.06);
+      // The meeting: rubber on rubber with the steel behind it, the panels booming (damped), and the second leaf home.
+      const k = R(0.93, 1.07);
+      this.thud(o, te, 60 * k, 0.3);
+      this.burst(o, te, { buf: this.brown, type: 'lowpass', f: 240, q: 0.6, peak: 0.32, a: 0.003, d: 0.2 });
+      this.burst(o, te, { f: R(420, 560), q: 1, peak: 0.22, a: 0.001, d: 0.05 });
+      this.ring(o, te, 98 * k, [[1, 0.5, 0.4], [2.24, 0.3, 0.28], [3.7, 0.16, 0.18], [5.4, 0.07, 0.1]], 0.17);
+      const t2 = te + R(0.05, 0.075);
+      this.thud(o, t2, 84 * k, 0.2);
+      this.burst(o, t2, { buf: this.brown, type: 'lowpass', f: 300, q: 0.6, peak: 0.3, a: 0.003, d: 0.12 });
+      // The lock dropping in: a sharp tick, the hook's little ring, and its knock on the keeper.
+      const tl = te + R(0.115, 0.15);
+      this.burst(o, tl, { f: R(2600, 3300), q: 1.8, peak: 0.28, a: 0.0005, d: 0.012 });
+      this.ring(o, tl, R(1500, 1750), [[1, 0.5, 0.06], [1.47, 0.3, 0.045], [2.6, 0.15, 0.03]], 0.09);
+      this.thud(o, tl, R(140, 160), 0.12);
+      this.ring(o, tl, R(380, 430), [[1, 0.5, 0.1], [2.4, 0.25, 0.07]], 0.07);
+    }
+  }
 
   sfx_hingeOpen({ pos }, t) {
     const o = this.out(pos, 2.5);
@@ -1248,7 +1485,7 @@ export class AudioEngine {
 
   sfx_step({ pos, surface = 'grass', run = false }, t) {
     const o = this.near;   // your own feet: never faded
-    const v = run ? 1.25 : 1;
+    const v = run ? 0.62 : 1;   // running: lighter on its feet (more steps a minute, and louder each, was wearing)
     const noise = (freq, q, peak, dur, buf = this.white, at = t) => {
       const s = this.src(buf, false, 0.8 + Math.random() * 0.4); const bp = this.filter('bandpass', freq * (0.85 + Math.random() * 0.3), q); const g = this.gain(0);
       s.connect(bp).connect(g).connect(o); this.env(g, at, 0.006, peak * v, dur); s.start(at); s.stop(at + dur + 0.1);
@@ -2251,6 +2488,9 @@ export class AudioEngine {
     this.outdoor.gain.setTargetAtTime(og * Math.pow(0.05 / og, sealed), now, 0.35);
     this.outdoorLP.frequency.setTargetAtTime(olp * Math.pow(320 / olp, sealed), now, 0.35);
     const muted = env.muted ?? 0;
+    // Whether the sun is climbing (for the dawn chorus), from one frame to the next; a jump of the clock says nothing.
+    const climb = (env.altDeg ?? 0) - this.altDeg;
+    if (Math.abs(climb) > 1e-7 && Math.abs(climb) < 0.5) this.sunRising = climb > 0;
     this.altDeg = env.altDeg ?? 0;
     const surf = under ? 0 : 1 - muted;
     // The storm (setStorm), eased. At 0 everything below is the plain wind.
@@ -2290,12 +2530,30 @@ export class AudioEngine {
     const day = clamp((env.altDeg - 2) / 15, 0, 1);
     this.dayBugs.gain.setTargetAtTime(0.012 * day * surf, now, 1);
 
-    // Birds: busiest in daylight, thinning out through dusk.
-    const birdiness = clamp((env.altDeg + 3) / 10, 0, 1) * surf;
+    // Birds: busiest in daylight, most of all in the dawn chorus (the sun climbing from the horizon to about 12 deg),
+    // thinning out through dusk, silent underground and while a storm is on. A new singer takes a perch now and then
+    // (bird()), up to two at once by day and three at dawn (a rival answering makes one more), with lulls between;
+    // each one in song gives its next phrase as it comes due, and leaves once its last has died away.
+    const calm = clamp(1 - storm * 4, 0, 1);
+    const dawn = this.sunRising ? clamp((env.altDeg + 2) / 4, 0, 1) * clamp((14 - env.altDeg) / 8, 0, 1) : 0;
+    const birdiness = Math.min(1.6, clamp((env.altDeg + 3) / 10, 0, 1) + 0.9 * dawn) * surf * calm;
+    if (surf * calm !== this.birdK) { this.birdK = surf * calm; this.birdBus.gain.setTargetAtTime(this.birdK, now, 0.5); }
     this.birdTimer -= dt * (0.3 + birdiness);
     if (this.birdTimer <= 0) {
-      this.birdTimer = 1.2 + Math.random() * 5;
-      if (birdiness > 0.05 && Math.random() < birdiness + 0.1) this.bird(env.ground, birdiness);
+      this.birdTimer = 4 + 24 * Math.random() ** 2;
+      if (birdiness > 0.05 && this.singers.length < 1 + Math.round(birdiness * 1.25) && Math.random() < birdiness + 0.1) this.bird(env.ground, birdiness);
+    }
+    for (let i = this.singers.length - 1; i >= 0; i--) {
+      const s = this.singers[i];
+      if (birdiness <= 0.05 || s.pos.distanceToSquared(p) > 8100) s.left = 0;   // (or left 90 m behind)
+      if (s.left > 0) {
+        if (now - s.next > 2) s.next = now + Math.random() * 3;   // (the game was held up: don't all start at once)
+        else if (now >= s.next) this.birdPhrase(s, now);
+      } else if (now > s.end) {
+        s.out.disconnect();
+        this.singers[i] = this.singers[this.singers.length - 1];
+        this.singers.pop();
+      }
     }
 
     // Cave bed + drips + reverb amount. The lounge under the Tower (env.room) is a dry, quiet room: no drips.
@@ -2344,41 +2602,106 @@ export class AudioEngine {
     this.howlPan.pan.setTargetAtTime(Math.sin(now * 0.11 + 1) * 0.6, now, 1);
   }
 
-  bird(center, amt) {
-    const ac = this.ctx, t = this.now() + 0.05;
-    const a = Math.random() * Math.PI * 2, d = 12 + Math.random() * 30;
-    const pos = new THREE.Vector3(center.x + Math.cos(a) * d, center.y + 4 + Math.random() * 8, center.z + Math.sin(a) * d);
-    const o = this.panner(pos, 6, 1);
-    o.connect(this.outdoor);
-    const vol = 0.07 * (0.5 + amt * 0.5);
-    const kind = Math.floor(Math.random() * 4);
-    const note = (start, f0, f1, dur, level = 1, fm = 0) => {
-      const osc = ac.createOscillator();
-      osc.frequency.setValueAtTime(f0, start);
-      osc.frequency.exponentialRampToValueAtTime(f1, start + dur);
-      if (fm) {
-        const m = ac.createOscillator(); m.frequency.value = fm; const mg = this.gain(f0 * 0.08);
-        m.connect(mg).connect(osc.frequency); m.start(start); m.stop(start + dur + 0.02);
-      }
-      const g = this.gain(0);
-      osc.connect(g).connect(o);
-      g.gain.setValueAtTime(0.0001, start);
-      g.gain.exponentialRampToValueAtTime(vol * level, start + Math.min(0.02, dur * 0.3));
-      g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-      osc.start(start); osc.stop(start + dur + 0.02);
-    };
-    if (kind === 0) { // whistled glides
-      const n = 2 + Math.floor(Math.random() * 3), f = 2600 + Math.random() * 1200;
-      for (let i = 0; i < n; i++) note(t + i * 0.32, f * (1 + i * 0.05), f * 0.8, 0.24);
-    } else if (kind === 1) { // trill
-      const n = 6 + Math.floor(Math.random() * 10), f = 3800 + Math.random() * 1600;
-      for (let i = 0; i < n; i++) note(t + i * 0.055, f, f * 0.85, 0.04, 0.7, 90);
-    } else if (kind === 2) { // two-note call
-      const f = 3500 + Math.random() * 800;
-      note(t, f, f * 1.02, 0.18); note(t + 0.25, f * 0.8, f * 0.78, 0.26);
-    } else { // chips
-      const n = 2 + Math.floor(Math.random() * 4);
-      for (let i = 0; i < n; i++) note(t + i * (0.12 + Math.random() * 0.2), 5200 + Math.random() * 1500, 4200, 0.05, 0.8);
+  // A bird begins a bout of song: one of BIRDS takes a perch somewhere round `center` and keeps it for its few phrases
+  // (update() calls birdPhrase() as each comes due), heard from there: quieter, duller and more smeared by the trees
+  // the farther off it is. Now and then a rival of its kind answers from another perch, once it has heard the first
+  // phrase out. amt: the birdiness (0..1.6); like: the singer answered.
+  bird(center, amt, like = null) {
+    const now = this.now(), low = clamp(1 - this.altDeg / 20, 0, 1);
+    let kind = like?.kind;
+    if (!kind) {
+      const wt = (k) => k.w[0] + (k.w[1] - k.w[0]) * low;
+      let r = Math.random() * BIRDS.reduce((a, k) => a + wt(k), 0);
+      kind = BIRDS.find((k) => (r -= wt(k)) <= 0) ?? BIRDS[0];
     }
+    const a = Math.random() * Math.PI * 2, d = like ? rand(24, 58) : rand(9, 50);
+    const pos = new THREE.Vector3(center.x + Math.cos(a) * d, center.y + rand(3, 12), center.z + Math.sin(a) * d);
+    const out = this.panner(pos, 6, 1), far = clamp((d - 9) / 45, 0, 1);
+    const inp = this.gain(BIRD_LEVEL * kind.vol * (0.6 + 0.4 * Math.min(1, amt)));
+    inp.connect(this.filter('lowpass', 15000 / (1 + d / 24), 0)).connect(out);
+    const echo = this.gain(0.4 + far);
+    echo.connect(this.filter('lowpass', 7000 / (1 + d / 24), 0)).connect(inp);
+    out.connect(this.birdBus);
+    const s = { kind, b: kind.make(), pos, in: inp, echo, out, far, left: Math.round(rand(kind.phrases[0], kind.phrases[1])), next: now, end: now };
+    this.singers.push(s);
+    if (like) s.next = like.end + rand(0.2, 1.4);
+    else {
+      this.birdPhrase(s, now);
+      if (kind.name !== 'chip' && this.singers.length < 5 && Math.random() < 0.2) this.bird(center, amt, s);
+    }
+  }
+
+  // One phrase of a singer's song, as a single voice: an oscillator whose pitch and level are drawn syllable by
+  // syllable (each its own sweep, attack and decay, a little off the last time), the kind's wave giving it harmonics;
+  // a second oscillator shakes the pitch of the burry and buzzing notes, and noise in a band following the pitch
+  // roughens the chips and breathes in the coos. From a distance a second, fainter and duller voice sings it again a
+  // moment behind, each note trailing off into the gap after it: the trees' answer.
+  birdPhrase(s, now) {
+    const ac = this.ctx, t = now + 0.05, det = rand(0.985, 1.015), song = s.kind.song(s.b);
+    const syl = song.map(([at, d, f0, f1, lv, o = {}], i) => {
+      const j = det * rand(0.992, 1.008), gap = i + 1 < song.length ? song[i + 1][0] - at - d : 0.16;
+      return { at, d, f0: f0 * j, f1: f1 * j, m: (o.m || 0) * j, lv: lv * rand(0.85, 1.05), v: o.v, n: o.n || 0,
+        a: Math.min(o.a ?? 0.01, d * 0.4), r: Math.min(o.r ?? d * 0.4, d * 0.55), tail: Math.min(0.14, d * 0.8, gap - 0.005) };
+    });
+    const last = syl[syl.length - 1], len = last.at + last.d + 0.25;
+    const vib = syl.some((x) => x.v) ? ac.createOscillator() : null;
+    const noise = syl.some((x) => x.n) ? this.src(this.white) : null;
+    for (const delay of s.far ? [0, rand(0.05, 0.09)] : [0]) {
+      const osc = ac.createOscillator(), g = this.gain(0), vg = vib && this.gain(0);
+      osc.setPeriodicWave(this.birdWave(s.kind.wave));
+      osc.connect(g).connect(delay ? s.echo : s.in);
+      if (vg) vib.connect(vg).connect(osc.frequency);
+      const nb = !delay && noise ? this.filter('bandpass', 1000, 5) : null, ng = nb && this.gain(0);
+      if (nb) noise.connect(nb).connect(ng).connect(s.in);
+      for (const x of syl) {
+        const a = t + delay + x.at, e = a + x.d;
+        for (const p of nb ? [osc.frequency, nb.frequency] : [osc.frequency]) {
+          p.setValueAtTime(x.f0, a);
+          if (x.m) p.exponentialRampToValueAtTime(x.m, a + x.d * 0.45);
+          p.exponentialRampToValueAtTime(x.f1, e);
+        }
+        g.gain.setValueAtTime(0, a);
+        if (!delay) {
+          g.gain.linearRampToValueAtTime(x.lv, a + x.a);
+          g.gain.linearRampToValueAtTime(x.lv * 0.7, e - x.r);
+          g.gain.linearRampToValueAtTime(0, e);
+        } else if (x.tail > 0.004) {
+          g.gain.linearRampToValueAtTime(x.lv * 0.2, a + Math.min(x.a + 0.012, x.d * 0.8));
+          g.gain.linearRampToValueAtTime(x.lv * 0.1, e);
+          g.gain.linearRampToValueAtTime(0, e + x.tail);
+        } else {
+          g.gain.linearRampToValueAtTime(x.lv * 0.2, a + Math.min(x.a + 0.012, x.d * 0.8));
+          g.gain.linearRampToValueAtTime(0, e);
+        }
+        if (vg) {
+          if (x.v && !delay) vib.frequency.setValueAtTime(x.v[0], a);
+          vg.gain.setValueAtTime(x.v ? x.v[1] * (x.f0 + x.f1) / 2 : 0, a);
+        }
+        if (ng) {
+          ng.gain.setValueAtTime(0, a);
+          ng.gain.linearRampToValueAtTime(x.n * x.lv * 6 * Math.sqrt(12000 / (x.f0 + x.f1)), a + x.a);
+          ng.gain.linearRampToValueAtTime(0, e);
+        }
+      }
+      osc.start(t + delay); osc.stop(t + delay + len);
+    }
+    if (vib) { vib.start(t); vib.stop(t + len + 0.1); }
+    if (noise) { noise.start(t, Math.random() * 3); noise.stop(t + len); }
+    s.end = t + len + 0.1;
+    s.next = t + len - 0.25 + rand(s.kind.rest[0], s.kind.rest[1]);
+    s.left--;
+  }
+
+  // A songbird's tone: a sine with a little of its second and third harmonics (pure), or more of them (soft). Made
+  // once each per context.
+  birdWave(name) {
+    const made = (this._birdWaves ||= {});
+    if (!made[name]) {
+      const h = name === 'pure' ? [1, 0.05, 0.015] : [1, 0.17, 0.06, 0.02];
+      const real = new Float32Array(h.length + 1), imag = new Float32Array(h.length + 1);
+      h.forEach((v, i) => { imag[i + 1] = v; });
+      made[name] = this.ctx.createPeriodicWave(real, imag);
+    }
+    return made[name];
   }
 }

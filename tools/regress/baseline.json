@@ -6848,7 +6848,7 @@
     "sha": {
      "position": "a97ed3b50cc7bf95aaa8abfcbe1b3de9",
      "index": "ba90b8d9062da66a6c86f479937b242c",
-     "color": "a25077d02049c99bffd34782ef6d24e9",
+     "color": "bea9a09d4fd30cab1907d7aee8a5af6b",
      "uv": "70bfb9554ec00eec30295be0e8c0965a",
      "normal": "7ff160eea0d03b0b088cffaa4a2566f5"
     }
@@ -7309,14 +7309,14 @@
     {
      "name": "mountain-props",
      "material": "trail-pebbles",
-     "verts": 5115,
-     "position": "0eaeeb91d012f9d52ac1fb2ca9ad72fc"
+     "verts": 5590,
+     "position": "03267bb532974990779a820c1677231a"
     },
     {
      "name": "mountain-props",
      "material": "trail-timber",
-     "verts": 11016,
-     "position": "4d0b7bf29b3a51b8f2c557b369e2cac3"
+     "verts": 12072,
+     "position": "1d952274ecc7a7efc226d32afaed9e39"
     },
     {
      "name": "mountain-props",
@@ -7339,8 +7339,8 @@
     {
      "name": "mountain-props",
      "material": "far",
-     "verts": 87617,
-     "position": "d63ac7a511f674de032dec0f706d1913"
+     "verts": 89148,
+     "position": "075f7858f1f18335aaad898158a7b501"
     }
    ],
    "edgeR": "fdbe7b5b5bdd65bde192ff026c9a5797",
@@ -11152,11 +11152,26 @@
   }
  },
  "mountain": {
-  "meadow": 6139,
+  "meadow": 6474,
   "trail": {
    "n": 442,
    "total": 220.27379957845173,
    "sha": "4995f111b11991eadd0ab38caeb70a8a"
+  },
+  "spur": {
+   "n": 93,
+   "total": 45.80600940869269,
+   "sha": "8dbafce6a772e9d8a4fabd9dc2600210",
+   "ends": {
+    "boards": 29.306009408692688,
+    "narrow": 29.806009408692688,
+    "tread": 34.80600940869269,
+    "earth": 41.30600940869269
+   },
+   "patches": {
+    "n": 5,
+    "sha": "66cc8a7bf07a404343347a97cb28aa80"
+   }
   },
   "observatory": {
    "center": [
@@ -11504,11 +11519,11 @@
      "sp": "352c12389b521d117e7e21a5d9e98710"
     },
     "meadow": {
-     "n": 6139,
-     "xz": "ffc0c878e6192d6fddb0353a3c2dd9f5",
-     "y": "cd8334f91c4adc8ba350a035686a6e99",
-     "s": "1fcdf59a52309b677cb03ed0af387519",
-     "sp": "1fcd5eebce50133b7bfe06b394676329"
+     "n": 6474,
+     "xz": "d98e109c0db8fb60f94ac7d880eb4fe2",
+     "y": "f5ce49adeacc54831e50c893022f79c2",
+     "s": "5f1126cac19b7dac2406962d04841fd2",
+     "sp": "3e03dee371ffbb5040852238bbdc4797"
     },
     "pebble": {
      "n": 90,
@@ -11525,11 +11540,11 @@
      "sp": "426bbd67be9391d50fddc6f8c7dd69f9"
     },
     "flower": {
-     "n": 221,
-     "xz": "e2d0fc0e46ce97059590a35dd0d0e7bd",
-     "y": "b46240b0bf1947aa1755b8e518aa5eac",
-     "s": "71b4965fb4512d787d8b612bf248bc68",
-     "sp": "8374de41a0b4170666f567276016f599"
+     "n": 283,
+     "xz": "7c4025ce50bab4a4781e7434ccfa926c",
+     "y": "d57e7ea644de85703a9c1486fb850e0f",
+     "s": "3439fe6bfcc27fd44e3fdd48db887a8c",
+     "sp": "b2f33a456853e212cee3ebae29c769c1"
     }
    }
   },
@@ -11678,7 +11693,7 @@
  ],
  "lod": {
   "entries": 173,
-  "instanced": 19,
+  "instanced": 23,
   "cliffRegistered": false,
   "names": "f90abc7f6aa1c218c87f973b0901d3b5"
  },
@@ -11687,5 +11702,5 @@
   "missing": [],
   "unrecordable": []
  },
- "tree": "90df2826e89f1dd1"
+ "tree": "f982b7414753808c"
 }

@@ -157,6 +157,17 @@ export class Physics {
     }
     return best;
   }
+
+  // Whether a hillside lies under pos, however far down and whatever is nearer (a path's own collider laid over it):
+  // anything of a collider with a walkable slope, where its slope rule applies (the Mountain's cap inside its rim).
+  hillsideBelow(pos, zone) {
+    _ray.origin.set(pos.x, pos.y + 0.5, pos.z);
+    _ray.direction.set(0, -1, 0);
+    for (const c of this.active(pos, zone)) {
+      if (this.limitAt(c, pos.x, pos.z) !== undefined && c.bvh.raycastFirst(_ray, THREE.DoubleSide)) return true;
+    }
+    return false;
+  }
 }
 
 // Whether a triangle is a slope too steep to walk on a collider whose walkable limit is lim (its normal turned

@@ -15,6 +15,11 @@ import { Flowers } from './flowers.js';
 // down), so the steps climb without a bump and nothing snags on a tie; along the path it climbs at 28 degrees at
 // the steepest. The hillsides round it are steeper than the Mountain's walkable slope (PLAYER.maxSlope), so the path
 // is the way up.
+//
+// A spur of the same path leaves it at the shed door and goes the other way round the mountain's foot, toward the mine,
+// for a little way. It is the same tread, timber and verges, from the same functions, but nobody keeps it up: it is laid
+// on the level ground as it is (no bed cut, no collision of its own: you walk on the ground under it), and it peters
+// out (layoutTrail's `fade`): the edging stops, the tread narrows and breaks into patches, the worn earth fades.
 
 export const TRAIL = {
   width: 1.4,             // the pebble tread, edge to edge
@@ -27,6 +32,7 @@ export const TRAIL = {
   tieW: 0.2, tieH: 0.34,  // a tie's width along the path, and its depth (most of it in the ground)
   tile: 1.1,              // metres per pebble texture tile (mapped in world x/z, so it has no seams)
 };
+const BED = 0.04;         // the walking line over the bed cut for it (carve), or over the ground a path is laid on
 
 // ---------------------------------------------------------------- layout
 // legs: [[theta, r, turn?], ...] round the summit (sx, sz), from the foot up; theta is absolute (atan2(z, x)).
@@ -35,7 +41,11 @@ export const TRAIL = {
 // legs (the shed door). ground(x, z): the natural ground height (the hillside without the path).
 // Heights follow the natural ground along the centreline, smoothed over about +-smooth m of path (so a U-turn's climb
 // spreads onto its arms), and the path's ends keep the ground's height there (the shed's floor, the summit plateau).
-export function layoutTrail({ sx, sz, head, legs, ground, turn = 2.0, smooth = 5 }) {
+// fade: for a path that peters out instead of arriving, how far back from its end each part of it stops, in metres:
+// { boards, narrow, tread, earth, seed }. The edging ends at `boards`; from `narrow` the tread narrows, its edges
+// ragged, to nothing at `tread`; then patches of pebbles, smaller and further apart, as far as `earth`; the last of it
+// is only worn earth, fading (wear(s), for the ground's colour).
+export function layoutTrail({ sx, sz, head, legs, ground, turn = 2.0, smooth = 5, fade = null }) {
   const polar = (t, r) => [sx + Math.cos(t) * r, sz + Math.sin(t) * r];
   const raw = head.map((p) => [p[0], p[1]]);
   const seg = (a, b) => {
@@ -199,12 +209,60 @@ export function layoutTrail({ sx, sz, head, legs, ground, turn = 2.0, smooth = 5
     near(x, z, q);
     if (!(q.d < TRAIL.blend)) return h;
     const B = clamp((q.d + q.d2) / 2, TRAIL.flat + 0.45, TRAIL.blend);
-    const bed = q.y - (q.stepped ? 0.14 : 0.04);
+    const bed = q.y - (q.stepped ? 0.14 : BED);
     return THREE.MathUtils.lerp(bed, h, smoothstep(TRAIL.flat, B, q.d));
   };
   // Whether the point s along the path is on one of the steps' ties (footsteps: timber there, pebbles between).
   const tieAt = (s) => steps.some((f) => s > f.sa - 0.1 && s < f.sb + 0.1 && f.ties.some((t) => s > t.s - 0.04 && s < t.s + TRAIL.tieW + 0.04));
-  return { path, pts: P, total, turns, steps, near, nearFar, carve, yAt, tieAt };
+
+  // ---- how it ends (fade) ----
+  // ends: where along it the edging, the full-width tread, the tread and the last patch stop. span(s): the tread's two
+  // edges there, as offsets from the centreline ([left, right], left negative). patches: the pebbles past the tread's
+  // end, each an ellipse (semi-axes a along and b across its own heading (c, sn), its outline's lumps in `rim`).
+  const hw = TRAIL.width / 2;
+  let ends = null, span = () => [-hw, hw], wear = () => 1;
+  const patches = [];
+  if (fade) {
+    const seed = fade.seed ?? 1, rng = new Rng(seed);
+    ends = { boards: total - fade.boards, narrow: total - fade.narrow, tread: total - fade.tread, earth: total - fade.earth };
+    span = (sv) => {
+      if (sv <= ends.narrow) return [-hw, hw];
+      // Down to half its width, each edge wandering on its own, and rounded off over its last 0.6 m.
+      const t = clamp((sv - ends.narrow) / (ends.tread - ends.narrow), 0, 1);
+      const k = hw * (1 - 0.5 * Math.pow(t, 1.3)) * Math.sqrt(clamp((ends.tread - sv) / 0.6, 0.004, 1));
+      const rag = (v) => 1 + t * (0.3 * noise2(sv * 0.8, v, seed) + 0.16 * noise2(sv * 2.3, v + 20, seed));
+      return [-k * rag(1.7), k * rag(9.3)];
+    };
+    wear = (sv) => 1 - smoothstep(ends.tread, total, sv);
+    for (let sv = ends.tread + rng.float(0.3, 0.5); sv < ends.earth;) {
+      const t = (sv - ends.tread) / (ends.earth - ends.tread);
+      const a = THREE.MathUtils.lerp(0.55, 0.2, t) * rng.float(0.8, 1.2), b = a * rng.float(0.5, 0.72);
+      const f = path.pointAt(sv + a), len = Math.hypot(f.dx, f.dz) || 1, lat = rng.float(-0.28, 0.28);
+      const rot = Math.atan2(f.dz, f.dx) + rng.float(-0.4, 0.4);
+      patches.push({
+        x: f.x - f.dz / len * lat, z: f.z + f.dx / len * lat, y: f.y, s: sv + a, a, b, c: Math.cos(rot), sn: Math.sin(rot),
+        rim: Array.from({ length: 9 }, () => rng.float(0.78, 1.12)),
+      });
+      sv += 2 * a + THREE.MathUtils.lerp(0.3, 1.0, t) * rng.float(0.8, 1.25);
+    }
+  }
+  // Whether (x, z) is on the path's pebbles (the tread and its edging, or one of the patches); `out` as near's.
+  const on = (x, z, out = {}) => {
+    near(x, z, out);
+    if (!ends) return out.d < hw + 0.12;
+    if (out.i >= 0 && out.s < ends.tread && out.d < hw + 0.12) {
+      if (out.s <= ends.narrow) return true;
+      const a = P[out.i], b = P[out.i + 1], dx = b.x - a.x, dz = b.z - a.z;
+      const lat = ((z - a.z) * dx - (x - a.x) * dz) / (Math.hypot(dx, dz) || 1), [l, r] = span(out.s);
+      if (lat > l - 0.05 && lat < r + 0.05) return true;
+    }
+    for (const p of patches) {
+      const dx = x - p.x, dz = z - p.z, u = (dx * p.c + dz * p.sn) / p.a, v = (dz * p.c - dx * p.sn) / p.b;
+      if (u * u + v * v < 1) { out.y = p.y; out.s = p.s; return true; }
+    }
+    return false;
+  };
+  return { path, pts: P, total, turns, steps, near, nearFar, carve, yAt, tieAt, on, ends, span, wear, patches };
 }
 
 // Whether a tree (species sp, scale s, standing at x, y, z) keeps its crown off the path: no part of it lower than
@@ -327,11 +385,21 @@ export function trailMaterials() {
 // its props), and the walking ribbon to `collider`: a collider of its own, without the hillside's walkable slope,
 // because round the inside of a hairpin the ribbon twists (its inner edge climbs the turn in 60 % of the distance)
 // and is steeper there than the path's line.
-export function buildMountainTrail(trail, batcher, collider, { seed = 5 } = {}) {
+//
+// ground(x, z): for a path laid on the ground as built (the spur), its height there; the tread and the edging then
+// follow it instead of the path's own profile, and there is no ribbon (collider: null). over: the path this one
+// leaves: where the two treads overlap this one lies on that one, shaded as one tread with it (its patchy shade is that
+// one's too: `tone`, its seed). open: paths whose treads cross this one's edges (default: `over`); the edging is left
+// out across them.
+export function buildMountainTrail(trail, batcher, collider, { seed = 5, ground = null, over = null, tone = over?.tone ?? seed + 3, open = over ? [over] : [] } = {}) {
   const M = trailMaterials();
   const rng = new Rng(seed);
-  const { pts: P, steps } = trail;
+  const { pts: P, steps, ends } = trail;
   const W = TRAIL.width, hw = W / 2;
+  const q = {};
+  trail.tone = tone;
+  // Where a path that peters out loses its edging, on each side (-1, 1): one side's gives up a little before the other's.
+  const edgeEnd = (side) => ends.boards - (side < 0 ? 0.9 : 0);
   // Frame at arc length s: position, tangent, left normal.
   const frame = (sv) => {
     const p = trail.path.pointAt(sv), len = Math.hypot(p.dx, p.dz) || 1;
@@ -340,7 +408,7 @@ export function buildMountainTrail(trail, batcher, collider, { seed = 5 } = {}) 
   const inFlight = (sv) => steps.find((f) => sv > f.sa - 1e-6 && sv < f.sb + 1e-6);
 
   // ---- the walking ribbon (collision): the tread and a board's width either side, at the walking height ----
-  {
+  if (collider) {
     const pos = [], idx = [], off = [-hw - 0.12, 0, hw + 0.12];
     P.forEach((p, i) => {
       const f = frame(p.s);
@@ -358,7 +426,8 @@ export function buildMountainTrail(trail, batcher, collider, { seed = 5 } = {}) 
   const LAT = [-1, -0.55, 0, 0.55, 1];
   const shade = (x, z, o) => {
     // Darker and damper at the edges, lighter where feet wear the middle, in patches.
-    const k = 0.84 + 0.12 * (1 - Math.abs(o)) + noise2(x * 0.7, z * 0.7, seed + 3) * 0.06;
+    if (over && over.near(x, z, q).d < hw) o = Math.min(Math.abs(o), q.d / hw);   // (on the other path's tread: as its)
+    const k = 0.84 + 0.12 * (1 - Math.abs(o)) + noise2(x * 0.7, z * 0.7, tone) * 0.06;
     return [k, k * 0.99, k * 0.97];
   };
   // uv: world x/z on the treads; on a riser's vertical face (u, v given), across it and up it.
@@ -373,8 +442,51 @@ export function buildMountainTrail(trail, batcher, collider, { seed = 5 } = {}) 
     const f = frame(sv);
     return LAT.map((l) => vert(f.x + f.nx * l * hw, y + (crown ? 0.012 * (1 - l * l) : 0), f.z + f.nz * l * hw, l));
   };
+  // A laid path's tread: as far over the ground as the trail's is over its bed while it has its edging; past that (on
+  // each side from where that side's edging ends, so no edge is left standing clear of the ground with no board against
+  // it) a low mound of pebbles with its edges under the turf. Where it leaves another path it lies on that one's tread.
+  if (ground) {
+    const end = ends ? ends.tread : trail.total;
+    const bare = (sv, l) => (ends ? smoothstep(-0.8, 1.2, sv - edgeEnd(l)) : 0);
+    const lay = (x, z, l, sv) => {
+      const rim = Math.abs(l) === 1 || sv > end - 1e-6;
+      const g = ground(x, z), y = g + THREE.MathUtils.lerp(BED + 0.012 + 0.012 * (1 - l * l), rim ? -0.03 : 0.022 + 0.016 * (1 - l * l), bare(sv, l));
+      // (on the other path's tread: a centimetre over its crown, and no less than two over the ground; then up to its own)
+      if (over && over.near(x, z, q).d < hw + 0.3) return THREE.MathUtils.lerp(Math.max(q.y + 0.036, g + 0.02), y, smoothstep(hw, hw + 0.3, q.d));
+      return y;
+    };
+    // Rows at every centreline point, and closer where the tread rounds off.
+    const at = P.filter((p) => p.s < end - 0.05).map((p) => p.s);
+    at.push(...(ends ? [0.6, 0.42, 0.27, 0.15, 0.06, 0] : [0]).map((d) => end - d));
+    at.sort((a, b) => a - b);
+    strip(at.filter((sv, i) => !i || sv - at[i - 1] > 0.02).map((sv) => {
+      const f = frame(sv), [e0, e1] = trail.span(sv);
+      return LAT.map((l) => {
+        const o = (e0 + e1) / 2 + l * (e1 - e0) / 2, x = f.x + f.nx * o, z = f.z + f.nz * o;
+        return vert(x, lay(x, z, l, sv), z, l);
+      });
+    }));
+    // The patches past its end: a low fan each, its lumpy rim under the turf.
+    const tri = (a, b, c) => {   // (wound as the strips are, whichever way round the rim runs)
+      const ux = pos[b * 3] - pos[a * 3], uz = pos[b * 3 + 2] - pos[a * 3 + 2], vx = pos[c * 3] - pos[a * 3], vz = pos[c * 3 + 2] - pos[a * 3 + 2];
+      if (uz * vx - ux * vz > 0) idx.push(a, c, b); else idx.push(a, b, c);
+    };
+    for (const p of trail.patches) {
+      const N = p.rim.length;
+      const ring = (k, lift, o) => p.rim.map((r, j) => {
+        const an = (j / N) * Math.PI * 2, u = Math.cos(an) * p.a * r * k, v = Math.sin(an) * p.b * r * k;
+        const x = p.x + u * p.c - v * p.sn, z = p.z + u * p.sn + v * p.c;
+        return vert(x, ground(x, z) + lift, z, o);
+      });
+      const c0 = vert(p.x, ground(p.x, p.z) + 0.036, p.z, 0), inner = ring(0.58, 0.026, 0.58), outer = ring(1, -0.03, 1);
+      for (let j = 0; j < N; j++) {
+        const n = (j + 1) % N;
+        tri(c0, inner[j], inner[n]); tri(inner[j], outer[j], inner[n]); tri(inner[n], outer[j], outer[n]);
+      }
+    }
+  }
   // Ramps: from each flight's top to the next one's foot, through every centreline point between.
-  const cuts = [0, ...steps.flatMap((f) => [f.sa, f.sb]), trail.total];
+  const cuts = ground ? [] : [0, ...steps.flatMap((f) => [f.sa, f.sb]), trail.total];
   for (let k = 0; k < cuts.length; k += 2) {
     const s0 = cuts[k], s1 = cuts[k + 1];
     if (s1 - s0 < 0.05) continue;
@@ -383,7 +495,7 @@ export function buildMountainTrail(trail, batcher, collider, { seed = 5 } = {}) 
     rows.push(row(s1, trail.yAt(s1) + 0.012));
     strip(rows);
   }
-  for (const f of steps) {
+  for (const f of ground ? [] : steps) {
     // The ramp's ends meet the flight's first and last treads.
     const bounds = [f.sa, ...f.ties.map((t) => t.s + 0.012), f.sb];
     for (let k = 0; k < bounds.length - 1; k++) {
@@ -415,11 +527,12 @@ export function buildMountainTrail(trail, batcher, collider, { seed = 5 } = {}) 
 
   // ---- timber: ties across the flights, edging boards along both sides ----
   const parts = [];
-  const timber = (len, h, d, matrix, tint, uLen) => {
+  // (keep: false leaves the timber out after its random draws, so the ones after it are as they were)
+  const timber = (len, h, d, matrix, tint, uLen, keep = true) => {
     const g = new THREE.BoxGeometry(len, h, d);
     const u = g.attributes.uv, du = rng.float(0, 1), dv = rng.float(0, 1);
     for (let i = 0; i < u.count; i++) u.setXY(i, u.getX(i) * uLen / 1.3 + du, u.getY(i) * 0.5 + dv);
-    parts.push({ geo: g, matrix, color: tint });
+    if (keep) parts.push({ geo: g, matrix, color: tint });
   };
   const tint = () => {
     const c = new THREE.Color().setRGB(1, 0.97, 0.93).lerp(new THREE.Color(0.62, 0.52, 0.44), rng.next() * 0.7);
@@ -455,9 +568,24 @@ export function buildMountainTrail(trail, batcher, collider, { seed = 5 } = {}) 
   // Edging: timbers laid end to end along both sides, short round the turns, their tops a little over the tread
   // (over the walking line in the flights, where they run up beside the steps like stringers).
   const topAt = (sv) => trail.yAt(sv) + (inFlight(sv) ? 0.1 : 0.07);
+  const top = (x, z, sv) => (ground ? ground(x, z) + BED + 0.07 : topAt(sv));
+  // The part of an edge (offset o) from s0 to s1 that is outside every tread in `open`: [from, to], or null.
+  const clear = (s0, s1, o) => {
+    const N = Math.max(1, Math.ceil((s1 - s0) / 0.04));
+    let best = null, run = null;
+    for (let k = 0; k <= N; k++) {
+      const sv = k === 0 ? s0 : k === N ? s1 : s0 + (s1 - s0) * k / N, f = frame(sv), x = f.x + f.nx * o, z = f.z + f.nz * o;
+      if (open.some((t) => t.near(x, z, q).d < hw - 0.02 && !(q.s > t.ends?.narrow))) { run = null; continue; }
+      run = run ? [run[0], sv] : [sv, sv];
+      if (!best || run[1] - run[0] > best[1] - best[0]) best = run;
+    }
+    return best;
+  };
   for (const side of [-1, 1]) {
     const o = side * (hw + TRAIL.board / 2);
-    for (let s0 = 0.6; s0 < trail.total - 0.4;) {
+    const to = ends ? edgeEnd(side) + 0.3 : trail.total;
+    let last = null;   // the last board laid on this side: its far end and its heading
+    for (let s0 = 0.6; s0 < to - 0.4;) {
       let s1 = s0 + rng.float(1.4, 2.2);
       // Shorter where the path bends: no board may stray over 3 cm from its curve.
       const a = frame(s0);
@@ -468,15 +596,36 @@ export function buildMountainTrail(trail, batcher, collider, { seed = 5 } = {}) 
         if (Math.abs(((mx - ax) * dz - (mz - az) * dx) / L) < 0.03) break;
         s1 = s0 + (s1 - s0) * 0.7;
       }
-      s1 = Math.min(s1, trail.total - 0.3);
+      s1 = Math.min(s1, to - 0.3);
       const b = frame(s1);
       const ax = a.x + a.nx * o, az = a.z + a.nz * o, bx = b.x + b.nx * o, bz = b.z + b.nz * o;
-      const ya = topAt(s0), yb = topAt(s1), dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+      const ya = top(ax, az, s0), yb = top(bx, bz, s1), dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
       if (L > 0.2) {
-        const h = 0.24, len = Math.hypot(L, yb - ya) + 0.02;
-        timber(len, h, TRAIL.board, mat4((ax + bx) / 2, (ya + yb) / 2 - h / 2, (az + bz) / 2, Math.atan2(-dz, dx), 1, 1, 1, rng.float(-0.02, 0.02), Math.atan2(yb - ya, L)), tint(), len);
+        const roll = rng.float(-0.02, 0.02), tn = tint();
+        let A = [ax, az, ya], B = [bx, bz, yb], keep = true;
+        // Where another path's tread crosses this edge the board is left out, or cut back to the part clear of it.
+        const cut = open.length ? clear(s0, s1, o) : null;
+        if (open.length && !cut) keep = false;
+        else if (cut && (cut[0] !== s0 || cut[1] !== s1)) {
+          [A, B] = cut.map((sv) => { const f = frame(sv), x = f.x + f.nx * o, z = f.z + f.nz * o; return [x, z, top(x, z, sv)]; });
+        }
+        // The last one of a path that peters out has slipped: its far end out of line and sunk.
+        if (ends && s1 > to - 0.3 - 1e-6) { const k = side * rng.float(0.07, 0.15); B = [B[0] + b.nx * k, B[1] + b.nz * k, B[2] - 0.05]; }
+        // Round the inside of a tight bend the path's frame swings at each of its points, and a board that starts just
+        // past one would start back inside the last board (two tops in one plane): it starts at that one's end instead.
+        if (last && (A[0] - last.B[0]) * last.ux + (A[1] - last.B[1]) * last.uz < -0.05) A = last.B;
+        const ex = B[0] - A[0], ez = B[1] - A[1], E = Math.hypot(ex, ez);
+        const h = 0.24, len = Math.hypot(E, B[2] - A[2]) + 0.02;
+        timber(len, h, TRAIL.board, mat4((A[0] + B[0]) / 2, (A[2] + B[2]) / 2 - h / 2, (A[1] + B[1]) / 2, Math.atan2(-ez, ex), 1, 1, 1, roll, Math.atan2(B[2] - A[2], E)), tn, len, keep && E > 0.2);
+        if (keep && E > 0.2) last = { B, ux: ex / E, uz: ez / E };
       }
       s0 = s1 + rng.float(0.01, 0.04);
+    }
+    // ...and one more past it, fallen: lying on its side in the grass, askew.
+    if (ends) {
+      const sv = to - 0.3 + rng.float(0.7, 1.3), f = frame(sv), len = rng.float(0.7, 1.05), off = o + side * rng.float(0.08, 0.26);
+      const x = f.x + f.nx * off, z = f.z + f.nz * off, y = ground ? ground(x, z) : trail.yAt(sv) - BED;
+      timber(len, 0.24, TRAIL.board, mat4(x, y + 0.03, z, Math.atan2(-f.tz, f.tx) + side * rng.float(0.22, 0.48), 1, 1, 1, side * rng.float(1.05, 1.3), rng.float(-0.04, 0.04)), tint(), len);
     }
   }
   batcher.add(mergeParts(parts), M.timber);
@@ -487,20 +636,26 @@ export function buildMountainTrail(trail, batcher, collider, { seed = 5 } = {}) 
 // big stones round the outside of each hairpin, all from its own random stream. ok(x, z): false where nothing may grow
 // (by the shed, round the observatory); treeOk the same for trees; avoid: trees already there ({ x, z }), kept 3.2 m
 // from. The trees bring their own rotation and tint, so they draw nothing from the forest's stream. Returns them.
-export function dressTrail(ctx, stack, trail, collider, { seed = 71, ok = () => true, treeOk = ok, avoid = [] } = {}) {
+// trees: false plants none (the spur: a tree is a collider on the stack's own). beside: other paths, whose treads its
+// grass, flowers and fallen stones keep off.
+export function dressTrail(ctx, stack, trail, collider, { seed = 71, ok = () => true, treeOk = ok, avoid = [], trees: plant = true, beside = [] } = {}) {
   const rng = new Rng(seed);
-  const q = {};
+  const q = {}, q2 = {};
   const hw = TRAIL.width / 2;
   const slopeOk = (x, z, ny) => stack.normalAt(x, z).y > ny;
+  const off = (x, z, m) => beside.every((t) => !(t.near(x, z, q2).d < hw + m));
   // Grass tufts: two or three either side every half metre, thickest just outside the boards.
   for (let s = 0.8; s < trail.total; s += 0.5) {
     const f = trail.path.pointAt(s), len = Math.hypot(f.dx, f.dz) || 1, nx = -f.dz / len, nz = f.dx / len;
     for (const side of [-1, 1]) {
+      // (where a path peters out the grass closes in with its tread, but leaves the worn line bare, and thins out)
+      const w = Math.max(Math.abs(trail.span(s)[side < 0 ? 0 : 1]), trail.ends ? 0.32 : 0), thin = trail.ends ? 1 - trail.wear(s) : 0;
       for (let k = rng.int(1, 3); k > 0; k--) {
-        const o = side * (hw + 0.14 + Math.pow(rng.next(), 1.6) * 1.3), a = rng.float(-0.25, 0.25);
+        const o = side * (w + 0.14 + Math.pow(rng.next(), 1.6) * 1.3), a = rng.float(-0.25, 0.25);
         const x = f.x + nx * o + f.dx / len * a, z = f.z + nz * o + f.dz / len * a;
         const sz = rng.float(0.65, 1.15);
-        if (!ok(x, z) || trail.near(x, z, q).d < hw + 0.12 || !slopeOk(x, z, 0.5)) continue;
+        if (thin && rng.next() < thin * 0.75) continue;
+        if (!ok(x, z) || trail.on(x, z, q) || !off(x, z, 0.12) || !slopeOk(x, z, 0.5)) continue;
         const y = stack.heightAt(x, z);
         if (y !== null) ctx.meadow.add(x, y, z, sz);
       }
@@ -516,14 +671,14 @@ export function dressTrail(ctx, stack, trail, collider, { seed = 71, ok = () => 
     const cx = f.x - f.dz / len * o, cz = f.z + f.dx / len * o;
     if (!ok(cx, cz)) continue;
     const kinds = [rng.int(0, 3), rng.int(0, 3)];
-    flowers.patch(stack, cx, cz, rng.float(1.1, 2.0), rng.int(9, 20), kinds, (x, z) => ok(x, z) && trail.near(x, z, q).d > hw + 0.2 && slopeOk(x, z, 0.55), rng);
+    flowers.patch(stack, cx, cz, rng.float(1.1, 2.0), rng.int(9, 20), kinds, (x, z) => ok(x, z) && trail.near(x, z, q).d > hw + 0.2 && off(x, z, 0.2) && slopeOk(x, z, 0.55), rng);
   }
   flowers.build(ctx.surface, ctx.lod);
   // Trees: now and then beside the path, 3-6 m off it, never within reach of another arm, and with no bough over the
   // tread lower than TREE_HEAD over it (crownClear).
   const trees = [];
   const clearOf = (x, z, r) => trees.concat(avoid).every((t) => Math.hypot(t.x - x, t.z - z) > r + (t.r ?? 0));
-  for (let s = 5; s < trail.total - 6; s += rng.float(5, 9)) {
+  for (let s = 5; plant && s < trail.total - 6; s += rng.float(5, 9)) {
     const f = trail.path.pointAt(s), len = Math.hypot(f.dx, f.dz) || 1;
     const sp = rng.next() < 0.78 ? 'pine' : 'broadleaf', sc = rng.float(0.6, 1.0), o = rng.sign() * rng.float(3.0, 6.0);
     const rotY = rng.float(0, Math.PI * 2), tint = Forest.tint(rng);
@@ -558,7 +713,7 @@ export function dressTrail(ctx, stack, trail, collider, { seed = 71, ok = () => 
     const side = hl > hr ? 1 : -1, o = side * (hw + rng.float(0.3, 0.75)), a = rng.float(-0.3, 0.3);
     const x = f.x + nx * o + f.dx / len * a, z = f.z + nz * o + f.dz / len * a;
     const sc = 0.08 + Math.pow(rng.next(), 2.2) * 0.3, geo = ctx.pebbles.geometries[rng.int(0, 2)];
-    if (!ok(x, z) || trail.near(x, z, q).d < hw + 0.2) continue;
+    if (!ok(x, z) || trail.near(x, z, q).d < hw + 0.2 || !off(x, z, 0.2)) continue;
     const y = stack.heightAt(x, z);
     if (y !== null) ctx.pebbles.addAt(x, y + sc * 0.2, z, sc, geo);
   }

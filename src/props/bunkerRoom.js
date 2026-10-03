@@ -33,6 +33,9 @@ const FILES = {
 };
 const DATA = new Set(['lm', 'env', 'wallN', 'floorR', 'floorN', 'orangeN', 'greenN']);   // not colour: no sRGB decode
 const TILED = new Set(['wall', 'wallN', 'concrete', 'orange', 'orangeN', 'green', 'greenN', 'steel', 'alu']);
+// The picture the terminal shows for REMOTE_TRANSFORM (props/terminal.js): 1024 x 768, the redaction painted into it.
+// Optional: without the file the room is as ever and the command only says it has no carrier.
+const MARS = 'bunker_mars.jpg';
 
 // Missing files leave the room procedural (world/bunker.js draws its bare shell instead).
 export async function loadBunker() {
@@ -40,8 +43,14 @@ export async function loadBunker() {
   const tl = new THREE.TextureLoader();
   const keys = Object.keys(FILES);
   try {
-    const [gltf, ...tex] = await Promise.all([new GLTFLoader().loadAsync(base + 'bunker.glb'), ...keys.map((k) => tl.loadAsync(base + FILES[k]))]);
+    const [gltf, mars, ...tex] = await Promise.all([new GLTFLoader().loadAsync(base + 'bunker.glb'),
+      tl.loadAsync(base + MARS).catch(() => null), ...keys.map((k) => tl.loadAsync(base + FILES[k]))]);
     const T = Object.fromEntries(keys.map((k, i) => [k, tex[i]]));
+    if (mars) {
+      mars.flipY = false;                  // (as the room's others: the terminal's glass has glTF UVs)
+      mars.colorSpace = THREE.SRGBColorSpace;
+      mars.anisotropy = 4;
+    }
     for (const [k, t] of Object.entries(T)) {
       t.flipY = false;                     // glTF UVs
       t.colorSpace = DATA.has(k) ? THREE.NoColorSpace : THREE.SRGBColorSpace;
@@ -56,7 +65,7 @@ export async function loadBunker() {
     // wrap seam behind -x has no derivative spike); it wraps round in u.
     T.env.wrapS = THREE.RepeatWrapping;
     T.env.anisotropy = 1;
-    return { gltf, ...T };
+    return { gltf, ...T, mars };
   } catch (e) {
     console.warn('bunker: no room model, the bare shell stays', e);
     return null;
@@ -486,7 +495,7 @@ export function placeBunkerRoom(ctx, asset, { F, P, parent, near, inside, inCar 
       eye: toWorld(eyeN.position), stand: toWorld(standN.position).setY(room.matrixWorld.elements[13]),
       yaw: F.ry + (se.yaw ?? -Math.PI / 2), pitch: se.pitch ?? -0.135, fov: se.fov ?? 40,
     };
-    terminal = createTerminal(ctx, { screen, seat, keyboard: kb });
+    terminal = createTerminal(ctx, { screen, seat, keyboard: kb, picture: asset.mars ?? null });
     // Its power LED: the indicator lamp nearest the glass (bunker_design.py terminal(): on the chin, 0.3 m off).
     if (meshes['glow@led']) ledU.uTermLedId.value = nearestLed(meshes['glow@led'].geometry, termGeo, 0.45);
   }

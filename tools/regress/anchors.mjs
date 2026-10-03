@@ -432,6 +432,12 @@ export async function recordAnchors(W) {
     out.mountain = {
       meadow: rec.adds.filter((a) => a.stack === 'mountain' && a.kind === 'meadow').length,
       trail: st.trail ? { n: st.trail.pts.length, total: st.trail.total, sha: sha(st.trail.pts.map((p) => [p.x, p.z, p.y ?? NaN])) } : null,
+      // The spur from the shed door round the foot (layoutTrail's fade): its centreline, where its edging, its tread
+      // and its patches stop, and the patches themselves.
+      spur: st.spurInfo ? {
+        n: st.spur.pts.length, total: st.spur.total, sha: sha(st.spur.pts.map((p) => [p.x, p.z, p.y ?? NaN])), ends: st.spurInfo.ends,
+        patches: { n: st.spurInfo.patches.length, sha: sha(st.spurInfo.patches.map((p) => [p.x, p.z, p.a, p.b, p.c, p.sn, ...p.rim])) },
+      } : null,
       observatory: calls('placeObservatory')[0] ?? null,
       shed: st.shed ? { x: st.shed.x, z: st.shed.z, rot: st.shed.rot, platePos: v3(st.shed.platePos) } : null,
       elevatorTop: elevator('mountain'),

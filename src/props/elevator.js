@@ -310,7 +310,7 @@ export function createElevator(ctx, { id, ends, start = 'top' }) {
     const e = el.ends[key];
     if (e.target === (open ? 1 : 0)) return;
     e.target = open ? 1 : 0;
-    sound(open ? 'doorOpen' : 'doorClose', key);
+    sound(open ? 'doorOpen' : 'doorClose', key, { dur: DOOR_TIME });   // (its stops land as the leaves do)
   };
 
   // Seconds between two stops: the long shaft between top and bottom, plus the lounge's short drop.

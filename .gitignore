@@ -20,6 +20,9 @@ __pycache__/
 # Regression harness scratch output (the baseline*.json files are tracked)
 tools/regress/out/
 
+# Offline sound renders (tools/audio): WAVs, spectrograms, and the engine copies --ref pulls from git
+tools/audio/out/
+
 # Logs and env
 *.log
 npm-debug.log*

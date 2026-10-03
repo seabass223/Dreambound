@@ -92,6 +92,7 @@ export function buildWorld(base) {
   ctx.meadow.build(surface, ctx.lod);
   ctx.tallGrass.build(surface, ctx.lod);
   ctx.pebbles.build(surface, ctx.lod);
+  ctx.stacks.mountain.finish();  // no grass through its spur's pebbles, now that the scatter is built (stacks/mountain.js)
   for (const d of deferred) ctx.physics.addCollider(d.builder.build(), d.zone);
   ctx.observatory?.finish();     // the roof station's deck, last: it is switched on only while its ladders meet
   // The lit interior nearest what's in view: the player's feet, or a cutscene's focus far away (main.js ctx.viewFocus).

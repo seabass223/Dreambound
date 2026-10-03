@@ -391,6 +391,7 @@ function surfaceAt(feet) {
   if (ctx.shed?.on(feet)) return 'rock';   // the Mountain shed's flagstones
   const tr = ctx.mountainTrail;              // the Mountain's switchbacks: pebbles, and timber on the steps' ties
   if (tr && tr.near(feet.x, feet.z, q).d < TRAIL.width / 2 + 0.12 && Math.abs(feet.y - q.y) < 0.8) return tr.tieAt(q.s) ? 'wood' : 'gravel';
+  if (ctx.mountainSpur?.on(feet.x, feet.z, q) && Math.abs(feet.y - q.y) < 0.8) return 'gravel';   // and the spur round its foot
   if (ctx.gatehouse?.onStairs(feet)) return 'metal';   // the staircase's grating
   if (ctx.gatehouse?.inside(feet)) return 'rock';      // the gatehouse corridor's concrete
   for (const [name, st] of Object.entries(ctx.stacks)) {

@@ -1162,6 +1162,482 @@ def build_electronics():
     empty('SOUND_electronics', pol(4.3, D(62), 1.3))
     empty('SOUND_desk', pol(4.0, D(124), 1.1))
 
+# ============================================================================ the summit bench
+# A flat-bar and hardwood viewpoint bench, as a parks department would have set one up here in the seventies. Each end
+# frame is welded from 12 mm flat bar bent the easy way: one strap carries the slats (up from the front leg over a
+# rolled front edge, back along the seat, round into the reclined back), another is the front leg and the armrest in
+# one loop, a splayed rear leg stands under the back of the seat, and a round rail ties the legs. A third strap carries
+# the slats at mid span; a tube under the seat and another between the rails tie the frames. Six seat slats, four back
+# slats and a top rail, each held by a carriage bolt at every strap (dome heads on the show face, nuts behind), and a
+# hardwood cap on each arm. Each leg is set in a cast concrete footing ('painted', tinted CONCRETE), all four struck
+# off at one level: the cap falls away under the bench's left end, and there they stand clear of it. Built in the
+# bench's own frame (x along the slats, y up, z out of the front; side-view points are Vector((z, y))) and emitted
+# with its ambient occlusion in the vertex colours: its faces are far too small for the building's AO atlas, so
+# bake_all() keeps them out of it, on the atlas's white texels (bench_white_ao).
+# 1.5 m wide, the seat's top 0.45 to 0.46 m up (0.45 under the BENCH_SEAT eye), the arms 0.67, the top rail 0.87;
+# about 5,800 triangles, in the 'near' layer's wood, metal_black, steel and painted.
+BENCH_AT = (7.8, 0.0, -3.18, PI - D(24.5))   # its frame in the model (as the BENCH empty)
+BENCH_BOX = (0.95, -0.5, 1.1, 0.62)          # everything of it: |x| <, y from, y to, |z| < (bench frame)
+
+def bench_ground(lx, lz):
+    """The Mountain's cap under the bench, in the bench's frame (m from the model's y = 0): level under its right half
+    and behind, falling away to 10.6 cm down at its left front corner (the plateau's edge is that near). Read off the
+    built cap (stack.heightAt under the footprint, through tools/regress/world.mjs). The footings run 0.32 m into the
+    ground, so no foot floats wherever the cap ends up; this only shades the ground's occlusion onto the bench and
+    the damp up the footings."""
+    return min(0.0, -0.038 + 0.117 * (lx + 0.75) - 0.085 * (lz + 0.4))
+
+def _fillet(pts, radii, step=D(11.0)):
+    """A 2D polyline through corner points with every inner corner rounded to its radius (0: the point itself, a
+    station along a straight). Returns the points and, per inner corner, the indices of its arc's two ends."""
+    P = [Vector(p) for p in pts]
+    out, marks = [P[0]], []
+    for i in range(1, len(P) - 1):
+        d0, d1 = (P[i] - P[i - 1]).normalized(), (P[i + 1] - P[i]).normalized()
+        ang = math.atan2(d0.x * d1.y - d0.y * d1.x, d0.dot(d1))
+        r = radii[i - 1]
+        if r <= 0 or abs(ang) < 1e-4:
+            marks.append((len(out), len(out)))
+            out.append(P[i])
+            continue
+        a = P[i] - d0 * (r * math.tan(abs(ang) / 2))
+        c = a + Vector((-d0.y, d0.x)) * (r if ang > 0 else -r)   # the centre, on the side the path turns to
+        k = max(2, int(math.ceil(abs(ang) / step)))
+        a0 = math.atan2(a.y - c.y, a.x - c.x)
+        marks.append((len(out), len(out) + k))
+        for j in range(k + 1):
+            out.append(c + Vector((math.cos(a0 + ang * j / k), math.sin(a0 + ang * j / k))) * r)
+    out.append(P[-1])
+    return out, marks
+
+def _run(poly, i):
+    """Arc length along a polyline up to its point i."""
+    return sum((b - a).length for a, b in zip(poly[:i], poly[1:i + 1]))
+
+def _along(poly, s):
+    """Point and unit tangent at arc length s along a 2D polyline (carried on straight past either end)."""
+    acc = 0.0
+    for k in range(len(poly) - 1):
+        a, b = poly[k], poly[k + 1]
+        L = (b - a).length
+        if s <= acc + L or k == len(poly) - 2:
+            d = (b - a) / L
+            return a + d * (s - acc), d
+        acc += L
+
+def _right(d):
+    """The right-hand normal of a side-view direction: up for the seat (which runs front to back), forward for the
+    back (which runs up): the side the slats are on."""
+    return Vector((d.y, -d.x))
+
+def _mitre(poly, i):
+    """Right-hand normal at point i of a polyline, and the factor that keeps a bar's thickness through the corner."""
+    n0 = _right((poly[i] - poly[i - 1]).normalized()) if i > 0 else None
+    n1 = _right((poly[i + 1] - poly[i]).normalized()) if i < len(poly) - 1 else None
+    if n0 is None or n1 is None:
+        return (n1 if n0 is None else n0), 1.0
+    n = (n0 + n1).normalized()
+    return n, 1.0 / max(0.5, n.dot(n0))
+
+def _offset(poly, d):
+    """The polyline moved d toward its right-hand side."""
+    out = []
+    for i, p in enumerate(poly):
+        n, k = _mitre(poly, i)
+        out.append(p + n * (d * k))
+    return out
+
+def bm_rings(rings, hard=None, soft=None, caps=(True, True), us=None, vs=None, cap_uv=None):
+    """Skin a row of rings (each the same closed loop of m points, convex) into strips. hard[k]: point k gets a vertex
+    for each of its two strips, a hard edge along the sweep; soft[k]: the strip from point k to k + 1 is shaded smooth
+    (a flat strip sharing its vertices with a soft one still shades flat, and the soft one leans into it: a rounded
+    edge without a pillowed face). us[i], vs[k] (k = 0..m): the UVs at ring i and point k (vs may be a row per ring,
+    for a section that changes along the sweep); cap_uv(k) the end caps'.
+    Faces wind outward and carry their strip in the 'strip' layer (m: an end cap), their ring in 'seg'."""
+    n, m = len(rings), len(rings[0])
+    hard, soft = hard or [False] * m, soft or [False] * m
+    us, vs = us or [0.0] * n, vs or [0.0] * (m + 1)
+    vr = vs if isinstance(vs[0], (list, tuple)) else [vs] * n
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('uv')
+    sl, gl = bm.faces.layers.int.new('strip'), bm.faces.layers.int.new('seg')
+    cen = [sum((Vector(p) for p in r), Vector((0, 0, 0))) / m for r in rings]
+    va, vb = [], []          # point k as the start of strip k, and as the end of strip k - 1
+    for r in rings:
+        a = [bm.verts.new(p) for p in r]
+        va.append(a)
+        vb.append([bm.verts.new(r[k]) if hard[k] else a[k] for k in range(m)])
+    def face(vs_, uvs, out, strip, seg, smooth):
+        f = bm.faces.new(vs_)
+        f.normal_update()
+        if f.normal.dot(out) < 0:
+            f.normal_flip()
+        at = dict(zip(vs_, uvs))
+        for l in f.loops:
+            l[uvl].uv = at[l.vert]
+        f[sl], f[gl], f.smooth = strip, seg, smooth
+    for i in range(n - 1):
+        mid = (cen[i] + cen[i + 1]) / 2
+        for k in range(m):
+            q = (va[i][k], vb[i][(k + 1) % m], vb[i + 1][(k + 1) % m], va[i + 1][k])
+            ctr = sum((v.co for v in q), Vector((0, 0, 0))) / 4
+            face(q, ((us[i], vr[i][k]), (us[i], vr[i][k + 1]), (us[i + 1], vr[i + 1][k + 1]), (us[i + 1], vr[i + 1][k])), ctr - mid, k, i, soft[k])
+    for end, other, on in ((0, 1, caps[0]), (n - 1, n - 2, caps[1])):
+        if on:
+            q = [bm.verts.new(p) for p in rings[end]]
+            face(q, [cap_uv(k) if cap_uv else (0.0, 0.0) for k in range(m)], cen[end] - cen[other], m, end, False)
+    return bm
+
+def bm_bar(path, x0, w, t, chamfer=0.002, clip0=None, clip1=None, caps=(True, True)):
+    """A flat bar bent the easy way: `path` is its centre line in the side plane, w its width (along x), t its
+    thickness. Every face of the section is a strip of its own, smooth along the bar and hard across its edges, with
+    the edges chamfered to catch the light. Strips: 0 the face away from the slats, 2 and 6 the edges, 4 the face on
+    the slats' side, odd ones the chamfers. clip0 / clip1 (point, normal: a line in the side plane) cut that end to
+    the face of the bar it is welded to, instead of square."""
+    c = chamfer
+    if c > 0:
+        sec = [(-w / 2 + c, -t / 2), (w / 2 - c, -t / 2), (w / 2, -t / 2 + c), (w / 2, t / 2 - c),
+               (w / 2 - c, t / 2), (-w / 2 + c, t / 2), (-w / 2, t / 2 - c), (-w / 2, -t / 2 + c)]
+    else:
+        sec = [(-w / 2, -t / 2), (w / 2, -t / 2), (w / 2, t / 2), (-w / 2, t / 2)]
+    m, n = len(sec), len(path)
+    rings = []
+    for i, p in enumerate(path):
+        nr, k = _mitre(path, i)
+        rings.append([Vector((x0 + a, p.y + nr.y * b * k, p.x + nr.x * b * k)) for (a, b) in sec])
+    for end, nxt, clip in ((0, 1, clip0), (n - 1, n - 2, clip1)):
+        if clip:
+            q, nn = Vector(clip[0]), Vector(clip[1])
+            d = (path[end] - path[nxt]).normalized()
+            for v in rings[end]:
+                k = (q - Vector((v.z, v.y))).dot(nn) / d.dot(nn)
+                v.z += d.x * k
+                v.y += d.y * k
+    vs = [0.0]
+    for k in range(m):
+        vs.append(vs[-1] + (Vector(sec[(k + 1) % m]) - Vector(sec[k])).length / 0.4)
+    return bm_rings(rings, [True] * m, [True] * m, caps, [_run(path, i) / 0.4 for i in range(n)], vs)
+
+def bm_rod(p0, p1, r, sides=10, stations=(0.0, 1.0), clip0=None, clip1=None, caps=(False, False), ease=0.0):
+    """A round bar from p0 to p1 (bench frame), smooth all round. clip0 / clip1 (point, normal: a plane) cut that end
+    to the face it is welded into; `ease` chamfers both ends instead (a sawn end, dressed)."""
+    a, b = Vector(p0), Vector(p1)
+    d = (b - a).normalized()
+    u = d.orthogonal().normalized()
+    v = d.cross(u)
+    radii = [r] * len(stations)
+    if ease > 0:
+        e = ease / (b - a).length
+        stations, radii = [stations[0], stations[0] + e] + list(stations[1:-1]) + [stations[-1] - e, stations[-1]], [r - ease] + radii + [r - ease]
+    rings = [[a + (b - a) * s + (u * math.cos(2 * PI * k / sides) + v * math.sin(2 * PI * k / sides)) * q for k in range(sides)]
+             for s, q in zip(stations, radii)]
+    for ring, clip in ((rings[0], clip0), (rings[-1], clip1)):
+        if clip:
+            q, nn = Vector(clip[0]), Vector(clip[1])
+            for p in ring:
+                p += d * ((q - p).dot(nn) / d.dot(nn))
+    L = (b - a).length
+    return bm_rings(rings, None, [True] * sides, caps, [s * L / 0.4 for s in stations], [k * 2 * PI * r / sides / 0.4 for k in range(sides + 1)])
+
+def _board(w, t, corners):
+    """Section of a board w wide and t thick, its bearing face on b = 0: [(a, b)] from the bearing face round by the
+    +a edge, the show face and the -a edge. corners: (radius, segments) for the corners at (-a, bearing),
+    (+a, bearing), (+a, show), (-a, show); one segment is a chamfer. Returns the points and each edge's kind:
+    'bear', 'show', 'edge' or 'round' (part of a rounding, shaded smooth)."""
+    C = (((-w / 2, 0.0), (0, -1), (1, 0), 'bear'), ((w / 2, 0.0), (1, 0), (0, 1), 'edge'),
+         ((w / 2, t), (0, 1), (-1, 0), 'show'), ((-w / 2, t), (-1, 0), (0, -1), 'edge'))
+    pts, kinds = [], []
+    for (P, din, dout, after), (r, segs) in zip(C, corners):
+        if r <= 0:
+            pts.append(P)
+        else:
+            cx, cy = P[0] - din[0] * r + dout[0] * r, P[1] - din[1] * r + dout[1] * r
+            for j in range(segs + 1):
+                th = PI / 2 * j / segs
+                pts.append((cx - dout[0] * r * math.cos(th) + din[0] * r * math.sin(th),
+                            cy - dout[1] * r * math.cos(th) + din[1] * r * math.sin(th)))
+                if j < segs:
+                    kinds.append('round' if segs > 1 else 'chamfer')
+        kinds.append(after)
+    return pts, kinds
+
+def bm_board(place, stations, w, t, corners, sink=0.0005, uv0=(0.0, 0.0), soft_edges=False):
+    """A board w wide and t thick (section: see _board). stations: (s, k, ease) along it, the two ends first and last:
+    there its section is k times as wide (a nose rounded in plan) and drawn in by `ease` all round (an eased end).
+    place(s, a, b) puts a point of station s's section in the bench's frame; the bearing face sinks `sink` into
+    what it lies on. Grain along the board in the UVs (the game's wood texture has its lines along u), wrapped round
+    the section; rings on the end grain. soft_edges: the edges and chamfers shade smooth as well as the roundings
+    (a board with a nose: its edge turns through the stations, and would show them as facets). Returns the bmesh and
+    its strips' kinds ('end': the end grain)."""
+    sec, kinds = _board(w, t, corners)
+    m = len(sec)
+    rings = [[place(s, a * k * (1 - 2 * e / w), t / 2 + (b - t / 2) * (1 - 2 * e / t) - sink) for (a, b) in sec] for (s, k, e) in stations]
+    vs = [uv0[1]]
+    for k in range(m):
+        vs.append(vs[-1] + (Vector(sec[(k + 1) % m]) - Vector(sec[k])).length / 0.3)
+    if any(k != 1.0 for (_, k, _) in stations):      # a nose: the grain runs straight on and is cut off by its curve
+        ks = kinds.index('show')
+        v_mid = (vs[ks] + vs[ks + 1]) / 2
+        vs = [[v_mid + (v - v_mid) * k for v in vs] for (_, k, _) in stations]
+    soft = ('round', 'edge', 'chamfer') if soft_edges else ('round',)
+    bm = bm_rings(rings, None, [kd in soft for kd in kinds], (True, True), [uv0[0] + st[0] / 1.2 for st in stations], vs,
+                  lambda k: (uv0[0] + sec[k][0] / 0.3, uv0[1] + sec[k][1] / 0.06))
+    return bm, kinds + ['end']
+
+def bm_footing(cx, cz, hx, hz, top, mid, bottom, c, lz, ix, iz):
+    """A cast concrete footing with a leg standing in it: a block 2 hx by 2 hz about (cx, cz) in plan, its top at
+    `top` with a chamfer c round it, its sides running down to `bottom` (open below: that end is in the ground) with a
+    ring of vertices at `mid` for the damp to shade from. The top is a rectangle 2 ix by 2 iz round the leg, which
+    comes up through it at (cx, lz), and a fan inside that to a vertex under the leg: the occlusion baked there is the
+    leg's contact shadow. All flat-shaded. Strips: 0 the sides, 1 the chamfer, 2 the top; the UVs are for a 0.6 m
+    tile (the game's limewash map on 'painted')."""
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('uv')
+    sl, gl = bm.faces.layers.int.new('strip'), bm.faces.layers.int.new('seg')
+    ring = lambda y, ax, az, ox, oz: [bm.verts.new((ox + sx * ax, y, oz + sz * az)) for (sx, sz) in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    r_bot, r_mid, r_sh = ring(bottom, hx, hz, cx, cz), ring(mid, hx, hz, cx, cz), ring(top - c, hx, hz, cx, cz)
+    r_top, r_in = ring(top, hx - c, hz - c, cx, cz), ring(top, ix, iz, cx, lz)
+    hub = bm.verts.new((cx, top, lz))
+    axis = Vector((cx, 0.0, cz))
+    def face(vs_, strip, seg, up):
+        f = bm.faces.new(vs_)
+        f.normal_update()
+        ctr = f.calc_center_median()
+        if f.normal.dot(Vector((0, 1, 0)) if up else Vector((ctr.x - axis.x, 0.0, ctr.z - axis.z))) < 0:
+            f.normal_flip()
+        for l in f.loops:
+            p = l.vert.co
+            if up:
+                l[uvl].uv = (p.x / 0.6, p.z / 0.6)
+            else:         # round the block: along the side it is on, and down
+                l[uvl].uv = (((p.x if seg % 2 == 0 else p.z) + seg * 0.37) / 0.6, p.y / 0.6)
+        f[sl], f[gl], f.smooth = strip, seg, False
+    for k in range(4):
+        j = (k + 1) % 4
+        face((r_bot[k], r_bot[j], r_mid[j], r_mid[k]), 0, k, False)
+        face((r_mid[k], r_mid[j], r_sh[j], r_sh[k]), 0, k, False)
+        face((r_sh[k], r_sh[j], r_top[j], r_top[k]), 1, k, False)
+        face((r_top[k], r_top[j], r_in[j], r_in[k]), 2, k, True)
+        face((r_in[k], r_in[j], hub), 2, k, True)
+    return bm
+
+def _emit_occluded(parts, M, ground=None, reach=0.3, rays=40, floor=0.3):
+    """Emit bmeshes built in one frame with their ambient occlusion in the vertex colours: every face corner casts
+    `rays` cosine-weighted rays over its hemisphere against everything in `parts` (and `ground`: (verts, polygons)),
+    a hit darkening it the more the nearer it is, down to `floor` when buried. parts: (bmesh, material,
+    tone(strip, seg, co, normal) -> (r, g, b)); UVs come from the bmesh's uv layer, smooth from its faces."""
+    from mathutils.bvhtree import BVHTree
+    verts, polys = [], []
+    for bm, _, _ in parts:
+        bm.verts.index_update()
+        bm.faces.index_update()
+        bm.normal_update()
+        base = len(verts)
+        verts.extend(v.co.copy() for v in bm.verts)
+        polys.extend([base + v.index for v in f.verts] for f in bm.faces)
+    if ground:
+        base = len(verts)
+        verts.extend(Vector(p) for p in ground[0])
+        polys.extend([base + i for i in f] for f in ground[1])
+    tree = BVHTree.FromPolygons(verts, polys)
+    golden = PI * (3 - math.sqrt(5))
+    dirs = [(math.sqrt((i + 0.5) / rays) * math.cos(i * golden), math.sqrt((i + 0.5) / rays) * math.sin(i * golden),
+             math.sqrt(1 - (i + 0.5) / rays)) for i in range(rays)]
+    seen = {}
+    def light(p, n):
+        key = (round(p.x, 4), round(p.y, 4), round(p.z, 4), round(n.x, 2), round(n.y, 2), round(n.z, 2))
+        k = seen.get(key)
+        if k is None:
+            t = n.orthogonal().normalized()
+            b = n.cross(t)
+            o = p + n * 0.002
+            hit = 0.0
+            for (dx, dy, dz) in dirs:
+                loc, _, _, dist = tree.ray_cast(o, t * dx + b * dy + n * dz, reach)
+                if loc is not None:
+                    hit += 1.0 - dist / reach
+            k = seen[key] = floor + (1.0 - floor) * (1.0 - hit / rays)
+        return k
+    class Feed:      # emit() asks for a face's UVs, then each corner's colour, then its smoothness, in that order
+        def uvface(self, f):
+            self.f, self.i = f, 0
+            return [tuple(l[self.uv].uv) for l in f.loops]
+        def colfn(self, co):
+            self.i += 1
+            return self.cols[self.f.index][self.i - 1]
+        def smooth(self, n):
+            return self.f.smooth
+    for bm, mat, tone in parts:
+        feed = Feed()
+        feed.uv = bm.loops.layers.uv.active or bm.loops.layers.uv.new('uv')
+        sl, gl = bm.faces.layers.int.get('strip'), bm.faces.layers.int.get('seg')
+        feed.cols = []
+        for f in bm.faces:
+            row = []
+            for l in f.loops:
+                n = l.vert.normal if f.smooth and l.vert.normal.length > 0.5 else f.normal
+                c = tone(f[sl] if sl else 0, f[gl] if gl else 0, l.vert.co, n)
+                k = light(l.vert.co, n)
+                row.append((c[0] * k, c[1] * k, c[2] * k))
+            feed.cols.append(row)
+        emit(bm, mat, M, WHITE, uvface=feed.uvface, colfn=feed.colfn, smooth=feed.smooth)
+
+def build_bench(g):
+    rnd = random.Random(7401)
+    lerp = lambda a, b, k: (a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k)
+    parts = []                                    # (bmesh, material, tone or the kind of paint), in the bench's frame
+    XF, BT = 0.665, 0.012                         # the end frames' centre planes (+-x); the flat bar's thickness
+    W_STRAP, W_LOOP, W_LEG, W_MID = 0.048, 0.058, 0.044, 0.036
+    SW, ST, GAP = 0.054, 0.028, 0.008             # seat and back slats: width, thickness; the gap between seat slats
+    RECL, FALL, ROLL = D(13.0), D(3.5), D(37.0)   # the back's recline, the seat's fall to the back, the front edge's roll
+
+    # ---- the line the slats bear on: up from the front leg, over the rolled front edge, along the seat, up the back
+    fr = Vector((math.cos(ROLL), -math.sin(ROLL)))
+    sd = Vector((-math.cos(FALL), -math.sin(FALL)))
+    bd = Vector((-math.sin(RECL), math.cos(RECL)))
+    crown = Vector((0.186, 0.4368))               # where the front edge and the seat would meet
+    nook = crown + sd * (0.416 / math.cos(FALL))  # where the seat and the back would
+    corners = [crown + fr * 0.0745, crown, nook, nook + bd * 0.459]
+    bear, marks = _fillet(corners, [0.10, 0.065])
+    fine, fmarks = _fillet(corners, [0.10, 0.065], D(2.0))     # (to place the slats on)
+    s_seat = _run(fine, fmarks[0][1])             # arc length where the seat's straight run starts
+    s_back = _run(fine, fmarks[1][1])             # ... and the back's
+
+    # ---- the front leg and the armrest, one loop; the arm passes between the second and third back slats
+    back0, back_gap = 0.0315, 0.022               # the first back slat's lower edge above the bend; the gap between them
+    c_arm, d_arm = _along(fine, s_back + back0 + 2 * SW + 1.5 * back_gap)
+    y_arm = c_arm.y + _right(d_arm).y * ST / 2    # (the slot's height halfway through the slats)
+    foot, elbow = Vector((0.262, -0.30)), Vector((0.2355, y_arm))
+    leg_z = lambda y: foot.x + (elbow.x - foot.x) * (y - foot.y) / (elbow.y - foot.y)
+    back_z = lambda y: nook.x + bd.x * (y - nook.y) / bd.y            # the back's bearing face
+    loop, _ = _fillet([foot] + [Vector((leg_z(y), y)) for y in (-0.11, -0.02, 0.07, 0.17, 0.40)] + [elbow]
+                      + [Vector((z, y_arm)) for z in (0.05, -0.13, back_z(y_arm))], [0, 0, 0, 0, 0, 0.05, 0, 0])
+    leg_d = (elbow - foot).normalized()
+    leg_back = (Vector((leg_z(0.39), 0.39)) - _right(leg_d) * (BT / 2 - 0.001), _right(leg_d))   # its rear face (1 mm in)
+
+    # ---- the three straps under the slats
+    strap = _offset(bear, -BT / 2)
+    for sx in (-1, 1):
+        parts.append((bm_bar(strap, sx * XF, W_STRAP, BT, clip0=leg_back), 'metal_black', 'bar'))
+        parts.append((bm_bar(loop, sx * XF, W_LOOP, BT, clip1=(Vector((back_z(y_arm), y_arm)) - _right(bd) * 0.001, _right(bd))),
+                      'metal_black', 'bar'))
+    i0 = marks[0][0] + 2                           # the middle one starts under the front slat
+    c0, d0 = _along(fine, _run(bear, i0) - 0.012)
+    parts.append((bm_bar([c0 - _right(d0) * BT / 2] + strap[i0:], 0.0, W_MID, BT, chamfer=0.0), 'metal_black', 'rod'))
+
+    # ---- the rear legs, splayed back from under the seat; a rail between the legs, a tube between the rails, and
+    # another under the seat that all three straps rest on
+    top = _along(fine, s_seat + 0.325)[0] - _right(sd) * BT          # on the strap's underside, where the bend starts
+    rfoot = Vector((-0.32, 0.0))
+    rd = (top - rfoot).normalized()
+    rleg = [rfoot + rd * ((y - rfoot.y) / rd.y) for y in (-0.15, -0.02, 0.07, 0.17)] + [top + rd * 0.004]   # (it ends inside its footing)
+    under = (top + _right(sd) * 0.001, _right(sd))
+    y_rail, r_rail, r_tube = 0.17, 0.015, 0.013
+    rail_a, rail_b = Vector((leg_z(y_rail), y_rail)), rfoot + rd * (y_rail / rd.y)
+    for sx in (-1, 1):
+        parts.append((bm_bar(rleg, sx * XF, W_LEG, BT, clip1=under), 'metal_black', 'bar'))
+        parts.append((bm_rod((sx * XF, y_rail, rail_b.x), (sx * XF, y_rail, rail_a.x), r_rail, 10, (0.0, 0.5, 1.0),
+                             clip0=((sx * XF, rail_b.y, rail_b.x), (0, _right(rd).y, _right(rd).x)),
+                             clip1=((sx * XF, rail_a.y, rail_a.x), (0, _right(leg_d).y, _right(leg_d).x))), 'metal_black', 'rod'))
+    zc = (rail_a.x + rail_b.x) / 2
+    parts.append((bm_rod((-XF, y_rail, zc), (XF, y_rail, zc), r_tube, 10, (0.0, 0.5, 1.0)), 'metal_black', 'rod'))
+    tube_c = _along(fine, s_seat + 0.13)[0] - _right(sd) * (BT + r_tube - 0.0015)
+    parts.append((bm_rod((-XF - 0.02, tube_c.y, tube_c.x), (XF + 0.02, tube_c.y, tube_c.x), r_tube, 12, (0.0, 0.5, 1.0),
+                         caps=(True, True), ease=0.003), 'metal_black', 'rod'))
+
+    # ---- the feet: each leg is set in a footing of its own, cast in a box of boards (so no two quite alike) and
+    # struck off at one level, 25 mm proud of the cap where it is highest (under the right end) and standing 6 to
+    # 10 cm clear where it falls away (the left front). They run 0.32 m down, so none floats wherever the cap ends up.
+    PAD_TOP = 0.025
+    WEATHERED, DAMP, STAIN = lerp(CONCRETE, srgb(118, 116, 104), 0.45), srgb(96, 98, 82), srgb(122, 82, 54)
+    frnd = random.Random(7402)                    # (their own dice: the boards keep theirs)
+    def footing(x, z, half_x, back=0.0):
+        hx, hz = 0.098 + frnd.uniform(-0.008, 0.008), 0.088 + frnd.uniform(-0.008, 0.008)
+        cx, cz = x + frnd.uniform(-0.006, 0.006), z - back + frnd.uniform(-0.006, 0.006)
+        ix, iz = half_x + 0.02, BT / 2 + 0.02
+        k = 1.0 + frnd.uniform(-0.07, 0.07)
+        def tone(strip, seg, co, n):
+            c = lerp(DAMP, mul(WEATHERED, k), smooth01(0.0, 0.07, co.y - bench_ground(co.x, co.z)))    # damp at the ground
+            d = max(abs(co.x - x) / ix, abs(co.z - z) / iz)                                                # rust washed off the leg
+            return lerp(c, STAIN, 0.5 if d < 0.1 else 0.22 if d < 1.1 else 0.0) if strip == 2 else c
+        parts.append((bm_footing(cx, cz, hx, hz, PAD_TOP, -0.04, -0.32, 0.012, z, ix, iz), 'painted', tone))
+    for sx in (-1, 1):
+        footing(sx * XF, leg_z(PAD_TOP), W_LOOP / 2)
+        footing(sx * XF, rfoot.x + rd.x * (PAD_TOP - rfoot.y) / rd.y, W_LEG / 2, 0.015)      # (set back: the leg leans into it)
+
+    # ---- hardwood: every board its own tone (some more weathered than others), wandering a little along its length
+    FACE = {'show': 1.0, 'round': 1.0, 'edge': 0.93, 'chamfer': 0.9, 'bear': 0.82, 'end': 0.64}
+    def board(place, stations, w, t, corners_, axis, soft_edges=False):
+        bm, kinds = bm_board(place, stations, w, t, corners_, uv0=(rnd.uniform(0, 1), rnd.uniform(0, 1)), soft_edges=soft_edges)
+        base = lerp(TIMBER, srgb(150, 130, 108), rnd.uniform(0.0, 0.55))
+        k, h = 1.0 + rnd.uniform(-0.13, 0.13), rnd.uniform(-0.05, 0.05)
+        tone = (base[0] * k * (1 + h), base[1] * k, base[2] * k * (1 - h))
+        f1, f2, p1, p2 = rnd.uniform(2.5, 4.5), rnd.uniform(7.0, 11.0), rnd.uniform(0, 6.3), rnd.uniform(0, 6.3)
+        parts.append((bm, 'wood', lambda strip, seg, co, n: mul(tone, FACE[kinds[strip]] * (
+            1.0 + 0.04 * math.sin(co[axis] * f1 + p1) + 0.03 * math.sin(co[axis] * f2 + p2)))))
+    BOLT = lerp(STEELG, srgb(120, 96, 78), 0.3)      # galvanised once, going brown
+    def bolt(p, n, grip):
+        """A carriage bolt through a board and a bar: its dome head on the wood at p, a nut on the far side."""
+        R = Matrix.Translation(Vector(p)) @ Vector((0, 1, 0)).rotation_difference(Vector(n)).to_matrix().to_4x4()
+        head = bm_lathe([(0.0098, -0.0005), (0.0068, 0.0035), (0.0, 0.0050)], 8)
+        head.normal_update()
+        for f in head.faces:
+            f.smooth = True
+            if f.normal.dot(f.calc_center_median() - Vector((0, -0.004, 0))) < 0:
+                f.normal_flip()
+        bmesh.ops.transform(head, matrix=R, verts=head.verts)
+        k = rnd.uniform(0.8, 1.0)
+        parts.append((head, 'steel', lambda strip, seg, co, n_: mul(BOLT, k)))
+        nut = bm_cyl(0.0078, 0.0078, 0.0065, 6)
+        nut.normal_update()
+        bmesh.ops.delete(nut, geom=[f for f in nut.faces if f.normal.y > 0.9], context='FACES')    # (the face on the bar)
+        bmesh.ops.transform(nut, matrix=R @ Matrix.Translation((0, -grip - 0.0027, 0)) @ Matrix.Rotation(rnd.uniform(0, PI / 3), 4, 'Y'), verts=nut.verts)
+        parts.append((nut, 'steel', lambda strip, seg, co, n_: mul(BOLT, k * 0.85)))
+
+    # ---- slats: six on the seat (the first on the rolled front edge), four up the back, and the top rail; a bolt
+    # through each at every strap
+    def slat(s, w, t, corners_):
+        c, d = _along(fine, s)
+        N = _right(d)
+        x0, x1 = -0.75 + rnd.uniform(-0.002, 0.002), 0.75 + rnd.uniform(-0.002, 0.002)     # (sawn to length by hand)
+        xs = [x0, x0 + 0.003, -XF - 0.035, -XF + 0.035, -0.22, 0.22, XF - 0.035, XF + 0.035, x1 - 0.003, x1]
+        board(lambda x, a, b: Vector((x, c.y + d.y * a + N.y * b, c.x + d.x * a + N.x * b)),
+              [(x, 1.0, 0.003 if i in (0, len(xs) - 1) else 0.0) for i, x in enumerate(xs)], w, t, corners_, 0)
+        for x in (-XF, 0.0, XF):
+            bolt((x, c.y + N.y * (t - 0.0005), c.x + N.x * (t - 0.0005)), (0, N.y, N.x), t + BT)
+    soft = ((0.0025, 1), (0.0025, 1), (0.007, 2), (0.007, 2))
+    slat(s_seat - SW / 2, SW, ST, ((0.0025, 1), (0.0025, 1), (0.007, 2), (0.010, 3)))      # (the front edge: rounder)
+    for k in range(5):
+        slat(s_seat + 0.004 + SW / 2 + k * (SW + GAP), SW, ST, soft)
+    for k in range(4):
+        slat(s_back + back0 + SW / 2 + k * (SW + back_gap), SW, ST, soft)
+    slat(s_back + back0 + 4 * (SW + back_gap) + 0.040, 0.080, 0.032, ((0.0025, 1), (0.009, 2), (0.013, 3), (0.007, 2)))
+
+    # ---- the arms' hardwood caps: square at the back, a rounded nose over the bend, two bolts each
+    y_cap, cap_w, cap_t, z0, z1, nose = y_arm + BT / 2, 0.070, 0.024, -0.235, 0.214, 0.045
+    for sx in (-1, 1):
+        st = [(z0, 1.0, 0.003), (z0 + 0.003, 1.0, 0.0), (-0.02, 1.0, 0.0), (z1 - nose, 1.0, 0.0)]
+        st += [(z1 - nose * (1 - u), math.sqrt(1 - u * u), 0.0) for u in (0.25, 0.47, 0.66, 0.81, 0.92)] + [(z1 - nose * 0.015, 0.172, 0.003)]
+        board(lambda z, a, b: Vector((sx * XF + a, y_cap + b, z)), st, cap_w, cap_t,
+              ((0.0025, 1), (0.0025, 1), (0.008, 2), (0.008, 2)), 2, soft_edges=True)
+        for z in (0.105, -0.145):
+            bolt((sx * XF, y_cap + cap_t - 0.0005, z), (0, 1, 0), cap_t + BT)
+
+    # ---- black paint, worn to the steel along the bars' edges and rusting where the legs come out of the concrete
+    BARE, RUSTY = srgb(92, 94, 96), srgb(74, 44, 28)
+    def paint(kind):
+        def tone(strip, seg, co, n):
+            c = lerp(BLACK, BARE, 0.55) if kind == 'bar' and strip % 2 == 1 and strip < 8 else BLACK
+            return lerp(c, RUSTY, 0.5 * (1.0 - smooth01(0.0, 0.12, co.y - PAD_TOP)))
+        return tone
+    parts = [(bm, mat, paint(tone) if isinstance(tone, str) else tone) for bm, mat, tone in parts]
+
+    # ---- the ground under it, as an occluder; then out, in the model's frame
+    gn, g0, gs = 33, -1.6, 0.1
+    gv = [(g0 + i * gs, bench_ground(g0 + i * gs, g0 + j * gs), g0 + j * gs) for j in range(gn) for i in range(gn)]
+    gf = [(j * gn + i, j * gn + i + 1, (j + 1) * gn + i + 1, (j + 1) * gn + i) for j in range(gn - 1) for i in range(gn - 1)]
+    _emit_occluded(parts, xf(g.x, g.y, g.z, g.ry), (gv, gf))
+
 # ============================================================================ outside
 def build_outside():
     set_origin(0, 0, 0)
@@ -1188,11 +1664,8 @@ def build_outside():
     # A bench at the summit's edge, looking out over the clouds toward the Dome and Rocks stacks (moved from by the door,
     # bug report 2fe12a13). Press it to sit (props/observatory.js): BENCH_SEAT is the seated eye, BENCH_STAND where you
     # stand up, in front of it.
-    g = G(7.8, 0, -3.18, PI - D(24.5))
-    for k in range(4):
-        g.box('wood', 1.5, 0.035, 0.09, 0, 0.44, -0.16 + k * 0.105, tint=jitter(TIMBER, 0.06), grain=0)
-    for sx in (-1, 1):
-        g.box('metal_black', 0.05, 0.44, 0.38, sx * 0.62, 0.22, 0, tint=BLACK)
+    g = G(*BENCH_AT)
+    build_bench(g)
     g.col(1.5, 0.5, 0.45, 0, 0.25, 0)
     empty('BENCH', g.p(0, 0, 0), ry=g.ry)
     empty('BENCH_SEAT', g.p(0, 1.12, -0.04))
@@ -1537,9 +2010,11 @@ def bake_all():
     its rivets and frame get islands too small to bake (they come out black). The frame, bead and rivets read the
     stucco just above the hatch; the screws, and the panel, read the plate texel they sit on. (The panel was
     baked open, shut away inside the wall; shut, it hangs just in front of the plate.) The ladders and the roof station
-    do the same (borrow_ladder_ao)."""
-    out = bake_ao()
+    do the same (borrow_ladder_ao). The summit bench stays out of the atlas altogether (bench_white_ao)."""
     sc = _scene()
+    bench_white_ao(sc, True)
+    out = bake_ao()
+    out['bench_ao'] = bench_white_ao(sc, False)
     out['ladder_ao'] = borrow_ladder_ao(sc)
     plate, steel, panel, plaster =(sc.objects.get(n) for n in (PREFIX + 'painted@near', PREFIX + 'steel@near', 'Hatch_steel@near', PREFIX + 'plaster'))
     if not (plate and steel and panel and plaster):
@@ -1580,6 +2055,40 @@ def bake_all():
         lp.data[li].uv = under(shut @ p)
     out['hatch_ao'] = {'plate_points': len(spots), 'wall_uv': [round(c, 4) for c in wall]}
     return out
+
+def bench_white_ao(sc, hide):
+    """The summit bench carries its occlusion in its vertex colours (build_bench), and its boards, bars and footings
+    would get islands a texel or two wide in the atlas. So, before the bake (hide=True), every one of its faces' lightmap UVs is
+    pointed at the atlas's top-left texels, which the game paints white (WHITE_UV in src/props/observatory.js, the
+    patch the filing drawers read), and the faces are hidden: the unwrap packs the faces it can see, so the bench
+    takes no room in the atlas (unwrapped with the rest, it cost the building 3% of its texel density). After the
+    bake (hide=False) they are shown again. Returns the number of faces."""
+    g = G(*BENCH_AT)
+    hx, y0, y1, hz = BENCH_BOX
+    white = (3.0 / AO_SIZE, 1.0 - 3.0 / AO_SIZE)       # (the exporter flips v)
+    n = 0
+    for name in ('wood@near', 'metal_black@near', 'steel@near', 'painted@near'):
+        ob = sc.objects.get(PREFIX + name)
+        if not ob:
+            continue
+        me = ob.data
+        lm = me.uv_layers.get('lightmap') or me.uv_layers.new(name='lightmap')
+        fh, vh = [False] * len(me.polygons), [False] * len(me.vertices)
+        for f in me.polygons:
+            w = ob.matrix_world @ f.center
+            dx, dy, dz = w.x - g.x, w.z - g.y, -w.y - g.z          # Blender -> game, from the bench's origin
+            if abs(dx * g.c - dz * g.s) < hx and y0 < dy < y1 and abs(dx * g.s + dz * g.c) < hz:
+                for li in f.loop_indices:
+                    lm.data[li].uv = white
+                fh[f.index] = hide
+                for vi in f.vertices:      # (the bench shares no vertex with anything else)
+                    vh[vi] = hide
+                n += 1
+        me.polygons.foreach_set('hide', fh)
+        me.vertices.foreach_set('hide', vh)
+        me.edges.foreach_set('hide', [vh[e.vertices[0]] and vh[e.vertices[1]] for e in me.edges])
+        me.update()
+    return n
 
 def borrow_ao(img, targets, donors):
     """Point every target face's lightmap UVs at the texel of the nearest donor face (a big, well-baked surface):
