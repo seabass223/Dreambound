@@ -20,8 +20,8 @@ const DEPTH = 0.3;                 // it reaches this far in front of and behind
 // The designs, in metres on the face (x across to the right, y up; the box is centred on 0, 0). r: the groove's
 // half-width, d: its depth. Lines are wobbled and their width and depth wander as they're drawn. Each has its box in
 // texels (tw, th), its lichen ([x, y, r, map lichen?, phase]) and a seed. `tower` is the clue; `arrow` points along +x
-// (carvePetroglyph turns it to aim at a place).
-const DESIGNS = { tower: towerDesign, arrow: arrowDesign };
+// (carvePetroglyph turns it to aim at a place); `arrowPile` is the arrow with a boulder pile drawn past its head.
+const DESIGNS = { tower: towerDesign, arrow: arrowDesign, arrowPile: arrowPileDesign };
 const dims = (kind) => { const d = DESIGNS[kind](); return { tw: d.tw, th: d.th, w: d.tw * PX, h: d.th * PX }; };
 
 function arrowDesign() {
@@ -38,6 +38,32 @@ function arrowDesign() {
   const dots = [{ x: -0.248, y: 0.003, r: 0.016, d: 0.0065 }];
   const lichen = [[-0.19, 0.19, 0.03, false, 1.4], [0.2, -0.2, 0.026, true, 2.9], [0.05, 0.215, 0.016, false, 4.4]];
   return { tw: 560, th: 560, lines, dots, lichen, seed: 5011 };
+}
+
+// The arrow with what it points to drawn past its head: a boulder pile (two stones and one on them, on a line of
+// ground), so it reads as "to the next pile" and not as pointing at whatever lies that way.
+function arrowPileDesign() {
+  const A = arrowDesign(), SH = -0.165;   // the arrow, moved left to make room
+  const shift = (p) => p.map(([x, y]) => [x + SH, y]);
+  // A stone: a closed, slightly lumpy outline.
+  const stone = (cx, cy, rx, ry, ph) => {
+    const p = [];
+    for (let k = 0; k <= 16; k++) {
+      const a = (k / 16) * Math.PI * 2, l = 1 + 0.09 * Math.sin(3 * a + ph) + 0.05 * Math.sin(5 * a + ph * 2.3);
+      p.push([cx + Math.cos(a) * rx * l, cy + Math.sin(a) * ry * l]);
+    }
+    return p;
+  };
+  const lines = [
+    ...A.lines.map((L) => ({ ...L, p: shift(L.p) })),
+    { p: stone(0.222, -0.05, 0.066, 0.05, 0.6), r: 0.0095, d: 0.0042 },
+    { p: stone(0.352, -0.056, 0.058, 0.044, 2.1), r: 0.0095, d: 0.0042 },
+    { p: stone(0.283, 0.046, 0.06, 0.046, 4.0), r: 0.0095, d: 0.0042 },
+    { p: [[0.135, -0.118], [0.23, -0.112], [0.33, -0.114], [0.432, -0.12]], r: 0.0085, d: 0.0036 },
+  ];
+  const dots = A.dots.map((D) => ({ ...D, x: D.x + SH }));
+  const lichen = [[-0.35, 0.19, 0.03, false, 1.4], [0.03, -0.2, 0.026, true, 2.9], [-0.1, 0.215, 0.016, false, 4.4]];
+  return { tw: 880, th: 560, lines, dots, lichen, seed: 5011 };
 }
 
 function towerDesign() {

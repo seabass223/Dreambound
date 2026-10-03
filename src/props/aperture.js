@@ -10,13 +10,15 @@ let IRIS = null;
 export function setIrisAsset(gltf) {
   const geo = {};
   let meta = null;
+  gltf.scene.updateMatrixWorld(true);
   gltf.scene.traverse((o) => {
-    if (o.isMesh) geo[o.name] = o.geometry;
+    if (o.isMesh) geo[o.name] = o;
     if (o.name === 'IRIS_META') meta = o.userData;
   });
-  // (Through mergeParts: the shared materials read vertex colours and uvs, which the model doesn't carry.)
-  const prep = (g) => {
-    const m = mergeParts([{ geo: g, color: 0xffffff }]);
+  // (Through mergeParts: the shared materials read vertex colours and uvs, which the model doesn't carry. With each
+  // mesh's own transform: a deploy that rounds the meshes, tools/deploy quantize, puts their offset and scale there.)
+  const prep = (o) => {
+    const m = mergeParts([{ geo: o.geometry, matrix: o.matrixWorld, color: 0xffffff }]);
     const p = m.attributes.position, uv = m.attributes.uv;
     for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) * 0.8, p.getZ(i) * 0.8);   // the metal's grain, from above
     return m;

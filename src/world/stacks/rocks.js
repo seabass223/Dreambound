@@ -34,12 +34,12 @@ const PILES = [
 const POOL_R = 3.4;
 const SEQ_SINK_R = 4.3;   // ground sunk under the sequoia out to here: its car and sill reach 3.5 m, plus a cap triangle
 // The carvings (props/petroglyph.js), a trail across the stack like a maze of sign posts, each pecked into a pile's
-// stone and glowing a little: an arrow on the 205° pile (where the stepping stones lead) points across the stack to the
+// stone and glowing a little: an arrow on the 205° pile (where the stepping stones lead; a pile drawn past its head) points across the stack to the
 // 45° pile; an arrow there points on, across again, to the 305° pile; and there is the clue itself, the Tower and its
 // elevator down to the lounge, with the Down button held for three counts. at: a point on the face (x, z from the
 // stack's centre, y absolute); normal: roughly out of it; to: the carving its arrow points at.
 const GLYPHS = [
-  { name: 'petroglyph:arrow:1', kind: 'arrow', pile: 1, at: [-41.409, 5.974, -16.657], normal: [-0.831, 0.01, 0.556], lift: 0.04, to: 1 },
+  { name: 'petroglyph:arrow:1', kind: 'arrowPile', pile: 1, at: [-41.409, 5.974, -16.657], normal: [-0.831, 0.01, 0.556], lift: 0.04, to: 1 },
   { name: 'petroglyph:arrow:2', kind: 'arrow', pile: 0, at: [31.124, 6.94, 28.68], normal: [0.931, 0.104, -0.349], lift: 0, to: 2 },
   { name: 'petroglyph', kind: 'tower', pile: 3, at: [26.052, 5.946, -38.004], normal: [0.472, 0.195, -0.86], lift: 0.05 },
 ];

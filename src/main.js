@@ -169,6 +169,22 @@ function restart() {
   removeEventListener('beforeunload', onBeforeUnload);
   location.reload();
 }
+// Back to the last save. Put back over the running game where that can be done (nothing to compile or upload again):
+// nothing one-way has happened since the save (saves.reversible), and nothing is under way that a restore would cut
+// across (a cutscene, a ride or a car on its way, something held, the eyepiece, the terminal, a ladder or a fall).
+// Otherwise the page loads again and wakes into it (no "Leave site?": the menu already asked).
+function loadSave() {
+  const snap = savesOn ? readSnapshot(SAVE_KEY) : null;
+  const inPlace = snap && started && !ended && !(sequence && !sequence.done) && !ctx.riding && !interact.held
+    && (player.mode === 'walk' || player.mode === 'sit') && fx.scope < 0.01 && !player.lookHandler
+    && !ctx.bunker?.terminal?.active() && !(ctx.elevators ?? []).some((el) => el.busy) && saves.reversible(snap);
+  if (!inPlace) { removeEventListener('beforeunload', onBeforeUnload); location.reload(); return; }
+  if (player.mode === 'sit') player.standUp();
+  saves.restore(snap);
+  saves.setBaseline(snap, snap.time);
+  settings.close(true);
+  sequence = createResume(ctx);   // the black lifts where you left off, as on waking into a save
+}
 // Travel (Menu > Game > Travel): straight to a place, standing, facing somewhere worth facing.
 // (End only in ?dev sessions: the way there is the gatehouse's stairs, and once down them there is no travelling back.)
 const PLACES = [['home', 'Home'], ['generator', 'Generator'], ['rocks', 'Rocks'], ['tower', 'Tower'], ['observatory', 'Observatory'], ...(DEV ? [['end', 'End']] : [])];
@@ -263,8 +279,7 @@ const settings = createSettings({
   player, clock, fx, input, canvas: renderer.domElement, baseSpeed: clock.speed, profiler, lighting, indoors,
   game: {
     save: () => saves.save(),
-    // Back to the last save: the page loads again and wakes into it (no "Leave site?": the menu already asked).
-    load: () => { removeEventListener('beforeunload', onBeforeUnload); location.reload(); },
+    load: loadSave,
     hasSave: () => savesOn && saves.hasSave,
     restart,
     travel,

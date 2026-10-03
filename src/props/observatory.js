@@ -11,6 +11,7 @@ import { FAR_BAND, mergeable } from '../render/lod.js';
 import { createScopeExit } from '../ui/scopeExit.js';
 import { createStation } from './observatoryStation.js';
 import { makeInspectable } from './inspect.js';
+import { printBackTexture } from './observatoryPrint.js';
 import { SKY_TARGET, VIEW_DROP } from '../world/skyTarget.js';
 import { createCoordsPan, coordsFinal, COORDS_LINES } from '../sequences/coordsPan.js';
 
@@ -625,9 +626,9 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
       },
     });
   }
-  // The print: the photo on its face, plain paper behind, lying across the folders at PAPER. Press it (with its drawer
-  // out) to hold it up close, lit a little, and again to put it back (props/inspect.js); it rides in and out with its
-  // drawer.
+  // The print: the photo on its face, a drawing of the building on its back, lying across the folders at PAPER. Press
+  // it (with its drawer out) to hold it up close, lit a little, move the mouse across to turn it over, and press again
+  // to put it back (props/inspect.js); it rides in and out with its drawer.
   let paper = null;
   if (nodes.PAPER && print) {
     const u = nodes.PAPER.userData, size = u.size ?? 0.21;
@@ -636,7 +637,11 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     const front = new THREE.Mesh(new THREE.PlaneGeometry(size, size), patchMaterial(new THREE.MeshStandardMaterial({
       map: print, roughness: 0.82, emissive: 0xffffff, emissiveMap: print, emissiveIntensity: 0, name: 'observatory-print',
     })));
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(size, size), patchMaterial(new THREE.MeshStandardMaterial({ color: 0xe8e2d4, roughness: 0.9, name: 'observatory-print-back' })));
+    // Its back: a drawing of the building with the service ladder marked (props/observatoryPrint.js); headless, plain.
+    const backMap = typeof document !== 'undefined' ? printBackTexture(nodes.LADDER?.userData.fixedA) : null;
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(size, size), patchMaterial(new THREE.MeshStandardMaterial(backMap
+      ? { map: backMap, roughness: 0.9, emissive: 0xffffff, emissiveMap: backMap, emissiveIntensity: 0, name: 'observatory-print-back' }
+      : { color: 0xe8e2d4, roughness: 0.9, name: 'observatory-print-back' })));
     back.rotation.y = Math.PI;
     back.position.z = -0.0006;
     group.add(front, back);
@@ -649,7 +654,7 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
     root.add(group);
     const drawer = u.drawer ?? 0;
     const inspect = makeInspectable(ctx, {
-      object: group, parent: root, meshes: [front, back], name: 'observatory:print', glow: { material: front.material, amount: 0.22 },
+      object: group, parent: root, meshes: [front, back], name: 'observatory:print', glow: { material: front.material, amount: 0.22 }, turn: true,
       canLift: () => !drawers[drawer] || drawers[drawer].x >= 0.9,   // only when its drawer is out
       rest: (outP, outQ) => {
         const d = drawers[drawer];
@@ -658,7 +663,7 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
         outQ.copy(restQ);
       },
     });
-    paper = { group, front, drawer, restP, restQ, inspect, get mode() { return inspect.mode(); } };
+    paper = { group, front, back, drawer, restP, restQ, inspect, get mode() { return inspect.mode(); } };
   }
   ctx.updaters.push((dt) => {
     for (const d of drawers) {
@@ -668,7 +673,10 @@ export function placeObservatory(ctx, asset, { center, doorAngle, collider }) {
       d.hit.position.copy(d.at).addScaledVector(d.out, e * d.travel);
       d.hit.updateMatrixWorld(true);
     }
-    paper?.inspect.update(dt);
+    if (paper) {
+      paper.inspect.update(dt);
+      if (paper.back.material.map) paper.back.material.emissiveIntensity = paper.front.material.emissiveIntensity;   // (held to the light, both faces)
+    }
   });
 
   ctx.updaters.push((dt) => {

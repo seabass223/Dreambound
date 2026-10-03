@@ -99,6 +99,12 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
     endgame: { open: !!snap.endgame?.open || (!!snap.rocks?.released && !!snap.rocks?.solved), descent: !!snap.endgame?.descent },
     elevators: snap.elevators,
   });
+  // What restore() can only ever put forward (the tor blown and its boulders out, the Rocks solved, the roof station
+  // and the lounge's bookcase open, the coordinates read, the stairs out), in a state or a snapshot.
+  const oneWay = (snap) => {
+    const blown = !!snap.tor?.exploded, solved = blown && !!snap.rocks?.solved;
+    return JSON.stringify([blown, solved, !!snap.observatory?.stationOpen, !!snap.observatory?.coords, !!snap.lounge?.secretOpen, !!snap.endgame?.open || solved]);
+  };
   const dirty = () => {
     if (!enabled() || !baseline) return false;
     const now = snapshot();
@@ -131,6 +137,15 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
       baseline = snap;
       savedAt = snap.time;
       return true;
+    },
+
+    // Whether restore() can put this snapshot back over the game as it stands now (main.js: Load last save without
+    // loading the page again): nothing one-way has happened since it was made, and the descent isn't under way
+    // (on either side: its storm and locks are only ever started once).
+    reversible(snap) {
+      const now = snapshot();
+      if (now.endgame?.descent || snap.endgame?.descent) return false;
+      return oneWay(now) === oneWay(snap);
     },
 
     // Put a snapshot back into the world. keepClock: leave the time of day alone (?t= given).
@@ -207,7 +222,10 @@ export function createSaveSystem({ ctx, player, clock, isSafe, enabled }) {
 
         // Elevators: which stop each car waits at (doors shut, as built).
         const lifts = snap.elevators ?? {};
-        for (const el of ctx.elevators ?? []) if (lifts[el.id] && el.ends[lifts[el.id]]) { el.at = lifts[el.id]; el.busy = false; }
+        for (const el of ctx.elevators ?? []) {
+          if (lifts[el.id] && el.ends[lifts[el.id]]) { el.at = lifts[el.id]; el.busy = false; }
+          for (const end of Object.values(el.ends)) end.target = 0;   // (a load over a running game: any left open)
+        }
 
         // The player, and if they stand in a car, its doors open.
         const p = snap.player;

@@ -43,6 +43,7 @@ const CSS = `
 #veil .title-screen header { display: grid; justify-items: center; gap: 10px; text-align: center; }
 #veil .title-screen h1 { margin: 0; font: 400 46px/1 var(--font-serif, Georgia, serif); letter-spacing: 0.04em; color: #e6dcc6; }
 #veil .title-screen header p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted-foreground, #a39a8a); }
+#veil .title-screen header .hint { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; }
 #veil .controls { width: 100%; box-sizing: border-box; padding: 6px 16px; border: 1px solid var(--border, #3a352d);
   border-radius: calc(var(--radius, 8px) + 2px); background: oklch(0.18 0.01 70 / 0.6); }
 #veil .controls div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 13px; }
@@ -92,7 +93,7 @@ export function createLoadingVeil(veil, t0 = performance.now()) {
   const screen = document.createElement('div');
   screen.className = 'title-screen';
   const header = document.createElement('header');
-  header.innerHTML = '<h1>Dreambound</h1><p>A quiet world of seas stack islands above the clouds. Wander, look closely, take it in. Exploring is encouraged, as is note-taking. Grab your favorite drink and see if you can awaken from the dream.</p>';
+  header.innerHTML = '<h1>Dreambound</h1><p>A quiet world of seas stack islands above the clouds. Wander, look closely, take it in. Exploring is encouraged, as is note-taking. Grab your favorite drink and see if you can awaken from the dream.</p><p class="hint">Headphones recommended</p>';
   const controls = document.createElement('div');
   controls.className = 'controls';
   controls.setAttribute('aria-label', 'Controls');
