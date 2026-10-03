@@ -6,28 +6,34 @@ import { clamp } from '../core/rng.js';
 const DOME_WIND_GAIN = 0.158; // 10^(-16/20)
 const DOME_WIND_LP = 750;     // Hz
 
-// A full storm (setStorm(1)): the wind's level times (1 + STORM_WIND), and the levels of the rain bed's layers.
+// A full storm (setStorm(1)): the wind's level times (1 + STORM_WIND), and the levels of the rain and the wind's howl.
 const STORM_WIND = 0.8;
-const RAIN = { hiss: 0.22, body: 0.4, drum: 0.16, patter: 0.5, metal: 0.35, howl: 2.2 };
+const RAIN = { wash: 0.92, howl: 2.2 };
 // The endgame one-shots' output levels, matched to the existing sounds (explosion, grind, alarm, rockLand, keyEnter)
 // at the distances they are heard from. buzzWet: the alarm's dream reverb at full wet.
 const LEVEL = {
   noPower: 1, coordsBeep: 1.5, hatch: 0.7, stairExtend: 1.2, stairFall: 0.8, pedestalButton: 1, pedestalSink: 0.6,
-  thunder: 0.6, shaftSwell: 0.38, buzz: 0.3, buzzWet: 0.35,
+  thunder: 0.86, shaftSwell: 0.38, buzz: 0.55, buzzWet: 0.3,
 };
 
-// In-place constant-peak band-pass (RBJ biquad) over a Float32Array at `rate`: the filter of the sounds baked into
-// buffers (the fire's grains, the rain's drops).
-function bandpass(x, f, Q, rate) {
-  const w = 2 * Math.PI * f / rate, al = Math.sin(w) / (2 * Q), a0 = 1 + al;
-  const b0 = al / a0, b2 = -al / a0, a1 = -2 * Math.cos(w) / a0, a2 = (1 - al) / a0;
+// In-place RBJ biquad over a Float32Array at `rate`: the filters of the sounds baked into buffers (the fire's grains,
+// the rain). type: 'bandpass' (constant peak), 'lowpass', 'highpass' or 'peaking' (dB: its gain).
+function biquad(x, type, f, Q, rate, dB = 0) {
+  const w = 2 * Math.PI * f / rate, c = Math.cos(w), al = Math.sin(w) / (2 * Q), A = Math.pow(10, dB / 40);
+  let b0 = al, b1 = 0, b2 = -al, a0 = 1 + al, a2 = 1 - al;
+  if (type === 'lowpass') { b1 = 1 - c; b0 = b2 = b1 / 2; }
+  else if (type === 'highpass') { b1 = -(1 + c); b0 = b2 = (1 + c) / 2; }
+  else if (type === 'peaking') { b0 = 1 + al * A; b1 = -2 * c; b2 = 1 - al * A; a0 = 1 + al / A; a2 = 1 - al / A; }
+  b0 /= a0; b1 /= a0; b2 /= a0; a2 /= a0;
+  const a1 = -2 * c / a0;
   let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
   for (let i = 0; i < x.length; i++) {
-    const y = b0 * x[i] + b2 * x2 - a1 * y1 - a2 * y2;
+    const y = b0 * x[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
     x2 = x1; x1 = x[i]; y2 = y1; y1 = y; x[i] = y;
   }
   return x;
 }
+const bandpass = (x, f, Q, rate) => biquad(x, 'bandpass', f, Q, rate);
 
 // Fully procedural Web Audio: ambience beds, positional emitters and one-shot effects.
 export class AudioEngine {
@@ -64,7 +70,8 @@ export class AudioEngine {
       fireMod: this.fireModBuffer(),
       fireGrains: this.fireGrainBank(rate),
       buzzGate: this.buzzGateBuffer(),
-      rain: this.rainBuffers(),
+      rain: this.rainBuffer(),
+      thunderNoise: this.thunderBuffers(rate),
     };
   }
 
@@ -117,7 +124,8 @@ export class AudioEngine {
     this.fireMod = P?.fireMod ?? this.fireModBuffer();
     this.fireGrains = P?.fireGrains ?? this.fireGrainBank(ac.sampleRate);
     this.buzzGate = P?.buzzGate ?? this.buzzGateBuffer();
-    this.rain = P?.rain ?? this.rainBuffers();
+    this.rain = P?.rain ?? this.rainBuffer();
+    this.thunderNoise = P?.thunderNoise ?? this.thunderBuffers(ac.sampleRate);
 
     this.buildWind();
     this.buildInsects();
@@ -269,83 +277,70 @@ export class AudioEngine {
     return buf;
   }
 
-  // The alarm clock's buzzer pattern (sfx_buzzAlarm): one cycle of BZZT-BZZT-BZZT, rest, as a 0..1 level at 8 kHz
-  // for a looped source to drive a gate with. Each buzz has 4 ms raised-cosine edges (no clicks) and sags a little.
+  // The alarm clock's buzzer pattern (sfx_buzzAlarm): one cycle of BZZZT, pause, as a 0..1 level at 8 kHz for a looped
+  // source to drive a gate with. The buzz comes on and goes off hard (3 ms raised-cosine edges: just no click) and
+  // sags a little as it runs.
   buzzGateBuffer(rate = 8000) {
-    const cycle = 0.9, step = 0.17, on = 0.105, edge = 0.004 * rate;
-    const n = Math.round(cycle * rate), buf = this.newBuffer(1, n, rate), d = buf.getChannelData(0);
-    for (let k = 0; k < 3; k++) {
-      const a = Math.round(k * step * rate), b = a + Math.round(on * rate);
-      for (let i = a; i < b; i++) {
-        const u = Math.max(0, Math.min(1, (i - a) / edge, (b - i) / edge));
-        d[i] = (0.5 - 0.5 * Math.cos(Math.PI * u)) * (1 - 0.12 * (i - a) / (b - a));
+    const cycle = 0.54, on = 0.32, edge = 0.003 * rate;
+    const n = Math.round(cycle * rate), b = Math.round(on * rate), buf = this.newBuffer(1, n, rate), d = buf.getChannelData(0);
+    for (let i = 0; i < b; i++) {
+      const u = Math.max(0, Math.min(1, i / edge, (b - i) / edge));
+      d[i] = (0.5 - 0.5 * Math.cos(Math.PI * u)) * (1 - 0.1 * i / b);
+    }
+    return buf;
+  }
+
+  // Heavy rain, baked once (no context needed): `seconds` of one even, dense wash in stereo, rain coming down on
+  // everything around, heard from a little way off. No drop is heard alone and nothing rings. Its bulk is pink noise
+  // with the lows cut (below ~350 Hz is the wind's), a broad lift where rain is brightest (2-6 kHz) and the top rolled
+  // off; under it, for the wet grain of the nearer drops, is a noise of sparse impulses (thousands of tiny ticks a
+  // second, far too thick to pick one out) in the same band. The two channels are made apart, so it is wide, and the
+  // loop's end is cross-faded (at equal power) into its start, so it has no seam.
+  rainBuffer(seconds = 10, rate = 32000) {
+    const n = Math.floor(seconds * rate), xf = Math.floor(0.5 * rate), m = n + xf;
+    const buf = this.newBuffer(2, n, rate);
+    const rms = (x) => { let q = 0; for (let i = 0; i < x.length; i++) q += x[i] * x[i]; return Math.sqrt(q / x.length) || 1; };
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch), y = new Float32Array(m), v = new Float32Array(m);
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+      for (let i = 0; i < m; i++) {
+        const w = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852;
+        b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+        y[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362; b6 = w * 0.115926;
+        if (Math.random() * rate < 1500) { const r = Math.random(); v[i] = (Math.random() < 0.5 ? -r : r) * r * r; }
+      }
+      biquad(y, 'highpass', 330, 0.7, rate); biquad(y, 'peaking', 3200, 0.5, rate, 5.5); biquad(y, 'lowpass', 8500, 0.6, rate);
+      biquad(v, 'bandpass', 3200, 0.6, rate); biquad(v, 'highpass', 1200, 0.7, rate);
+      const ky = 0.077 / rms(y), kv = 0.063 / rms(v);
+      for (let i = 0; i < m; i++) {                // (RMS 0.1; the bigger ticks rounded off: a soft clip at 0.34)
+        const o = Math.max(-3, Math.min(3, (y[i] * ky + v[i] * kv) / 0.34));
+        y[i] = 0.34 * o * (27 + o * o) / (27 + 9 * o * o);
+      }
+      for (let i = 0; i < n; i++) {
+        const k = i / xf;
+        d[i] = i >= xf ? y[i] : y[i] * Math.sqrt(k) + y[n + i] * Math.sqrt(1 - k);
       }
     }
     return buf;
   }
 
-  // Rain, baked once (no context needed): `patter`, a dense stereo bed of single close drops (crisp ticks on stone and
-  // leaves, the odd fat splat, now and then a plink into standing water), and `metal`, a sparser one of drops on steel
-  // (bright tinks, hollow tonks). Every drop lands at a random time, level and stereo place, wrapping round the end so
-  // the loop has no seam; buildStorm() loops them at unrelated rates under the hiss, so nothing is heard repeating.
-  rainBuffers(rate = 32000) {
-    const R = (a, b) => a + Math.random() * (b - a);
-    const noise = (n, tau) => {
-      const x = new Float32Array(n), k = Math.exp(-1 / (tau * rate));
-      for (let i = 0, e = 1; i < n; i++, e *= k) x[i] = (Math.random() * 2 - 1) * e;
-      return x;
-    };
-    const norm = (x) => {
-      let p = 1e-9;
-      for (let i = 0; i < x.length; i++) p = Math.max(p, Math.abs(x[i]));
-      for (let i = 0; i < x.length; i++) x[i] /= p;
-      return x;
-    };
-    const struck = (dur, f0, parts) => {          // a little impact click and decaying partials [ratio, level, tau]
-      const n = Math.ceil(dur * rate), x = norm(bandpass(noise(n, 0.0004), f0 * 1.3, 0.8, rate));
-      for (let i = 0; i < n; i++) x[i] *= 0.35;
-      for (const [r, a, tau] of parts) {             // a decaying phasor, rotated a step per sample
-        const w = 2 * Math.PI * f0 * r * R(0.98, 1.02) / rate, k = Math.exp(-1 / (tau * rate)), cw = Math.cos(w) * k, sw = Math.sin(w) * k;
-        for (let i = 0, c = a, s = 0; i < n; i++) { x[i] += s; const c2 = c * cw - s * sw; s = c * sw + s * cw; c = c2; }
+  // Thunder's noise (sfx_thunder), baked once, both mono (so a crack sits where it is panned). `white`: plain. `torn`:
+  // the same broken into a ragged run of ticks and rips (its level a train of random spikes, each dying in 1-6 ms,
+  // over a low floor): under an envelope it tears and crackles where plain noise would only hiss.
+  thunderBuffers(rate) {
+    const make = (seconds, torn) => {
+      const n = Math.floor(seconds * rate), buf = this.newBuffer(1, n, rate), d = buf.getChannelData(0);
+      for (let i = 0, e = 0, k = 0; i < n; i++, e *= k) {
+        if (torn && Math.random() * rate < 260) {
+          const h = Math.pow(Math.random(), 2.2);
+          if (h > e) { e = h; k = Math.exp(-1 / ((0.001 + 0.005 * Math.random()) * rate)); }
+        }
+        d[i] = (Math.random() * 2 - 1) * (torn ? 0.12 + 0.88 * e : 1);
       }
-      return x;
-    };
-    const drops = {
-      tick: () => { const tau = R(0.0003, 0.0014); return bandpass(noise(Math.ceil(tau * rate * 7), tau), R(1800, 7500), R(0.8, 2), rate); },
-      splat: () => {
-        const tau = R(0.002, 0.005), n = Math.ceil(tau * rate * 7);
-        const body = norm(bandpass(noise(n, tau), R(450, 1300), R(1.5, 3), rate)), click = norm(bandpass(noise(n, tau * 0.25), R(2500, 5000), 1, rate));
-        for (let i = 0; i < n; i++) body[i] += 0.5 * click[i];
-        return body;
-      },
-      plink: () => {                              // the bubble's ring, rising as it shrinks
-        const n = Math.ceil(0.04 * rate), x = new Float32Array(n), f0 = R(1100, 2600), k = R(8, 18), tau = R(0.006, 0.011);
-        let ph = 0;
-        for (let i = 0; i < n; i++) { const s = i / rate; ph += 2 * Math.PI * f0 * (1 + k * s) / rate; x[i] = Math.sin(ph) * Math.exp(-s / tau); }
-        return x;
-      },
-      tink: () => struck(0.12, R(2600, 6200), [[1, 1, R(0.01, 0.035)], [1.47, 0.5, R(0.008, 0.02)], [2.09, 0.3, 0.008]]),
-      tonk: () => struck(0.25, R(650, 1300), [[1, 1, R(0.03, 0.07)], [2.4, 0.45, R(0.02, 0.04)], [3.9, 0.25, 0.015]]),
-    };
-    const bake = (seconds, perSec, pick) => {
-      const n = Math.floor(seconds * rate), buf = this.newBuffer(2, n, rate), L = buf.getChannelData(0), Rt = buf.getChannelData(1);
-      for (let c = Math.floor(seconds * perSec); c > 0; c--) {
-        const x = norm(drops[pick(Math.random())]()), lvl = 0.1 + 0.9 * Math.pow(Math.random(), 2), at = Math.floor(Math.random() * n);
-        const q = Math.random() * Math.PI / 2, gl = lvl * Math.cos(q), gr = lvl * Math.sin(q);
-        for (let i = 0; i < x.length; i++) { const k = (at + i) % n; L[k] += x[i] * gl; Rt[k] += x[i] * gr; }
-      }
-      let sq = 0;
-      for (let i = 0; i < n; i++) sq += L[i] * L[i] + Rt[i] * Rt[i];
-      // Every bed at an RMS of 0.1, its loudest drops rounded off (a tanh-like soft clip at 0.45) so none stands out.
-      const s = 0.1 / (Math.sqrt(sq / (2 * n)) || 1) / 0.45;
-      const soft = (v) => { v = Math.max(-3, Math.min(3, v * s)); return 0.45 * v * (27 + v * v) / (27 + 9 * v * v); };
-      for (let i = 0; i < n; i++) { L[i] = soft(L[i]); Rt[i] = soft(Rt[i]); }
       return buf;
     };
-    return {
-      patter: bake(7.3, 220, (r) => (r < 0.78 ? 'tick' : r < 0.95 ? 'splat' : 'plink')),
-      metal: bake(5.1, 30, (r) => (r < 0.7 ? 'tink' : 'tonk')),
-    };
+    return { white: make(1.5, false), torn: make(4, true) };
   }
 
   src(buffer, loop = true, rate = 1) {
@@ -447,11 +442,12 @@ export class AudioEngine {
     osc.start(t); osc.stop(t + dur + tail + 0.02);
   }
 
-  // The alarm clock's buzzer tone: a narrow pulse (30 %), nasal and full of harmonics. Made once per context.
+  // The alarm clock's buzzer tone: a narrow pulse (18 %), a contact making and breaking: every harmonic strong up to
+  // the fifth, then more in lobes above. Made once per context.
   buzzWave() {
     if (!this._buzzWave) {
-      const N = 40, real = new Float32Array(N), imag = new Float32Array(N);
-      for (let n = 1; n < N; n++) real[n] = (2 * Math.sin(n * Math.PI * 0.3)) / (n * Math.PI);
+      const N = 48, real = new Float32Array(N), imag = new Float32Array(N);
+      for (let n = 1; n < N; n++) real[n] = (2 * Math.sin(n * Math.PI * 0.18)) / (n * Math.PI);
       this._buzzWave = this.ctx.createPeriodicWave(real, imag);
     }
     return this._buzzWave;
@@ -473,6 +469,19 @@ export class AudioEngine {
     const sh = this.ctx.createWaveShaper();
     sh.curve = curve; sh.oversample = '2x';
     return sh;
+  }
+  // A limiter's curve (sfx_thunder), for a signal at half level (the curve spans -2..2): untouched up to 0.42, then
+  // bending over to a ceiling of 0.66, so whatever adds up behind it comes out no louder than that.
+  limitCurve() {
+    if (!this._limit) {
+      const n = 4096, c = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const x = (i / (n - 1) * 2 - 1) * 2, a = Math.abs(x);
+        c[i] = Math.sign(x) * (a <= 0.42 ? a : 0.42 + 0.24 * Math.tanh((a - 0.42) / 0.24));
+      }
+      this._limit = c;
+    }
+    return this._limit;
   }
   crushCurve() {
     if (!this._crush) {
@@ -545,32 +554,16 @@ export class AudioEngine {
   }
 
   // The storm's own sounds (setStorm), built here but left unplugged from the outdoor bus, their sources not started,
-  // until the first storm (stormBed). The rain: a broad hiss of rain on everything far and near, its body, a low
-  // drumming, two layers of close patter (one further off, duller) and drops on steel (rainBuffers). The wind's howl:
-  // two narrow bands of noise moaning with the gusts (the wind itself is buildWind's, pushed harder in update()).
+  // until the first storm (stormBed). The rain: one steady wash (rainBuffer), looped. The wind's howl: two narrow bands
+  // of noise moaning with the gusts (the wind itself is buildWind's, pushed harder in update()).
   buildStorm() {
     const ac = this.ctx;
     this.stormBus = this.gain(1);
     this.stormLive = false; this.stormStarted = false; this.stormIdleAt = 0;
-    const layer = (src, ...chain) => {
-      const g = this.gain(0);
-      let n = src;
-      for (const f of chain) n = n.connect(f);
-      n.connect(g).connect(this.stormBus);
-      return g;
-    };
-    const loop = (buf, rate) => { const s = ac.createBufferSource(); s.buffer = buf; s.loop = true; s.playbackRate.value = rate; return s; };
-    const hiss = this.src(this.white), body = this.src(this.pink, true, 0.93), drum = this.src(this.brown);
-    const patA = loop(this.rain.patter, 1), patB = loop(this.rain.patter, 0.83), metal = loop(this.rain.metal, 1);
-    this.rainHissLP = this.filter('lowpass', 8000, 0);
-    this.rainHiss = layer(hiss, this.filter('highpass', 900, 0), this.rainHissLP);
-    this.rainBody = layer(body, this.filter('bandpass', 1100, 0.6));
-    this.rainDrum = layer(drum, this.filter('lowpass', 240, 0));
-    this.rainPat = this.gain(0);
-    this.rainPat.connect(this.stormBus);
-    patA.connect(this.rainPat);
-    patB.connect(this.filter('lowpass', 4200, 0)).connect(this.gain(0.7)).connect(this.rainPat);
-    this.rainMetal = layer(metal, this.filter('highpass', 500, 0));
+    const rain = ac.createBufferSource();
+    rain.buffer = this.rain; rain.loop = true;
+    this.rainOut = this.gain(0);
+    rain.connect(this.rainOut).connect(this.stormBus);
     const howl = this.src(this.pink, true, 0.9), howl2 = this.src(this.pink, true, 1.1);
     this.howlBP = this.filter('bandpass', 650, 8); this.howlBP2 = this.filter('bandpass', 1060, 11);
     this.howl = this.gain(0);
@@ -578,7 +571,7 @@ export class AudioEngine {
     howl.connect(this.howlBP).connect(this.howl);
     howl2.connect(this.howlBP2).connect(this.gain(0.6)).connect(this.howl);
     this.howl.connect(this.howlPan).connect(this.stormBus);
-    this.stormSrcs = [hiss, body, drum, patA, patB, metal, howl, howl2];
+    this.stormSrcs = [rain, howl, howl2];
     // Thunder's way out (sfx_thunder): always plugged in (it carries nothing between strikes), held at the same share
     // of the outdoors as the rain (stormBed), so a strike still in flight isn't heard full on underground.
     this.thunderBus = this.gain(1);
@@ -1966,64 +1959,126 @@ export class AudioEngine {
     this.ring(bot, te, R(95, 115), [[1, 0.5, 0.6], [2.3, 0.3, 0.35]], 0.18);
   }
 
-  // Thunder (render/storm.js, which delays it for the distance). near (0..1): 1 is a strike close by, a ripping crack,
-  // a huge boom and a long roll; 0 a far-off one, only a long low rumble swelling up, its highs lost in the air. pan
-  // (-1..1): where it is, left to right; the roll comes from all along the bolt, so it spreads toward the middle.
-  // Outdoors (muffled indoors like the rest, and gone underground: thunderBus), with its own echoes off the cloud: no
-  // reverb.
-  sfx_thunder({ near = 0.5, pan = 0 }, t) {
+  // Thunder (render/storm.js, which plays it as the sound arrives, distance / 343 s after the flash), shaped all the
+  // way by how far off the strike was. distance: metres, about 100 .. 15000 (or the old near, 0..1: 1 a strike close
+  // by, 0 one far off). pan (-1..1): where it struck, left to right. Outdoors (muffled indoors like the rest, gone
+  // underground: thunderBus), with its own echoes off the cloud and the ground: no reverb.
+  //  - Close (100-300 m) it attacks: a crack as sharp as a shot, torn at the edges, sitting where it struck; the
+  //    pressure of it right behind, a huge low boom driven into overload; 2-5 more cracks over the next second (the
+  //    rest of the channel, further off); then a short heavy rumble, lurching, gone in a few seconds.
+  //  - Further (1-3 km) the crack has lost its edge, a rattle running up into the boom (KRRROOOM), and the roll goes on.
+  //  - Far (6 km and more) it rolls in: no crack at all, a low rumble swelling up over seconds out of nothing, a broad
+  //    dull boom, then one roll over another, each duller than the last, from all across the sky, dying for 15-20 s.
+  // Everything between is the same sound with more air in the way: the crack's level, every cut-off, the attack, the
+  // length, the number of rolls and the stereo width all run on u, the distance in octaves.
+  sfx_thunder({ distance, near, pan = 0 }, t) {
     const ac = this.ctx;
     const R = (a, b) => a + Math.random() * (b - a);
-    const n = clamp(+near || 0, 0, 1), p = clamp(+pan || 0, -1, 1), lvl = LEVEL.thunder * (0.8 + 0.2 * n);
-    const o = this.gain(lvl), sp = ac.createStereoPanner();
-    sp.pan.value = p;
-    o.connect(this.filter('lowpass', 500 + 11000 * n * n, 0)).connect(sp).connect(this.thunderBus);
-    const ro = this.gain(lvl), sp2 = ac.createStereoPanner();
-    sp2.pan.setValueAtTime(p * 0.7, t); sp2.pan.linearRampToValueAtTime(p * 0.25, t + 6);
-    ro.connect(this.filter('lowpass', 300 + 3000 * n, 0)).connect(sp2).connect(this.thunderBus);
-    const dur = 6 + (1 - n) * 3 + R(-0.5, 1.5);
-    // The crack: the channel tearing open, a fast crackle of rips, then the main stroke.
-    const kc = clamp((n - 0.3) / 0.7, 0, 1);
-    let tb = t + R(0, 0.3);
-    if (kc > 0) {
-      const rip = R(0.12, 0.35), m = 8 + Math.floor(Math.random() * 10);
-      let tk = t;
-      for (let i = 0; i < m; i++) {
-        tk += R(0.004, rip / m * 2);
-        const a = kc * R(0.15, 0.5) * (1 - i / m * 0.5);
-        this.burst(o, tk, { type: 'highpass', f: R(900, 2600), q: 0.7, peak: a, a: 0.0004, d: R(0.008, 0.04) });
-        if (Math.random() < 0.5) this.grain(o, tk, Math.random() < 0.5 ? 'snap' : 'crackle', R(0.5, 1), a * 1.5);
-      }
-      const ts = t + rip;
-      this.burst(o, ts, { type: 'highpass', f: 700, q: 0.7, peak: 0.95 * kc, a: 0.0005, d: 0.09 });
-      this.burst(o, ts, { f: 2200, q: 0.5, peak: 0.6 * kc, a: 0.0008, d: 0.35 });
-      this.burst(o, ts + 0.012, { type: 'highpass', f: 1100, q: 0.7, peak: 0.5 * kc, a: 0.0005, d: 0.05 });
-      tb = ts + 0.01;
+    const mix = (a, b, k) => a + (b - a) * k;
+    const dist = clamp(+distance || 150 * Math.pow(80, 1 - clamp(near == null ? 0.5 : +near || 0, 0, 1)), 60, 20000);
+    const u = clamp(Math.log(dist / 100) / Math.log(150), 0, 1);      // 0 at 100 m .. 1 at 15 km
+    const p = clamp(+pan || 0, -1, 1);
+    const crack = Math.pow(clamp(1 - (u - 0.1) / 0.45, 0, 1), 1.5);    // the sharp edge: gone by ~1.5 km
+    const rattle = clamp(1 - (u - 0.42) / 0.38, 0, 1);                 // the tearing under it: gone by ~5 km
+    const atk = Math.min(2.8, 0.004 * Math.exp(7.2 * Math.pow(u, 1.43)));   // the boom's rise: 5 ms .. 80 ms at 1.5 km .. seconds
+    const dur = mix(4.2, 19, Math.pow(u, 1.25)) * R(0.85, 1.2);       // the roll's length
+    const lvl = LEVEL.thunder * (1 - 0.35 * Math.pow(u, 1.3));
+    const { white, torn } = this.thunderNoise;
+
+    // Two ways out. The strike itself, through the air's low-pass (11 kHz at 150 m, 1.6 kHz at 1.5 km, 270 Hz at
+    // 12 km): its cracks and its booms each overdriven when close (soft-clipped apart, so the boom can't garble the
+    // crack), clean when far. And the roll, duller still, its biggest swells rounded off the same way (which also
+    // gives the lowest rumble some body on small speakers). Both leave through a high-pass that drops what is too low
+    // to hear (a fifth of the noise's power is under 30 Hz, where all it does is use up the headroom) and one limiter
+    // (limitCurve): whatever a strike's cracks, booms and rolls add up to, it leaves here no louder than 0.66 (the
+    // outdoor bus's low-pass can ring a crack a tenth over that), which leaves the storm's bed its room over the
+    // loudest strike.
+    const out = this.filter('highpass', 32, 0);
+    out.connect(this.gain(0.5)).connect(this.shaper(this.limitCurve())).connect(this.thunderBus);
+    const air = this.filter('lowpass', 16000 * Math.pow(220 / 16000, u), -6), hitOut = this.gain(lvl);   // (Q -6 dB: no overshoot)
+    air.connect(hitOut).connect(out);
+    const rollOut = this.gain(lvl * 0.75), roll = this.filter('lowpass', 1500 * Math.pow(200 / 1500, u), 0);
+    roll.connect(this.gain(0.6)).connect(this.shaper(this.driveCurve())).connect(rollOut).connect(out);
+    // Where things sit: the crack where it struck (never hard over: a strike dead to one side is still some 12 dB down
+    // in the other ear, not gone), the later cracks a little off it, the booms all round (too low to place, and wide:
+    // their noise differs left and right), the rolls across three places that spread out with distance until they are
+    // all round too. (The overdrive comes before the panner: clipping both channels of a panned sound would level them
+    // and pull it to the middle.) The crack is the loudest thing in it: over the rain it has to be.
+    const at = (o, x) => { const sp = ac.createStereoPanner(); sp.pan.value = clamp(x, -1, 1); sp.connect(o); return sp; };
+    const over = (drive, level, o) => { const g = this.gain(drive); g.connect(this.shaper(this.driveCurve())).connect(this.gain(level)).connect(o); return g; };
+    const cp = over(mix(2, 0.8, u), 1, at(air, p * mix(0.7, 0.4, u))), cp2 = over(mix(2, 0.8, u), 0.7, at(air, p * 0.5 + R(-0.25, 0.25)));
+    const bp = over(mix(1.4, 0.45, u), 0.52, air);
+    const wide = 0.2 + 0.55 * u, rp = [-1, 0, 1].map((k) => at(roll, p * 0.6 * (1 - u) + k * wide));
+    // A swell of low noise into o: looped noise through a low-pass falling f0 -> f1, rising over a, dying over d.
+    const swell = (o, tk, buf, f0, f1, peak, a, d, rate = 1) => {
+      const s = this.src(buf, true, rate), lp = this.filter('lowpass', f0, 0.5), g = this.gain(0);
+      s.connect(lp).connect(g).connect(o);
+      lp.frequency.setValueAtTime(f0, tk); lp.frequency.exponentialRampToValueAtTime(f1, tk + a + d);
+      this.env(g, tk, a, peak, d);
+      s.start(tk, Math.random() * 3); s.stop(tk + a + d + 0.05);
+    };
+
+    // The crack. Very close, the air tearing a moment ahead of it; then the snap, its hiss ripping away, and the
+    // ragged body of it (which further off is all that's left: a rattle, slower and duller).
+    const tear = crack > 0.5 ? crack * crack * R(0.03, 0.13) : 0, t0 = t + tear;
+    if (tear) this.burst(cp, t, { buf: torn, type: 'highpass', f: 1800, q: 0.7, peak: 0.5 * crack, a: tear, d: 0.02 });
+    if (crack > 0.02) {
+      this.burst(cp, t0, { buf: white, type: 'highpass', f: 450, q: 0.7, peak: 2 * crack, a: 0.0003, d: R(0.2, 0.3) });
+      this.burst(cp, t0, { buf: torn, type: 'highpass', f: 2400, q: 0.7, peak: 1.2 * crack, a: 0.0005, d: R(0.3, 0.55) });
     }
-    // The boom (slow to swell when far).
-    const atk = 0.06 + (1 - n) * 0.9;
-    if (n > 0.2) this.tone(o, tb, 80, 30, 0.7 * n, 0.01, 1.6);
-    this.burst(o, tb, { buf: this.brown, type: 'lowpass', f: 160, q: 0.6, peak: 0.9, a: 0.01 + (1 - n) * 0.5, d: 2.2 });
-    this.burst(o, tb, { buf: this.pink, type: 'lowpass', f: 500 + 1200 * n, q: 0.5, peak: 0.1 + 0.6 * n, a: 0.008 + (1 - n) * 0.4, d: 0.9 });
-    // The roll: noise lumbering about and darkening as it goes, a sub-bass weight under it, and later swells.
-    const roll = this.src(this.pink), lp = this.filter('lowpass', 1200, 0.6), lum = this.gain(1), rg = this.gain(0);
-    roll.connect(lp).connect(lum).connect(rg).connect(ro);
-    lp.frequency.setValueAtTime(450 + 1350 * n, tb); lp.frequency.exponentialRampToValueAtTime(120 + 110 * n, tb + dur);
-    rg.gain.setValueAtTime(0.0001, tb); rg.gain.exponentialRampToValueAtTime(0.55, tb + atk);
-    rg.gain.exponentialRampToValueAtTime(0.3, tb + atk + dur * 0.3); rg.gain.exponentialRampToValueAtTime(0.06, tb + dur * 0.8);
-    rg.gain.exponentialRampToValueAtTime(0.0001, tb + dur);
-    const mod = ac.createBufferSource(); mod.buffer = this.fireMod; mod.loop = true; mod.playbackRate.value = R(1.8, 3);
-    mod.connect(this.gain(0.6)).connect(lum.gain);
+    if (rattle > 0.02) this.burst(cp, t0, { buf: torn, f: mix(1900, 600, u), q: 0.5, peak: 1.6 * rattle, a: 0.0008 + 0.3 * u * u, d: mix(0.6, 1.4, u), rate: mix(1, 0.45, u) });
+    // A close strike deafens for a moment: the rain and the howl dip under the crack (by up to 6 dB at 100 m, nothing
+    // past 1 km) and are back within a second. (It also leaves the crack its headroom.)
+    if (crack > 0.05) {
+      const g = this.stormBus.gain;
+      g.setTargetAtTime(1 - 0.5 * crack, t0, 0.012); g.setTargetAtTime(1, t0 + 0.25, 0.3);
+    }
+    // The boom, right behind it (close, 30-50 ms: the crack has had its moment by then, KRAK-BOOM): a sub thump
+    // sweeping down (close only), the low pressure of it, and its body.
+    const tb = t0 + mix(R(0.03, 0.05), atk * R(0.3, 0.6), u);
+    if (u < 0.65) this.tone(bp, tb, mix(95, 60, u), mix(32, 24, u), 0.9 * Math.pow(1 - u / 0.7, 1.5), 0.006 + atk * 0.5, R(0.7, 1.1));
+    swell(bp, tb, this.brown, mix(200, 110, u), mix(90, 60, u), 2.6, atk, mix(2.3, 5, u) * R(0.9, 1.2));
+    swell(bp, tb, this.pink, mix(1300, 300, u), mix(300, 120, u), mix(1.4, 0.7, u), atk * 0.7 + 0.004, mix(0.7, 3, u));
+    // The rest of the channel, further off: more cracks, each later, duller and smaller, each with its own thump.
+    let ts = t0 + 0.05;
+    for (let i = 0, n = Math.round(R(2, 5) * Math.min(1, rattle * 1.5)); i < n; i++) {
+      ts += R(0.08, 0.4) * (1 + 1.5 * u);
+      const f = i / n, k = 1 - 0.45 * f;
+      this.burst(cp2, ts, { buf: torn, f: R(800, 2200) * k, q: 0.6, peak: R(0.7, 1.5) * rattle * k, a: R(0.001, 0.004) + 0.15 * u * u, d: R(0.2, 0.5) * (1 + 1.5 * u), rate: R(0.55, 1) });
+      if (crack > 0.15) this.burst(cp2, ts, { buf: white, type: 'highpass', f: R(600, 1400), q: 0.7, peak: crack * R(0.3, 0.8) * k, a: 0.0004, d: R(0.08, 0.2) });
+      swell(bp, ts, this.brown, R(150, 260), 80, R(0.8, 1.6) * k, 0.008 + atk * 0.5, R(0.5, 1.2) * (1 + u));
+    }
+
+    // The roll. Its bed: noise darkening as it goes, lurching on the fire's smoothed random (fast and rough when
+    // close, slow when far), its level a ragged fall; a sub-bass weight under it.
+    const bed = this.src(this.pink), lp = this.filter('lowpass', 1000, 0.6), lum = this.gain(1), bg = this.gain(0);
+    bed.connect(lp).connect(lum).connect(bg).connect(rp[1]);
+    lp.frequency.setValueAtTime(mix(1200, 240, u), t); lp.frequency.exponentialRampToValueAtTime(mix(150, 70, u), t + dur);
+    const mod = ac.createBufferSource(); mod.buffer = this.fireMod; mod.loop = true; mod.playbackRate.value = mix(7, 2.5, u) * R(0.8, 1.3);
+    mod.connect(this.gain(0.7)).connect(lum.gain);
+    const rise = atk * 1.2 + mix(0.45, 0.1, u), top = mix(0.9, 0.5, u), steps = 4 + Math.floor(dur / 1.5);
+    bg.gain.setValueAtTime(0.0001, t); bg.gain.exponentialRampToValueAtTime(top, t + rise);
+    for (let i = 1; i <= steps; i++) {
+      const f = i / steps;
+      bg.gain.exponentialRampToValueAtTime(top * Math.pow(mix(0.012, 0.06, u), f) * R(0.5, 1.3), t + rise + (dur - rise) * (f + R(-0.3, 0.3) / steps));
+    }
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + dur + 2.5);
     const sub = this.src(this.brown), sg = this.gain(0);
-    sub.connect(this.filter('lowpass', 90, 0.6)).connect(sg).connect(ro);
-    sg.gain.setValueAtTime(0.0001, tb); sg.gain.exponentialRampToValueAtTime(0.8, tb + atk + 0.2); sg.gain.exponentialRampToValueAtTime(0.0001, tb + dur + 1);
-    roll.start(tb, Math.random() * 3); roll.stop(tb + dur + 0.1);
-    mod.start(tb, Math.random() * 60); mod.stop(tb + dur + 0.1);
-    sub.start(tb, Math.random() * 3); sub.stop(tb + dur + 1.1);
-    for (let k = 3 + Math.floor(Math.random() * 3); k > 0; k--) {
-      const tk = tb + R(0.4, dur * 0.7), a = R(0.3, 0.7) * (1 - (tk - tb) / dur);
-      this.burst(ro, tk, { buf: this.brown, type: 'lowpass', f: R(140, 260 + 500 * n), q: 0.6, peak: a, a: R(0.06, 0.35), d: R(0.6, 1.6) });
-      this.burst(ro, tk, { buf: this.pink, type: 'lowpass', f: R(300, 500 + 900 * n), q: 0.5, peak: a * 0.5, a: R(0.05, 0.3), d: R(0.4, 1.1) });
+    sub.connect(this.filter('lowpass', mix(95, 75, u), 0.6)).connect(sg).connect(bp);
+    sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime(0.9, t + rise + 0.15); sg.gain.exponentialRampToValueAtTime(0.0001, t + dur + 2.5);
+    bed.start(t, Math.random() * 3); bed.stop(t + dur + 2.6);
+    mod.start(t, Math.random() * 60); mod.stop(t + dur + 2.6);
+    sub.start(t, Math.random() * 3); sub.stop(t + dur + 2.6);
+    // And the rolls over it: 2-3 close (short, soon over), 6-8 far (long, slow to rise, overlapping, the biggest a
+    // little way in), each from its own place and each duller than the one before.
+    const rolls = Math.round(mix(2, 6.5, u) + R(0, 1.4));
+    for (let i = 0; i < rolls; i++) {
+      const f = (i + R(0.1, 0.9)) / rolls, tk = t + rise * mix(1, 0.6, u) + mix(0.15, 0, u) + f * dur * mix(0.5, 0.7, u);
+      const big = u * Math.exp(-Math.pow((f - 0.22) / 0.15, 2)), a = R(0.5, 1) * mix(1.4, 1, u) * (1 - 0.7 * f) * (1 + 0.6 * big);
+      const o = rp[Math.floor(Math.random() * 3)], f0 = R(170, 330) * mix(1, 0.75, u) * (1 - 0.5 * f);
+      const up = R(0.06, 0.25) + atk * R(0.25, 0.7), down = R(0.8, 1.6) * mix(1, 5, u);
+      swell(o, tk, this.brown, f0, f0 * 0.5, a, up, down, R(0.6, 1));
+      if (i % 2 === 0) swell(o, tk, this.pink, f0 * mix(3, 1.6, u), f0, a * 0.45, up, down * 0.7, R(0.6, 1));
     }
   }
 
@@ -2072,37 +2127,43 @@ export class AudioEngine {
     air.start(t, Math.random() * 3); air.stop(end);
   }
 
-  // The ending's alarm clock (sequences/ending.js): a cheap digital buzzer, a nasal pulse with a rough edge to it,
-  // through a small speaker, going BZZT-BZZT-BZZT, rest (buzzGateBuffer), heard down the dream's long dark reverb
-  // (buildDream). It starts faint, muffled and drowned in the reverb; the handle brings it up dry and present:
+  // The ending's alarm clock (sequences/ending.js): a cheap clock radio's buzzer, low, harsh and stupid. A 226 Hz
+  // narrow pulse (buzzWave) whose pitch never quite holds (a few cents of fast random wander), a rasp of noise in it,
+  // through a small speaker (two hard resonances, overdriven till it clips, no lows, no top), and chopped at 50 Hz
+  // (every 4.5 cycles, so each chop catches the wave differently and it rattles, like a diaphragm against its stop);
+  // going BZZZT, BZZZT, BZZZT (buzzGateBuffer), heard down the dream's long dark reverb (buildDream). It starts
+  // faint, muffled and drowned in the reverb; the handle brings it up dry and present:
   //   setWet(v, tau = 0.3): the reverb's level, 0..1 (starts at 1)
   //   setDry(v, tau = 0.3): the direct sound, 0..1 (starts at 0.3), its tone opening out from muffled to bright with it
   //   stop(fade = 0.05): everything, the reverb's tail too, to silence over `fade` s
   // level: the buzzer's loudness (0.5 sits with the other sounds). One alarm at a time: the reverb is shared.
   sfx_buzzAlarm({ level = 0.5 }, t) {
     const ac = this.ctx;
-    const f0 = 496;
+    const f0 = 226;
     const tone = ac.createOscillator(); tone.setPeriodicWave(this.buzzWave()); tone.frequency.value = f0;
-    const saw = ac.createOscillator(); saw.type = 'sawtooth'; saw.frequency.value = f0 * 2.004;
-    const rough = this.gain(0.72), am = ac.createOscillator();
-    am.type = 'square'; am.frequency.value = 62;
-    am.connect(this.gain(0.28)).connect(rough.gain);
-    tone.connect(rough); saw.connect(this.gain(0.16)).connect(rough);
-    const gate = this.gain(0), gs = ac.createBufferSource();
+    const am = ac.createOscillator(); am.type = 'square'; am.frequency.value = f0 / 4.5;
+    const jit = ac.createBufferSource(); jit.buffer = this.fireMod; jit.loop = true; jit.playbackRate.value = 40;
+    const cents = this.gain(18);
+    jit.connect(cents); cents.connect(tone.detune); cents.connect(am.detune);
+    const rough = this.gain(0.675);
+    am.connect(this.gain(0.325)).connect(rough.gain);
+    const gate = this.gain(0), gs = ac.createBufferSource(), rasp = this.src(this.white);
     gs.buffer = this.buzzGate; gs.loop = true;
     gs.connect(gate.gain);
-    const pk1 = this.filter('peaking', 1250, 1.2), pk2 = this.filter('peaking', 2700, 1.6);
-    pk1.gain.value = 5; pk2.gain.value = 7;
+    tone.connect(gate); rasp.connect(this.filter('bandpass', 1800, 0.7)).connect(this.gain(0.22)).connect(gate);
+    const pk1 = this.filter('peaking', 880, 1.6), pk2 = this.filter('peaking', 2500, 2);
+    pk1.gain.value = 7; pk2.gain.value = 12;
     const voice = this.gain(Math.max(0, +level || 0) * LEVEL.buzz);
-    rough.connect(gate).connect(this.gain(1.5)).connect(this.shaper(this.driveCurve()))
-      .connect(this.filter('highpass', 450, 0)).connect(pk1).connect(pk2).connect(this.filter('lowpass', 6200, 0)).connect(voice);
+    gate.connect(pk1).connect(pk2).connect(this.gain(3)).connect(this.shaper(this.driveCurve())).connect(rough)
+      .connect(this.filter('highpass', 200, 0)).connect(this.filter('lowpass', 5200, 0)).connect(voice);
     const top = (v) => 700 * Math.pow(18, v);   // the direct sound's tone: muffled when faint, bright at 1
     const dryLP = this.filter('lowpass', top(0.3), 0), dry = this.gain(0.3), out = this.gain(1);
     voice.connect(dryLP).connect(dry).connect(out).connect(this.route);
     voice.connect(this.dreamIn);
     const wet = this.dreamOut.gain;
     wet.cancelScheduledValues(t); wet.setValueAtTime(LEVEL.buzzWet, t);
-    for (const x of [tone, saw, am, gs]) x.start(t);
+    const srcs = [tone, am, jit, rasp, gs];
+    for (const x of srcs) x.start(t);
     let stopped = false;
     const at = () => Math.max(this.now(), t);
     const tau = (x) => Math.max(0.005, +x || 0);
@@ -2120,7 +2181,7 @@ export class AudioEngine {
         const tt = at(), f = tau(fade);
         out.gain.setTargetAtTime(0, tt, f / 5);
         wet.setTargetAtTime(0, tt, f / 5);
-        for (const x of [tone, saw, am, gs]) x.stop(tt + f * 1.6 + 0.02);
+        for (const x of srcs) x.stop(tt + f * 1.6 + 0.02);
       },
     };
   }
@@ -2261,8 +2322,8 @@ export class AudioEngine {
 
   // The storm's bed (buildStorm), each frame from update(): plugged in and started with the first storm, unplugged
   // again a few seconds after it has gone. s: the storm (eased); k: how much of the outdoors reaches the listener (0
-  // underground, low in an elevator car; thunder is held to it too). The rain swells and brightens a little with the
-  // gusts; the howl follows them.
+  // underground, low in an elevator car; thunder is held to it too). The rain is steady, only leaning a little with the
+  // gusts (under a dB either way); the howl follows them.
   stormBed(now, s, k) {
     if (k !== this.stormK) { this.stormK = k; this.thunderBus.gain.setTargetAtTime(k, now, 0.3); }
     if (s > 0.001) {
@@ -2274,13 +2335,8 @@ export class AudioEngine {
       this.stormLive = false;
     }
     if (!this.stormLive) return;
-    const r = s * k, g = Math.min(1.4, this.gust), breath = 0.85 + 0.2 * g;
-    this.rainHiss.gain.setTargetAtTime(RAIN.hiss * r * breath, now, 0.4);
-    this.rainHissLP.frequency.setTargetAtTime(6500 + 2500 * g, now, 0.6);
-    this.rainBody.gain.setTargetAtTime(RAIN.body * r * breath, now, 0.4);
-    this.rainDrum.gain.setTargetAtTime(RAIN.drum * r, now, 0.6);
-    this.rainPat.gain.setTargetAtTime(RAIN.patter * Math.pow(r, 1.3), now, 0.4);
-    this.rainMetal.gain.setTargetAtTime(RAIN.metal * Math.pow(r, 1.5), now, 0.4);
+    const r = s * k, g = Math.min(1.4, this.gust);
+    this.rainOut.gain.setTargetAtTime(RAIN.wash * k * Math.pow(s, 1.3) * (0.94 + 0.1 * g), now, 1.2);
     this.howl.gain.setTargetAtTime(RAIN.howl * r * Math.max(0, g - 0.25), now, 0.5);
     const hf = 440 + g * 380;
     this.howlBP.frequency.setTargetAtTime(hf, now, 0.9);

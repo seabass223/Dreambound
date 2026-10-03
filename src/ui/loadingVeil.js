@@ -92,7 +92,7 @@ export function createLoadingVeil(veil, t0 = performance.now()) {
   const screen = document.createElement('div');
   screen.className = 'title-screen';
   const header = document.createElement('header');
-  header.innerHTML = '<h1>Dreambound</h1><p>A quiet world of seas stack islands above the clouds. Wander, look closely, and press on what catches your eye. Exploring is encouraged, as is note-taking.</p>';
+  header.innerHTML = '<h1>Dreambound</h1><p>A quiet world of seas stack islands above the clouds. Wander, look closely, take it in. Exploring is encouraged, as is note-taking. Grab your favorite drink and see if you can awaken from the dream.</p>';
   const controls = document.createElement('div');
   controls.className = 'controls';
   controls.setAttribute('aria-label', 'Controls');

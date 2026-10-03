@@ -4,6 +4,9 @@ import { h, button, card, section, hint, spacer, field, slider, toggle, toggleGr
 import { checkSas } from '../net/azure.js';
 import { gradeTimeline, CSS as TIMELINE_CSS } from './gradeTimeline.js';
 
+// The build number (yyyy-mm-dd.x, vite.config.js), beside the menu's title: blank in a dev run.
+const BUILD_NUMBER = typeof __DREAMBOUND_BUILD_NUMBER__ !== 'undefined' ? __DREAMBOUND_BUILD_NUMBER__ : '';   // eslint-disable-line no-undef
+
 const KEY = 'dreambound.settings.v1';
 const DEFAULTS = {
   walk: 1,
@@ -124,13 +127,16 @@ const CSS = `
 #settings .locked-note { color: oklch(0.8 0.1 75); }
 ` + TIMELINE_CSS;
 
+// The Travel section (Menu > Game) is there only with localStorage "travel" set to 1.
+const TRAVEL_UI = (() => { try { return localStorage.getItem('travel') === '1'; } catch { return false; } })();
+
 const x2 = (v) => v.toFixed(2);
 const times = (v) => v.toFixed(2) + '×';
 // The menu, as data: groups at the top level, each opening a page of sections of rows, every row built by the UI kit
 // from its entry. key: a settings value (saved); live: a value that isn't a setting (the clock). The 'game', 'travel'
 // and 'looks' rows are built by hand below.
 const GROUPS = [
-  { id: 'game', title: 'Game', description: 'Save, load, restart, travel', iconName: 'flag', sections: [
+  { id: 'game', title: 'Game', description: TRAVEL_UI ? 'Save, load, restart, travel' : 'Save, load, restart', iconName: 'flag', sections: [
     ['Progress', [{ type: 'game' }]],
     ['Travel', [{ type: 'travel' }, { type: 'endgame' }, { type: 'locked', lock: 'travel' }]],
   ] },
@@ -430,12 +436,12 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
     controls[f.key] = c;
     return field({ label: f.label, control: c, inline: f.type === 'switch' || f.type === 'choice' });
   };
-  const usable = (f) => !(((f.type === 'game' || f.type === 'endgame') && !game) || (f.type === 'travel' && !game?.places?.length));
+  const usable = (f) => !(((f.type === 'game' || f.type === 'endgame') && !game) || (f.type === 'travel' && !(TRAVEL_UI && game?.places?.length)));
   const groups = GROUPS
     .map((g) => ({ ...g, sections: g.sections.filter(([, fields]) => fields.every(usable)) }))
     .filter((g) => g.sections.length);
   const pages = groups.map((g) => ({ ...g, content: () => g.sections.map(([title, fields]) => section(title, ...fields.map(make))) }));
-  const nav = navStack({ root: { title: 'Menu' }, pages });
+  const nav = navStack({ root: { title: 'Menu', aside: BUILD_NUMBER && 'Build ' + BUILD_NUMBER }, pages });
   // Build every page up front: sync() needs their controls, and nothing gets built mid-game.
   for (const p of pages) nav.open(p.id);
   nav.reset();

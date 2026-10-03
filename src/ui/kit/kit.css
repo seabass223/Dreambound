@@ -84,6 +84,7 @@
 .ui-nav-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; padding: 18px 0 8px; margin-left: -4px;
   background: linear-gradient(var(--card) 70%, transparent); }
 .ui-nav-page:first-child .ui-nav-header { margin-left: 0; }
+.ui-nav-aside { margin-left: auto; font: 11px var(--font-mono); color: var(--muted-foreground); }
 .ui-nav-instant .ui-nav-track, .ui-nav-instant .ui-nav-page { transition: none; }
 @media (prefers-reduced-motion: reduce) { .ui-nav-track, .ui-nav-page { transition: none; } }
 .ui-icon { flex: none; }

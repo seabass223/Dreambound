@@ -78,11 +78,12 @@ export const buttonGroup = (...buttons) => h('div', { class: 'ui-btn-group', rol
 
 // ---- navStack: a root page and one level of pages below it. The root lists its pages as items; opening one slides
 // it in from the right (the root slides out left), with its title and a back button above its content.
-// root: { title, content: [...] } — pages: [{ id, title, description, iconName, content: () => [...] }]
+// root: { title, aside (a quiet note at the title's far end), content: [...] } — pages: [{ id, title, description, iconName, content: () => [...] }]
 // Returns { el, open(id), back(), reset(), depth }.
 export function navStack({ root, pages }) {
   const rootPage = h('div', { class: 'ui-nav-page' },
-    h('div', { class: 'ui-nav-header' }, h('h2', { class: 'ui-card-title' }, root.title)),
+    h('div', { class: 'ui-nav-header' }, h('h2', { class: 'ui-card-title' }, root.title),
+      root.aside ? h('span', { class: 'ui-nav-aside' }, root.aside) : null),
     ...(root.content ?? []),
     itemGroup(...pages.map((p) => item({ title: p.title, description: p.description, iconName: p.iconName, onClick: () => api.open(p.id) }))));
   const sub = h('div', { class: 'ui-nav-page' });

@@ -180,6 +180,7 @@ export function createDebugReport({ ctx, player, camera, clock, renderer, scene,
       build: {
         version: typeof __DREAMBOUND_VERSION__ !== 'undefined' ? __DREAMBOUND_VERSION__ : null,   // eslint-disable-line no-undef
         built: typeof __DREAMBOUND_BUILD__ !== 'undefined' ? __DREAMBOUND_BUILD__ : null,          // eslint-disable-line no-undef
+        number: (typeof __DREAMBOUND_BUILD_NUMBER__ !== 'undefined' && __DREAMBOUND_BUILD_NUMBER__) || null,   // eslint-disable-line no-undef
         mode: import.meta.env?.MODE ?? null,
         three: THREE.REVISION,
       },

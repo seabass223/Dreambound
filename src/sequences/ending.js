@@ -252,7 +252,7 @@ export function createEnding(ctx, opts = {}) {
       clock.setMinutes?.(m);
       clock.setColon?.(t >= T.count[0] || (t % 1) < 0.5);
       clock.setGlow?.(smoothstep(T.rise[0], T.rise[0] + 1.2, t) * (1 + 0.6 * smoothstep(T.count[0], T.count[1], t)));
-      once('alarm', T.alarm, () => { alarm = play('buzzAlarm', { level: 0.5 }); });
+      once('alarm', T.alarm, () => { ctx.storm?.holdNear?.(true); alarm = play('buzzAlarm', { level: 0.5 }); });   // (the storm keeps its distance while it rings)
       once('nearer', T.count[0] + 2.5, () => alarm?.setDry?.(0.5, 1.5));   // (the dream thinning)
       once('awake', T.count[1], () => { alarm?.setWet?.(0, 0.4); alarm?.setDry?.(1, 0.3); });
 
