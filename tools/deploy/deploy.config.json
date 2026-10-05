@@ -1,5 +1,5 @@
 {
-  "$comment": "Defaults for npm run deploy (tools/deploy/deploy.mjs). Flags override them; see the README's Deploy section.",
+  "$comment": "Defaults for npm run deploy (tools/deploy/deploy.mjs). Flags override them; see Agent-README.md's Deploy section.",
 
   "$encode": "transfer compression of models, code and page: none | br | gzip. Lossless, undone by the browser: the game gets the same bytes.",
   "encode": "br",

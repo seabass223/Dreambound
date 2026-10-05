@@ -48,7 +48,7 @@ level table, what you saw).
    rolling rumble. An alarm that was "too nice" became a low, harsh buzzer. The elevator's doors got separate opening
    and closing sounds timed to the leaves' travel. Birds became distinct species singing bouts from their perches. If
    the words could mean two different sounds, render both and ask.
-4. **Rules.** Keep to the engine's (README, "The engine's rules"): only the node types the test mocks have (wave
+4. **Rules.** Keep to the engine's (`tools/audio/README.md`, "The engine's rules"): only the node types the test mocks have (wave
    shapers through `this.shaper()`), out through `world` (outdoor beds through `outdoor`; one-shots by `this.out()` /
    `this.route`), no exponential ramp to or from 0, nothing scheduled in the past, every source stopped, no nodes made
    per frame in `update()`, levels in the tables at the top of the file, slow-to-make buffers baked in `prepare()`.
@@ -65,8 +65,8 @@ level table, what you saw).
    again as in step 2 (`...after.log`) and compare their `PASS` / `FAIL` lines with the before's: only a line that
    turned from `PASS` to `FAIL` is yours, and an exit code of 1 is not by itself. Of `elevator_test.mjs` only the three
    checks named `audio ...`, at its end, are about sound; all of `dome_wind_test.mjs` is.
-8. **Callers and README.** Option names, defaults and durations still match every caller. If the sentence in
-   `README.md` that describes the sound is now wrong, correct it. A sound that is new, or newly worth comparing, gets
+8. **Callers and the reference.** Option names, defaults and durations still match every caller. If the sentence in
+   `Agent-README.md` that describes the sound is now wrong, correct it. A sound that is new, or newly worth comparing, gets
    a job in `tools/audio/jobs.mjs`, and a place in its `GROUPS`.
 9. **Hand over.** Send (SendUserFile) the pair, `tools/audio/out/<job>.before.wav` and `<job>.after.wav`, and the
    picture of the two, `<job>.pair.png`, with a few lines on what changed and the levels before and after. Say plainly

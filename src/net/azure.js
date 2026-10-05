@@ -1,6 +1,6 @@
 // Azure Storage from the browser with SAS URLs only (no SDK, no account keys): a block blob upload and a queue message.
 // Used by the bug report dialog (ui/reportDialog.js). The storage account needs CORS rules for the game's origin on
-// both the Blob and the Queue service (see the README's Bug reports section).
+// both the Blob and the Queue service (see Agent-README.md, Debug reports).
 //
 // SAS URLs are bearer credentials: whoever holds one can do what it allows. The reports only need
 //   blob:  a container SAS with Create + Write (sp=cw): it can add new blobs, not read, list, overwrite or delete;

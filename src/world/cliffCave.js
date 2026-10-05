@@ -17,7 +17,7 @@ import { PATH_TILE } from './cliffPath.js';
 const MOUTH = { halfW: 1.85, spring: 1.5 };   // the arch: half width, and the height its round top starts at (top 3.35)
 const NF = 12, NS = 6, NA = 30;                // outline points: along the floor, up each side, over the arch
 // The rock round the elevator's plate (|x| < 1.85, 3.3 m high, its face 0.07 m in front of the elevator's root;
-// README "Blender models"): the tunnel's last metre and a half eases from rough rock into a squared reveal a little
+// Agent-README.md, "Blender models"): the tunnel's last metre and a half eases from rough rock into a squared reveal a little
 // inside the plate's outline, standing `ahead` in front of its face, so the rock laps over the plate's edges (you never
 // see the plate's sides) and it reads as set into the rock.
 const PLATE_REVEAL = { halfW: 1.82, height: 3.27, from: 0.72, ahead: 0.02 };

@@ -326,7 +326,7 @@ Rocks 1; oblique: End 5, Tower 2, Rocks 1; strafe: End 4). No R7 case fails.
   3 and `R6:end:oblique:292.5deg:55` in 2, with the walls and caps there unchanged.
 - Not covered by R6 (known gaps): the controller's 9 m fall trigger used to fire while the player was still over a
   steep Mountain cap face (feet 0.1-0.9 m above the ground), and `createFall` leaves out the stack it starts over,
-  so such a fall dropped through the cap. The Mountain's slope limit (README "Walking and slopes") closed it for
+  so such a fall dropped through the cap. The Mountain's slope limit (Agent-README.md, "Walking and slopes") closed it for
   faces up to 50°: a slide down them counts as on the ground. Steeper cap faces used to be cliffs that still fell: a
   run from the observatory off one arm of the switchbacks onto the next (an 8 m bank of 44-72° faces at the hairpin
   21-23 m from the summit, 40° right of the door), or off the plateau at Walk speed above 1x, reached the 9 m and

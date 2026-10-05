@@ -24,7 +24,7 @@ Work through Dreambound's bug report inbox (tools/bugqueue/lib.mjs explains the 
    code: write that up in resolution.md and move on.
 6. **Fix and verify** as usual for this project: the smallest change that fixes it, checked in the preview with a
    before/after capture, the regression harness (`node tools/regress/run.mjs`) re-baselined only when every difference
-   is explained, `npm run build`, and the README kept current. Don't commit. If the fix needs a decision from the user
+   is explained, `npm run build`, and `Agent-README.md` (the technical reference) kept current. Don't commit. If the fix needs a decision from the user
    (a design choice, something ambiguous, a large change), write `waiting.md` in its folder saying what you need, ask
    the user, and go on to the next report instead of guessing.
 7. **Close it.** Write `resolution.md` in the report's folder (what was wrong, what changed with file references, how
