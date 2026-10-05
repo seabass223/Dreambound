@@ -291,7 +291,7 @@ void main() {
   float I = 1.0, halfPx = 4.0;
   if (j > 0.5) {
     // A branch: fading toward its tip.
-    I = uBranch * 0.55 * pow(1.0 - s, 1.3);
+    I = uBranch * 0.55 * pow(max(1.0 - s, 0.0), 1.3);
     halfPx = 2.6;
   }
   vec3 P = aPath.xyz;

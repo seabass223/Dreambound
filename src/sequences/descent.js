@@ -2,7 +2,8 @@
 // main.js wires it here), and from then on there's no going back. Whatever the hour, the sky turns to midnight and
 // stays there (the clock eases forward to it, or back the short way if midnight has only just gone); a storm rolls in
 // (rain, lightning and thunder, the wind up: render/storm.js); the time of day and Travel are locked in the menu
-// (ui/settings.js); and the staircase is armed, so each section falls away once it's behind the player.
+// (ui/settings.js), and so is the pace: Walk speed is held at 1x whatever the setting, and Shift doesn't run; and the
+// staircase is armed, so each section falls away once it's behind the player.
 //
 // Also called by a restored save that was made after it (core/save.js), instant: midnight, the storm and the locks at
 // once. ctx.state.endgame.descent is the flag the save keeps.
@@ -28,6 +29,7 @@ export function startDescent(ctx, { clock = ctx.clock, storm = ctx.storm, settin
   storm?.set?.(1, instant ? 0 : 18);
   settings?.lockTime?.(true);
   settings?.lockTravel?.(true);
+  settings?.lockWalk?.(true);
   if (ctx.gatehouse) ctx.gatehouse.armed = true;
   return true;
 }

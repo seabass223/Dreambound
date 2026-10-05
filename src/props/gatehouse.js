@@ -113,7 +113,11 @@ function beamMaterial(color) {
       float h(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
       void main() {
         if (uK <= 0.0) discard;
-        float v = 1.0 - vUv.y;   // (glTF flips v: the design's 0 at the lens arrives as 1)
+        // (glTF flips v: the design's 0 at the lens arrives as 1. Clamped: with MSAA a pixel on the cone's edge is
+        // shaded at its centre, off the triangle, where the varying runs past its ends; pow of a negative is NaN, and
+        // one NaN pixel in an additive mesh goes through the bloom's blurs over the whole frame: the screen went black
+        // the moment the lamps came on, bug report 1e2b1c67.)
+        float v = clamp(1.0 - vUv.y, 0.0, 1.0);
         float along = pow(1.0 - v, 1.6) * smoothstep(0.0, 0.06, v);
         float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.4);
         float motes = 0.85 + 0.15 * sin(vW.x * 1.7 + vW.y * 2.3 + uTime * 0.7) * sin(vW.z * 1.3 - uTime * 0.5);

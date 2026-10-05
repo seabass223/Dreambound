@@ -358,6 +358,19 @@ export function createPostFX(renderer, scene, camera) {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.35, 0.55, 1.35);
+  // A pixel that isn't a number (a shader's pow or sqrt of a negative: with MSAA an interpolated value can run past its
+  // ends at a triangle's edge) is one bad pixel in the scene, but the bloom's blurs average it into everything round
+  // it, mip after mip, and the whole frame goes black (bug report 1e2b1c67: the gatehouse's light cones). So the
+  // bloom's bright-pass leaves such pixels out, and caps what it takes: the fault stays the size of a pixel.
+  {
+    const m = bloom.materialHighPassFilter, read = 'vec4 texel = texture2D( tDiffuse, vUv );';
+    if (m.fragmentShader.includes(read)) {
+      m.fragmentShader = m.fragmentShader.replace(read, `${read}
+			if ( any( isnan( texel ) ) || any( isinf( texel ) ) || ! ( dot( texel.rgb, vec3( 1.0 ) ) >= 0.0 ) ) texel = vec4( 0.0 );
+			texel = min( texel, vec4( 64.0 ) );`);
+      m.needsUpdate = true;
+    } else console.warn('postfx: the bloom bright-pass has changed; its NaN guard is not in');
+  }
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
   // Anti-aliasing (the Menu's Graphics > Anti-aliasing), off by default. FXAA: a pass on the finished image, before the

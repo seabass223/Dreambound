@@ -8,9 +8,21 @@
 export const CREDITS = [
   'Dreambound',
   '',
-  'A game by Kyle Sebestyen',
+  ['World Design', 'Kyle Sebestyen'],
   '',
-  'Built with three.js and Blender',
+  ['Puzzle Design', 'Kyle Sebestyen'],
+  '',
+  ['Concept Art', 'GPT5.6'],
+  '',
+  ['Programming', 'Opus 5.5'],
+  '',
+  ['3D Modeling', 'Opus 5.5 with Blender MCP'],
+  '',
+  ['Textures and Lightmapping', 'Opus 5.5 with Blender MCP'],
+  '',
+  ['Sound Design', 'Opus 5.5 in browser api'],
+  '',
+  ['Camera Cutscene Sequencing', 'Opus 5.5'],
 ];
 
 const SPEED = 0.07;    // of the screen's height per second

@@ -97,6 +97,7 @@ export class Player {
 
   updateWalk(dt) {
     const a = this.canMove && !this.lookHandler ? this.input.axis() : { x: 0, y: 0, run: false };
+    if (this.canRun === false) a.run = false;   // (the descent: Shift doesn't run, ui/settings.js lockWalk)
     _fwd.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     _right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
     _move.set(0, 0, 0).addScaledVector(_fwd, a.y).addScaledVector(_right, a.x);

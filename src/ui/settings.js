@@ -188,6 +188,7 @@ const GROUPS = [
   { id: 'gameplay', title: 'Gameplay', description: 'Walk speed, time of day', iconName: 'footprints', sections: [
     ['Movement', [
       { key: 'walk', label: 'Walk speed', type: 'slider', min: 0.5, max: 2, step: 0.05, format: times },
+      { type: 'locked', lock: 'walk' },
       { key: 'headBob', label: 'Head bob', type: 'slider', min: 0, max: 1, step: 0.05, format: (v) => (v < 0.025 ? 'Off' : Math.round(v * 100) + '%') },
       { type: 'hint', text: 'How much the view bobs and sways as you walk and run. Lower it for a steadier view; Off holds it level.' },
     ]],
@@ -218,8 +219,9 @@ const GROUPS = [
   ] },
 ];
 
-// What a locked control says, under it (shown only while it's locked: lockTime, lockTravel).
+// What a locked control says, under it (shown only while it's locked: lockTime, lockTravel, lockWalk).
 const LOCKED = {
+  walk: 'The stairs set the pace now: walk speed is held at 1.00× and there is no running.',
   time: 'Midnight holds now: the time of day can\'t be changed.',
   travel: 'There is no way back from here: travel is closed.',
 };
@@ -241,7 +243,7 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
   const dbg = loadDebug();
   const api = { open: false, values: s, debug: dbg, onChange: null };
   // The endgame's locks (sequences/descent.js): the clock is held at midnight, and there's no travelling back.
-  const locked = { time: false, travel: false };
+  const locked = { time: false, travel: false, walk: false };
 
   // Color grading looks: a button each (pressed while the grade is exactly that look), and Clear.
   const same = (a, b) => GRADE_KEYS.every((k) => (typeof b[k] === 'string' ? String(a[k]).toLowerCase() === b[k].toLowerCase() : Math.abs(a[k] - b[k]) < 1e-6));
@@ -296,7 +298,8 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
   });
 
   function apply() {
-    player.speedMul = s.walk;
+    player.speedMul = locked.walk ? 1 : s.walk;   // (the descent's pace: lockWalk; the setting itself is kept)
+    player.canRun = !locked.walk;
     player.bobScale = s.headBob;
     fx.gamma = s.gamma * (1 + lift);   // the lift itself eases in update()
     fx.brightness = s.brightness;
@@ -321,9 +324,10 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
     },
   };
   const tone = (f) => GRADE_KEYS.includes(f.key);
-  const read = (f) => (f.live ? live[f.key].get() : f.store === 'debug' ? dbg[f.key] : tone(f) ? target()[f.key] : s[f.key]);
+  // (Locked, the Walk speed row shows the pace it is held at, not the setting.)
+  const read = (f) => (f.key === 'walk' && locked.walk ? 1 : f.live ? live[f.key].get() : f.store === 'debug' ? dbg[f.key] : tone(f) ? target()[f.key] : s[f.key]);
   const write = (f, v) => {
-    if (locked.time && (f.key === 'time' || f.key === 'pauseCycle')) { controls[f.key]?.set(read(f)); return; }
+    if ((locked.time && (f.key === 'time' || f.key === 'pauseCycle')) || (locked.walk && f.key === 'walk')) { controls[f.key]?.set(read(f)); return; }
     if (f.live) live[f.key].set(v);
     else if (f.store === 'debug') { dbg[f.key] = v.trim(); saveDebug(dbg); }
     else if (tone(f)) { target()[f.key] = v; apply(); timeline.refresh(); }
@@ -489,7 +493,8 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
 
   // The endgame's locks. Time: the Time of day slider and the Pause switch are disabled, their writes ignored, and the
   // clock's speed is left alone (a held clock, core/time.js holdAt, ignores it too); unlocked, the speed is the
-  // settings' again. Travel: the Travel buttons are disabled.
+  // settings' again. Travel: the Travel buttons are disabled. Walk: the Walk speed slider is disabled and reads 1.00x,
+  // the player walks at that whatever the setting (which is kept), and Shift doesn't run (player.canRun).
   const setLock = (which, on) => {
     on = !!on;
     if (locked[which] === on) return;
@@ -499,14 +504,19 @@ export function createSettings({ player, clock, fx, input, canvas, baseSpeed = 1
       for (const k of ['time', 'pauseCycle']) if (controls[k]) controls[k].el.disabled = on;
       controls.time?.set(clock.phase);   // (its readout: see format above)
       if (!on) clock.speed = s.pauseCycle ? 0 : baseSpeed;
+    } else if (which === 'walk') {
+      if (controls.walk) { controls.walk.el.disabled = on; controls.walk.set(on ? 1 : s.walk); }
+      apply();
     } else {
       for (const b of travelBtns) b.disabled = on;
     }
   };
   api.lockTime = (on) => setLock('time', on);
   api.lockTravel = (on) => setLock('travel', on);
+  api.lockWalk = (on) => setLock('walk', on);
   Object.defineProperty(api, 'timeLocked', { get: () => locked.time });
   Object.defineProperty(api, 'travelLocked', { get: () => locked.travel });
+  Object.defineProperty(api, 'walkLocked', { get: () => locked.walk });
 
   // While the panel is open, keep the time readout and the timeline's needle following the running clock.
   api.tick = () => {
